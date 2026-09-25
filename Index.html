@@ -190,6 +190,48 @@
     .login-forgot { font-size:.74rem; color:rgba(255,255,255,.65); cursor:pointer; margin-top:12px; display:inline-block; }
     .login-forgot:hover { color:#fff; }
     #ajudaSenha { background:rgba(255,255,255,.1) !important; color:rgba(255,255,255,.85) !important; }
+
+    /* ============================================================
+       CELULAR — tabelas viram cartões, abas deslizam, modais em tela
+       cheia, toque confortável (mín. ~40px) e nada vaza na horizontal.
+       Tabelas com a classe "resp" usam data-label em cada <td>.
+       ============================================================ */
+    @media (max-width:640px) {
+      body { font-size:15px; }
+      #toastBox { left:12px; right:12px; bottom:12px; }
+      .toast-hb { max-width:none; }
+      .clock { display:none; }
+      .topbar { margin-bottom:10px; }
+      .pg-head { flex-direction:column; align-items:stretch; gap:10px; }
+      .pg-head > .btn-hb, .pg-head > .d-flex { width:100%; }
+      .pg-head > .d-flex > button { flex:1; justify-content:center; }
+      .evt-title-row { flex-direction:column; align-items:stretch; }
+      .evt-switch-btn { width:100%; justify-content:center; }
+      .evt-switch-menu { left:0; right:0; min-width:0; max-width:none; }
+      .evt-tabs { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; margin-left:-4px; margin-right:-4px; }
+      .evt-tabs::-webkit-scrollbar { display:none; }
+      .evt-tab { white-space:nowrap; flex:none; padding:9px 14px; }
+      .btn-hb, .btn-hb-outline { justify-content:center; min-height:40px; }
+      .btn-sm { min-height:34px; min-width:34px; }
+      .card-hb-body { padding:14px; }
+      .kpi { padding:12px 14px; }
+
+      .table-hb.resp { min-width:0; }
+      .table-hb.resp thead { display:none; }
+      .table-hb.resp tbody tr { display:block; padding:12px 14px; border-bottom:1px solid var(--border); }
+      .table-hb.resp tbody tr:last-child { border-bottom:none; }
+      .table-hb.resp tbody tr:hover { background:transparent; }
+      .table-hb.resp tbody td { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; padding:3px 0; border:none; text-align:right; word-break:break-word; }
+      .table-hb.resp tbody td::before { content:attr(data-label); flex:none; font-size:.66rem; font-weight:700; text-transform:uppercase; letter-spacing:.3px; color:var(--text-muted); text-align:left; padding-top:3px; }
+      .table-hb.resp tbody td.td-titulo { display:block; text-align:left; font-size:.97rem; padding-bottom:6px; }
+      .table-hb.resp tbody td.td-titulo::before, .table-hb.resp tbody td.td-acoes::before, .table-hb.resp tbody td:empty { display:none; }
+      .table-hb.resp tbody td.td-acoes { justify-content:flex-end; padding-top:8px; gap:6px; }
+
+      .modal-footer { flex-wrap:wrap; gap:8px; }
+      .modal-footer > * { margin:0 !important; }
+      .modal-footer > .btn-hb, .modal-footer > .btn-hb-outline { flex:1; }
+      .link-box { font-size:.72rem; }
+    }
   </style>
 </head>
 <body>
@@ -224,14 +266,15 @@
     <div class="nav-group-label">Geral</div>
     <div class="navlink" data-nav="eventos"><i class="fas fa-calendar-days"></i> Eventos</div>
     <div class="navlink" data-nav="diretorio"><i class="fas fa-address-book"></i> Diretório</div>
-    <div class="navlink" data-nav="config"><i class="fas fa-gear"></i> Configurações</div>
+    <div class="navlink" data-nav="config" id="navConfig"><i class="fas fa-gear"></i> Configurações</div>
 
     <div class="sidebar-foot">
       <div class="user-chip">
         <div class="av" id="userAvatar">A</div>
         <div><div class="nm" id="userName">Administrador</div><div class="rl" id="userRole">Master</div></div>
       </div>
-      <div class="navlink" id="logoutBtn" style="margin-top:6px;"><i class="fas fa-arrow-right-from-bracket"></i> Sair</div>
+      <div class="navlink" id="trocarSenhaBtn" style="margin-top:6px;" onclick="abrirTrocaSenha()"><i class="fas fa-key"></i> Trocar minha senha</div>
+      <div class="navlink" id="logoutBtn"><i class="fas fa-arrow-right-from-bracket"></i> Sair</div>
     </div>
   </nav>
 
@@ -250,6 +293,18 @@
   </main>
 </div>
 
+<!-- Modal: trocar a própria senha (qualquer perfil) -->
+<div class="modal fade" id="modalMinhaSenha" tabindex="-1"><div class="modal-dialog modal-sm modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down"><div class="modal-content" style="border-radius:16px;border:none;">
+  <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold"><i class="fas fa-key me-2 text-primary"></i>Trocar minha senha</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body">
+    <div class="mb-2"><label class="form-label">Senha atual</label><input type="password" class="form-control" id="msAtual" autocomplete="current-password"></div>
+    <div class="mb-2"><label class="form-label">Nova senha</label><input type="password" class="form-control" id="msNova" autocomplete="new-password" placeholder="mínimo 4 caracteres"></div>
+    <div class="mb-1"><label class="form-label">Repita a nova senha</label><input type="password" class="form-control" id="msNova2" autocomplete="new-password"></div>
+    <p class="small text-muted mt-2 mb-0">Esqueceu a senha atual? Peça ao administrador para redefinir.</p>
+  </div>
+  <div class="modal-footer" style="border-top:1px solid var(--border);"><button class="btn-hb-outline" data-bs-dismiss="modal">Cancelar</button><button class="btn-hb" id="btnMinhaSenha" onclick="salvarMinhaSenha()"><i class="fas fa-check"></i> Salvar</button></div>
+</div></div></div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
   // ============================================================
@@ -258,7 +313,6 @@
   // ============================================================
   window.TOKEN = null;                    // definido após login (apiLogin)
   window.SESSAO = null;                   // {gestor, setor, perfil}
-  window.URL_BASE = window.location.href.split('?')[0]; // para montar links públicos (convite/confirmar)
   window.EVENTOS_CACHE = [];              // cache de apiListarEventosTodos
   window.EventoAtual = null;              // {id, nome, data, local, status, capacidade}
   var currentTopNav = 'eventos';
@@ -286,13 +340,92 @@
   ];
 
   // ------------------------------------------------------------
+  // ESCAPE de HTML — todo dado vindo da planilha (nome, empresa, cargo…)
+  // passa por esc() antes de entrar em innerHTML. Sem isso, um nome
+  // digitado no formulário público como <img onerror=...> executaria
+  // código na tela de quem está logado. Usado por todas as views.
+  // ------------------------------------------------------------
+  window.esc = function(v) {
+    return String(v === null || v === undefined ? '' : v).replace(/[&<>"']/g, function(c) {
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+  };
+
+  // ------------------------------------------------------------
+  // PERMISSÕES — pode('eventos.criar') etc. Só esconde botões; quem
+  // decide de verdade é o servidor (temPermissao_ em Auth.js).
+  // ------------------------------------------------------------
+  window.pode = function(chave) {
+    var s = window.SESSAO;
+    if (!s) return false;
+    if (s.perfil === 'Admin') return true;
+    return !!(s.permissoes && s.permissoes[chave]);
+  };
+  var PERFIL_NOME = { Admin:'Administrador', Gestor:'Gestor', Organizador:'Organizador', Recepcao:'Recepção', Consulta:'Consulta' };
+
+  function aplicarSessaoNaTela() {
+    var s = window.SESSAO || {};
+    document.getElementById('userName').innerText = s.gestor || 'Usuário';
+    document.getElementById('userRole').innerText = PERFIL_NOME[s.perfil] || s.perfil || '';
+    document.getElementById('userAvatar').innerText = (s.gestor || 'U').charAt(0).toUpperCase();
+    document.getElementById('navConfig').style.display = s.perfil === 'Admin' ? '' : 'none';
+  }
+
+  window.abrirTrocaSenha = function() {
+    ['msAtual','msNova','msNova2'].forEach(function(id){ document.getElementById(id).value = ''; });
+    fecharSidebarMobile();
+    new bootstrap.Modal(document.getElementById('modalMinhaSenha')).show();
+  };
+  window.salvarMinhaSenha = function() {
+    var atual = document.getElementById('msAtual').value;
+    var nova = document.getElementById('msNova').value;
+    if (!atual || !nova) { toast('Preencha a senha atual e a nova.', 'err'); return; }
+    if (nova.length < 4) { toast('A nova senha precisa ter pelo menos 4 caracteres.', 'err'); return; }
+    if (nova !== document.getElementById('msNova2').value) { toast('As duas senhas novas não são iguais.', 'err'); return; }
+    var btn = document.getElementById('btnMinhaSenha'); btn.disabled = true;
+    google.script.run.withSuccessHandler(function(resp) {
+      btn.disabled = false;
+      if (resp && resp.auth === false) { forcarLogout('Sessão expirada.'); return; }
+      if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
+      bootstrap.Modal.getInstance(document.getElementById('modalMinhaSenha')).hide();
+      toast(resp.mensagem, 'ok');
+    }).withFailureHandler(function(err){ btn.disabled = false; toast(err.message, 'err'); })
+      .apiTrocarMinhaSenha(window.TOKEN, atual, nova);
+  };
+
+  // ------------------------------------------------------------
+  // COPIAR LINK — dentro do Apps Script o navegador às vezes bloqueia
+  // navigator.clipboard (a página roda num iframe). Tenta a API moderna,
+  // depois o método antigo (execCommand) e, se tudo falhar, mostra o
+  // link numa caixa para a pessoa copiar na mão. O link nunca se perde.
+  // ------------------------------------------------------------
+  window.copiarTexto = function(txt) {
+    if (!txt) { toast('Link indisponível.', 'err'); return; }
+    function metodoAntigo() {
+      var ta = document.createElement('textarea');
+      ta.value = txt; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.top = '-1000px';
+      document.body.appendChild(ta); ta.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      if (ok) toast('Link copiado.', 'ok'); else window.prompt('Copie o link abaixo (Ctrl+C / segurar e copiar):', txt);
+    }
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(txt).then(function() { toast('Link copiado.', 'ok'); }).catch(metodoAntigo);
+    } else {
+      metodoAntigo();
+    }
+  };
+
+  // ------------------------------------------------------------
   // TOAST helper — usado pelas views via window.toast(...)
   // ------------------------------------------------------------
   window.toast = function(msg, kind) {
     var box = document.getElementById('toastBox');
     var el = document.createElement('div');
     el.className = 'toast-hb ' + (kind === 'err' ? 'err' : 'ok');
-    el.innerHTML = '<i class="fas ' + (kind === 'err' ? 'fa-circle-exclamation' : 'fa-circle-check') + '"></i><span>' + msg + '</span>';
+    el.innerHTML = '<i class="fas ' + (kind === 'err' ? 'fa-circle-exclamation' : 'fa-circle-check') + '"></i><span></span>';
+    el.querySelector('span').textContent = msg;
     box.appendChild(el);
     setTimeout(function() { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(function(){ el.remove(); }, 300); }, 3600);
   };
@@ -343,7 +476,7 @@
     }).join('');
     var otherEvents = window.EVENTOS_CACHE.filter(function(e){ return e.id !== ev.id; });
     var switchItems = otherEvents.map(function(e) {
-      return '<div class="evt-switch-item" onclick="fecharSwitch(); abrirEvento(\'' + e.id + '\', currentEventTab)">' + e.nome + '<div style="font-size:.7rem;color:var(--text-muted)">' + (e.data || 'sem data') + '</div></div>';
+      return '<div class="evt-switch-item" onclick="fecharSwitch(); abrirEvento(\'' + esc(e.id) + '\', currentEventTab)">' + esc(e.nome) + '<div style="font-size:.7rem;color:var(--text-muted)">' + esc(e.data || 'sem data') + '</div></div>';
     }).join('') || '<div class="evt-switch-item" style="color:var(--text-muted)">Nenhum outro evento.</div>';
 
     slot.innerHTML =
@@ -351,10 +484,10 @@
         '<div class="evt-back" onclick="goTo(\'eventos\')"><i class="fas fa-arrow-left"></i> Todos os eventos</div>' +
         '<div class="evt-title-row">' +
           '<div>' +
-            '<div class="evt-title">' + ev.nome + ' <span class="pill ' + statusPill + '">' + (ev.status || '—') + '</span></div>' +
-            '<div class="evt-meta"><span><i class="fas fa-calendar"></i> ' + (ev.data || 'sem data') + '</span>' +
-            (ev.local ? '<span><i class="fas fa-location-dot"></i> ' + ev.local + '</span>' : '') +
-            (ev.capacidade ? '<span><i class="fas fa-user-group"></i> capacidade ' + ev.capacidade + '</span>' : '') + '</div>' +
+            '<div class="evt-title">' + esc(ev.nome) + ' <span class="pill ' + statusPill + '">' + esc(ev.status || '—') + '</span></div>' +
+            '<div class="evt-meta"><span><i class="fas fa-calendar"></i> ' + esc(ev.data || 'sem data') + '</span>' +
+            (ev.local ? '<span><i class="fas fa-location-dot"></i> ' + esc(ev.local) + '</span>' : '') +
+            (ev.capacidade ? '<span><i class="fas fa-user-group"></i> capacidade ' + esc(ev.capacidade) + '</span>' : '') + '</div>' +
           '</div>' +
           '<div class="evt-switch">' +
             '<button class="evt-switch-btn" onclick="toggleSwitch()"><i class="fas fa-shuffle"></i> Trocar evento <i class="fas fa-chevron-down"></i></button>' +
@@ -395,7 +528,7 @@
         executarScripts(container);
       })
       .withFailureHandler(function(err) {
-        container.innerHTML = '<div class="empty-state"><i class="fas fa-triangle-exclamation"></i><h6>Erro ao carregar</h6><p>' + err.message + '</p></div>';
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-triangle-exclamation"></i><h6>Erro ao carregar</h6><p>' + esc(err.message) + '</p></div>';
       })
       .getViewContent(viewName);
   }
@@ -423,6 +556,12 @@
   // Token fica em sessionStorage (some ao fechar a aba).
   // ------------------------------------------------------------
   var SESSION_KEY = 'hb_eventos_sessao';
+  // O navegador pode bloquear o armazenamento dentro do iframe do Apps
+  // Script (Safari, Chrome com cookies de terceiros bloqueados). Sem
+  // estas proteções o login travava; agora só não "lembra" ao recarregar.
+  function sessaoGuardar(obj) { try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(obj)); } catch (e) {} }
+  function sessaoLer() { try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null'); } catch (e) { return null; } }
+  function sessaoApagar() { try { sessionStorage.removeItem(SESSION_KEY); } catch (e) {} }
 
   function mostrarGate(msg) {
     document.getElementById('appShell').style.display = 'none';
@@ -435,16 +574,26 @@
   function entrarNoApp(sessao) {
     window.TOKEN = sessao.token;
     window.SESSAO = sessao;
-    document.getElementById('userName').innerText = sessao.gestor || 'Usuário';
-    document.getElementById('userRole').innerText = sessao.perfil || '';
-    document.getElementById('userAvatar').innerText = (sessao.gestor || 'U').charAt(0).toUpperCase();
+    aplicarSessaoNaTela();
     document.getElementById('loginGate').style.display = 'none';
     document.getElementById('appShell').style.display = 'flex';
-    carregarEventosCache(function() { goTo('eventos'); });
+    // Perfil e permissões atualizados (o admin pode ter mudado algo
+    // desde o login) — em paralelo com a lista de eventos.
+    var pendentes = 2;
+    function pronto() { if (--pendentes === 0) goTo('eventos'); }
+    google.script.run.withSuccessHandler(function(resp) {
+      if (resp && resp.ok) {
+        Object.assign(window.SESSAO, resp.dados);
+        sessaoGuardar(window.SESSAO);
+        aplicarSessaoNaTela();
+      }
+      pronto();
+    }).withFailureHandler(pronto).apiSessaoAtual(window.TOKEN);
+    carregarEventosCache(pronto);
   }
 
   window.forcarLogout = function(msg) {
-    sessionStorage.removeItem(SESSION_KEY);
+    sessaoApagar();
     window.TOKEN = null; window.SESSAO = null;
     mostrarGate(msg || '');
   };
@@ -464,8 +613,11 @@
       .withSuccessHandler(function(resp) {
         btn.disabled = false;
         if (!resp.ok) { document.getElementById('loginMsg').innerText = resp.mensagem; return; }
-        sessionStorage.setItem(SESSION_KEY, JSON.stringify(resp.dados));
+        sessaoGuardar(resp.dados);
         entrarNoApp(resp.dados);
+        if (resp.dados.senhaPadrao) {
+          setTimeout(function() { toast('Você entrou com a senha padrão. Troque-a no menu: Trocar minha senha.', 'err'); }, 800);
+        }
       })
       .withFailureHandler(function(err) { btn.disabled = false; document.getElementById('loginMsg').innerText = err.message; })
       .apiLogin(setor, senha);
@@ -504,7 +656,7 @@
     document.getElementById('logoutBtn').addEventListener('click', function() {
       if (!confirm('Deseja realmente sair?')) return;
       var tok = window.TOKEN;
-      sessionStorage.removeItem(SESSION_KEY);
+      sessaoApagar();
       window.TOKEN = null; window.SESSAO = null;
       mostrarGate('');
       if (tok) google.script.run.apiSair(tok);
@@ -512,8 +664,7 @@
     function tickClock() { document.getElementById('clockDisplay').innerText = new Date().toLocaleString('pt-BR'); }
     setInterval(tickClock, 1000); tickClock();
 
-    var salvo = null;
-    try { salvo = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null'); } catch (e) { salvo = null; }
+    var salvo = sessaoLer();
     if (salvo && salvo.token) entrarNoApp(salvo); else mostrarGate('');
   });
 </script>

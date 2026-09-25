@@ -1,8 +1,28 @@
-<!-- ConfigPainel.html — logo da instituição + gestão de logins -->
+<!-- ConfigPainel.html — logo, endereço dos links, permissões e logins (somente Admin) -->
 <div class="pg-head">
-  <div><h4><i class="fas fa-gear me-2 text-primary"></i>Configurações</h4><p>Identidade visual e logins de acesso ao sistema.</p></div>
+  <div><h4><i class="fas fa-gear me-2 text-primary"></i>Configurações</h4><p>Identidade visual, links públicos, permissões e logins de acesso.</p></div>
 </div>
 
+<!-- ENDEREÇO DOS LINKS -->
+<div class="card-hb card-hb-body mb-4">
+  <h6 class="fw-bold mb-1" style="color:var(--ink-900)"><i class="fas fa-link me-2 text-primary"></i>Endereço dos links públicos</h6>
+  <p class="small text-muted mb-3">É a base de todos os links enviados (lote para empresas e link pessoal de confirmação). Os links não ficam gravados: se este endereço mudar, todos passam a usar o novo automaticamente.</p>
+  <div id="urlAviso"></div>
+  <label class="form-label mb-1">Endereço em uso agora</label>
+  <div class="d-flex gap-2 flex-wrap mb-3">
+    <input class="form-control" id="urlAtual" readonly style="max-width:560px;" onclick="this.select()">
+    <button class="btn-hb-outline" onclick="copiarTexto(document.getElementById('urlAtual').value)"><i class="fas fa-copy"></i> Copiar</button>
+    <a class="btn-hb-outline" id="urlTestar" href="#" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i> Testar</a>
+  </div>
+  <label class="form-label mb-1">Fixar endereço <span class="text-muted fw-normal">(opcional — use o "URL do app da Web" da implantação, terminado em /exec)</span></label>
+  <div class="d-flex gap-2 flex-wrap">
+    <input class="form-control" id="urlFixa" placeholder="https://script.google.com/macros/s/.../exec" style="max-width:560px;">
+    <button class="btn-hb" id="btnSalvarUrl" onclick="salvarUrl()"><i class="fas fa-check"></i> Salvar</button>
+    <button class="btn btn-sm btn-outline-secondary" id="btnUrlAuto" onclick="salvarUrl(true)" style="display:none;"><i class="fas fa-rotate-left"></i> Usar automático</button>
+  </div>
+</div>
+
+<!-- LOGO -->
 <div class="card-hb card-hb-body mb-4">
   <h6 class="fw-bold mb-3" style="color:var(--ink-900)"><i class="fas fa-image me-2 text-primary"></i>Logo da instituição</h6>
   <div class="d-flex align-items-center gap-4 flex-wrap">
@@ -23,8 +43,19 @@
   </div>
 </div>
 
+<!-- PERMISSÕES -->
 <div class="pg-head">
-  <div><h4 class="fs-6 mb-0"><i class="fas fa-users-gear me-2 text-primary"></i>Logins de acesso</h4><p>Criar, trocar senha e ativar/desativar.</p></div>
+  <div><h4 class="fs-6 mb-0"><i class="fas fa-shield-halved me-2 text-primary"></i>Permissões por perfil</h4><p>O que cada perfil pode fazer. Ver as informações é liberado para todos; o administrador sempre pode tudo.</p></div>
+  <div class="d-flex gap-2">
+    <button class="btn-hb-outline" onclick="restaurarPermissoes()"><i class="fas fa-rotate-left"></i> Padrão</button>
+    <button class="btn-hb" id="btnSalvarPerm" onclick="salvarPermissoes()"><i class="fas fa-check"></i> Salvar permissões</button>
+  </div>
+</div>
+<div id="permWrap" class="mb-4"><div class="skel" style="height:220px;"></div></div>
+
+<!-- LOGINS -->
+<div class="pg-head">
+  <div><h4 class="fs-6 mb-0"><i class="fas fa-users-gear me-2 text-primary"></i>Logins de acesso</h4><p>Criar, editar, redefinir senha e ativar/desativar.</p></div>
   <button class="btn-hb" onclick="abrirModalLogin()"><i class="fas fa-plus"></i> Novo login</button>
 </div>
 
@@ -32,14 +63,14 @@
 
 <div class="card-hb card-hb-body mt-3" style="background:var(--blue-50);border-color:transparent;">
   <div class="small" style="color:var(--ink-700);"><i class="fas fa-circle-info me-1"></i>
-    Esqueceu a senha de um login e ele ficou sem acesso? Abra <strong>Extensões → Apps Script</strong> nesta planilha,
-    escolha a função <strong>resetAdmin</strong> na barra de execução e clique em Executar — isso redefine o administrador para <strong>adm / 1234</strong>.
+    Alguém esqueceu a senha? Clique no botão <i class="fas fa-key"></i> da pessoa e defina uma senha nova — ela pode trocar depois em <strong>Trocar minha senha</strong>.
+    Se <strong>você</strong> (administrador) perder o acesso: abra o editor do Apps Script deste projeto, escolha a função <strong>resetAdmin</strong> e clique em Executar — o login volta a ser <strong>adm / 1234</strong>.
   </div>
 </div>
 
 <!-- Modal: criar/editar login -->
-<div class="modal fade" id="modalLogin" tabindex="-1"><div class="modal-dialog"><div class="modal-content" style="border-radius:16px;border:none;">
-  <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold" id="modalLoginTitulo"><i class="fas fa-user-shield me-2 text-primary"></i>Novo login</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal fade" id="modalLogin" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down"><div class="modal-content" style="border-radius:16px;border:none;">
+  <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold" id="modalLoginTitulo">Novo login</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
   <div class="modal-body">
     <input type="hidden" id="lgId">
     <div class="mb-3"><label class="form-label">Nome *</label><input class="form-control" id="lgNome"></div>
@@ -47,25 +78,80 @@
       <div class="col-6"><label class="form-label">Usuário (setor) *</label><input class="form-control" id="lgSetor" placeholder="ex: recepcao"></div>
       <div class="col-6"><label class="form-label">Cargo</label><input class="form-control" id="lgCargo"></div>
     </div>
-    <div class="row g-2 mb-3">
+    <div class="row g-2 mb-1">
       <div class="col-6"><label class="form-label">Perfil</label>
         <select class="form-select" id="lgPerfil">
-          <option value="Admin">Admin</option>
-          <option value="Organizacao">Organização</option>
+          <option value="Admin">Administrador</option>
+          <option value="Gestor">Gestor</option>
+          <option value="Organizador">Organizador</option>
           <option value="Recepcao">Recepção</option>
           <option value="Consulta">Consulta</option>
         </select>
       </div>
-      <div class="col-6"><label class="form-label" id="lgSenhaLabel">Senha *</label><input class="form-control" id="lgSenha" type="password" placeholder="mínimo 3 caracteres"></div>
+      <div class="col-6" id="lgSenhaCol"><label class="form-label">Senha *</label><input class="form-control" id="lgSenha" type="password" placeholder="mínimo 4 caracteres"></div>
     </div>
+    <p class="small text-muted mb-0 mt-2" id="lgPerfilDica"></p>
   </div>
   <div class="modal-footer" style="border-top:1px solid var(--border);"><button class="btn-hb-outline" data-bs-dismiss="modal">Cancelar</button><button class="btn-hb" id="btnSalvarLogin" onclick="salvarLogin()"><i class="fas fa-check"></i> Salvar</button></div>
 </div></div></div>
 
+<!-- Modal: redefinir senha de um login -->
+<div class="modal fade" id="modalResetSenha" tabindex="-1"><div class="modal-dialog modal-sm modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down"><div class="modal-content" style="border-radius:16px;border:none;">
+  <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold"><i class="fas fa-key me-2 text-primary"></i>Redefinir senha</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body">
+    <p class="small mb-2">Nova senha para <strong id="rsNome"></strong>:</p>
+    <input type="hidden" id="rsId">
+    <input class="form-control" id="rsSenha" type="text" autocomplete="off" placeholder="mínimo 4 caracteres">
+    <p class="small text-muted mt-2 mb-0">Passe a senha para a pessoa; ela pode trocar depois em "Trocar minha senha".</p>
+  </div>
+  <div class="modal-footer" style="border-top:1px solid var(--border);"><button class="btn-hb-outline" data-bs-dismiss="modal">Cancelar</button><button class="btn-hb" id="btnResetSenha" onclick="confirmarResetSenha()"><i class="fas fa-check"></i> Redefinir</button></div>
+</div></div></div>
+
 <script>
 (function() {
-  var PERFIL_PILL = { Admin:'pill-blue', Organizacao:'pill-violet', Recepcao:'pill-amber', Consulta:'pill-gray' };
+  var PERFIL_PILL = { Admin:'pill-blue', Gestor:'pill-violet', Organizador:'pill-green', Organizacao:'pill-violet', Recepcao:'pill-amber', Consulta:'pill-gray' };
+  var PERFIL_NOME = { Admin:'Administrador', Gestor:'Gestor', Organizador:'Organizador', Organizacao:'Gestor', Recepcao:'Recepção', Consulta:'Consulta' };
+  var PERFIL_DICA = {
+    Admin: 'Pode tudo, inclusive logins e permissões.',
+    Gestor: 'Cria e edita eventos, listas, lotes e faz check-in (ajustável em Permissões).',
+    Organizador: 'Cadastra pessoas e adiciona pessoas às listas (ajustável em Permissões).',
+    Recepcao: 'Faz o check-in na entrada do evento (ajustável em Permissões).',
+    Consulta: 'Só visualiza.'
+  };
   var logins = [];
+  var perm = null;
+
+  function erroResp(resp) {
+    if (resp && resp.auth === false) { forcarLogout('Sessão expirada.'); return true; }
+    if (!resp || !resp.ok) { toast((resp && resp.mensagem) || 'Erro.', 'err'); return true; }
+    return false;
+  }
+  function falha(err) { toast(err.message, 'err'); }
+
+  // ---------- endereço dos links ----------
+  function carregarUrl() {
+    google.script.run.withSuccessHandler(function(resp) {
+      if (!resp || !resp.ok) return;
+      var d = resp.dados;
+      document.getElementById('urlAtual').value = d.atual || '';
+      document.getElementById('urlTestar').href = d.atual || '#';
+      document.getElementById('urlFixa').value = d.fixa || '';
+      document.getElementById('btnUrlAuto').style.display = d.fixa ? '' : 'none';
+      var aviso = '';
+      if (!d.atual) aviso = '<div class="alert alert-warning small">O app ainda não foi implantado como "App da Web". Implante para os links funcionarem.</div>';
+      else if (d.avisoDev) aviso = '<div class="alert alert-warning small">Você abriu o sistema pelo endereço de teste (/dev). Os links foram corrigidos para /exec automaticamente — confira se o endereço abaixo abre.</div>';
+      document.getElementById('urlAviso').innerHTML = aviso;
+    }).apiObterUrlPublica(window.TOKEN);
+  }
+  window.salvarUrl = function(automatico) {
+    var url = automatico ? '' : document.getElementById('urlFixa').value.trim();
+    if (!automatico && !url) { toast('Cole o endereço ou use "Usar automático".', 'err'); return; }
+    google.script.run.withSuccessHandler(function(resp) {
+      if (erroResp(resp)) return;
+      toast(resp.mensagem, 'ok'); carregarUrl();
+    }).withFailureHandler(falha).apiSalvarUrlPublica(window.TOKEN, url);
+  };
+  carregarUrl();
 
   // ---------- logo da instituição ----------
   function carregarLogo() {
@@ -83,9 +169,9 @@
   window.removerLogo = function() {
     if (!confirm('Voltar para a logo padrão do Hospital da Baleia?')) return;
     google.script.run.withSuccessHandler(function(resp) {
-      if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
+      if (erroResp(resp)) return;
       toast(resp.mensagem, 'ok'); carregarLogo();
-    }).withFailureHandler(function(err){ toast(err.message, 'err'); }).apiRemoverLogo(window.TOKEN);
+    }).withFailureHandler(falha).apiRemoverLogo(window.TOKEN);
   };
 
   var logoEscalaTimer = null;
@@ -95,9 +181,8 @@
     document.getElementById('logoPreview').style.maxHeight = Math.round(70 * (pct / 100)) + 'px';
     clearTimeout(logoEscalaTimer);
     logoEscalaTimer = setTimeout(function() {
-      google.script.run.withSuccessHandler(function(resp) {
-        if (!resp.ok) toast(resp.mensagem, 'err');
-      }).withFailureHandler(function(err){ toast(err.message, 'err'); }).apiSalvarLogoEscala(window.TOKEN, pct / 100);
+      google.script.run.withSuccessHandler(function(resp) { erroResp(resp); })
+        .withFailureHandler(falha).apiSalvarLogoEscala(window.TOKEN, pct / 100);
     }, 400);
   });
 
@@ -111,46 +196,100 @@
     reader.onload = function() {
       google.script.run.withSuccessHandler(function(resp) {
         e.target.value = '';
-        if (!resp.ok) { msg.innerHTML = '<span class="text-danger">' + resp.mensagem + '</span>'; return; }
+        if (!resp.ok) { msg.innerHTML = '<span class="text-danger">' + esc(resp.mensagem) + '</span>'; return; }
         carregarLogo();
         msg.innerHTML = '<span style="color:var(--success)"><i class="fas fa-circle-check me-1"></i>Logo atualizada para todos.</span>';
         toast('Logo atualizada.', 'ok');
-      }).withFailureHandler(function(err) { e.target.value = ''; msg.innerHTML = '<span class="text-danger">' + err.message + '</span>'; })
+      }).withFailureHandler(function(err) { e.target.value = ''; msg.innerHTML = '<span class="text-danger">' + esc(err.message) + '</span>'; })
         .apiSalvarLogo(window.TOKEN, reader.result, file.name);
     };
     reader.readAsDataURL(file);
   });
 
+  // ---------- permissões ----------
+  function carregarPermissoes() {
+    google.script.run.withSuccessHandler(function(resp) {
+      if (erroResp(resp)) { document.getElementById('permWrap').innerHTML = ''; return; }
+      perm = resp.dados; renderPermissoes();
+    }).withFailureHandler(falha).apiObterPermissoes(window.TOKEN);
+  }
+  function renderPermissoes() {
+    var html = '<div class="card-hb"><table class="table-hb" style="min-width:560px;"><thead><tr><th>Ação</th><th class="text-center">Administrador</th>' +
+      perm.perfis.map(function(p){ return '<th class="text-center">' + esc(p.rotulo) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      perm.acoes.map(function(a) {
+        var chave = a.modulo + '.' + a.acao;
+        return '<tr><td>' + esc(a.rotulo) + '</td><td class="text-center"><input type="checkbox" class="form-check-input" checked disabled></td>' +
+          perm.perfis.map(function(p) {
+            var marcado = (perm.matriz[p.perfil] || []).indexOf(chave) !== -1;
+            return '<td class="text-center"><input type="checkbox" class="form-check-input perm-chk" data-perfil="' + esc(p.perfil) + '" data-chave="' + esc(chave) + '"' + (marcado ? ' checked' : '') + '></td>';
+          }).join('') + '</tr>';
+      }).join('') +
+      '<tr><td>Gerenciar logins, permissões, logo e links</td><td class="text-center"><input type="checkbox" class="form-check-input" checked disabled></td>' +
+      perm.perfis.map(function(){ return '<td class="text-center"><input type="checkbox" class="form-check-input" disabled></td>'; }).join('') + '</tr>' +
+      '</tbody></table></div>';
+    document.getElementById('permWrap').innerHTML = html;
+  }
+  window.salvarPermissoes = function() {
+    if (!perm) return;
+    var matriz = {};
+    perm.perfis.forEach(function(p){ matriz[p.perfil] = []; });
+    document.querySelectorAll('.perm-chk').forEach(function(chk) {
+      if (chk.checked) matriz[chk.dataset.perfil].push(chk.dataset.chave);
+    });
+    var btn = document.getElementById('btnSalvarPerm'); btn.disabled = true;
+    google.script.run.withSuccessHandler(function(resp) {
+      btn.disabled = false;
+      if (erroResp(resp)) return;
+      toast(resp.mensagem, 'ok'); carregarPermissoes();
+    }).withFailureHandler(function(err){ btn.disabled = false; falha(err); }).apiSalvarPermissoes(window.TOKEN, matriz);
+  };
+  window.restaurarPermissoes = function() {
+    if (!confirm('Voltar todas as permissões para o padrão?')) return;
+    google.script.run.withSuccessHandler(function(resp) {
+      if (erroResp(resp)) return;
+      toast(resp.mensagem, 'ok'); carregarPermissoes();
+    }).withFailureHandler(falha).apiRestaurarPermissoesPadrao(window.TOKEN);
+  };
+  carregarPermissoes();
+
+  // ---------- logins ----------
   carregar();
   function carregar() {
     google.script.run.withSuccessHandler(function(resp) {
       if (resp && resp.auth === false) { forcarLogout('Sessão expirada.'); return; }
-      if (!resp.ok) { document.getElementById('loginsWrap').innerHTML = '<div class="card-hb"><div class="empty-state"><i class="fas fa-lock"></i><p>' + resp.mensagem + '</p></div></div>'; return; }
+      if (!resp.ok) { document.getElementById('loginsWrap').innerHTML = '<div class="card-hb"><div class="empty-state"><i class="fas fa-lock"></i><p>' + esc(resp.mensagem) + '</p></div></div>'; return; }
       logins = resp.dados; render();
-    }).withFailureHandler(function(err){ toast(err.message, 'err'); }).apiListarLogins(window.TOKEN);
+    }).withFailureHandler(falha).apiListarLogins(window.TOKEN);
   }
 
   function render() {
     var wrap = document.getElementById('loginsWrap');
-    wrap.innerHTML = '<div class="card-hb"><table class="table-hb"><thead><tr><th>Nome</th><th>Usuário</th><th>Cargo</th><th>Perfil</th><th>Status</th><th></th></tr></thead><tbody>' +
+    wrap.innerHTML = '<div class="card-hb"><table class="table-hb resp"><thead><tr><th>Nome</th><th>Usuário</th><th>Cargo</th><th>Perfil</th><th>Status</th><th></th></tr></thead><tbody>' +
       logins.map(function(g) {
-        return '<tr><td><strong>' + g.nome + '</strong></td><td>' + g.setor + '</td><td>' + (g.cargo || '<span class="text-muted">—</span>') + '</td>' +
-          '<td><span class="pill ' + (PERFIL_PILL[g.perfil] || 'pill-gray') + '">' + g.perfil + '</span></td>' +
-          '<td><span class="pill ' + (g.ativo === 'Sim' ? 'pill-green' : 'pill-red') + '">' + (g.ativo === 'Sim' ? 'Ativo' : 'Inativo') + '</span></td>' +
-          '<td class="text-end">' +
-            '<button class="btn btn-sm btn-outline-secondary me-1" title="Editar / trocar senha" onclick="editarLoginId(\'' + g.id + '\')"><i class="fas fa-key"></i></button>' +
-            '<button class="btn btn-sm btn-outline-' + (g.ativo === 'Sim' ? 'danger' : 'success') + '" title="' + (g.ativo === 'Sim' ? 'Desativar' : 'Ativar') + '" onclick="alternarLogin(\'' + g.id + '\')"><i class="fas fa-power-off"></i></button>' +
+        var id = esc(g.id);
+        return '<tr><td class="td-titulo"><strong>' + esc(g.nome) + '</strong></td><td data-label="Usuário">' + esc(g.setor) + '</td><td data-label="Cargo">' + (g.cargo ? esc(g.cargo) : '<span class="text-muted">—</span>') + '</td>' +
+          '<td data-label="Perfil"><span class="pill ' + (PERFIL_PILL[g.perfil] || 'pill-gray') + '">' + esc(PERFIL_NOME[g.perfil] || g.perfil) + '</span></td>' +
+          '<td data-label="Status"><span class="pill ' + (g.ativo === 'Sim' ? 'pill-green' : 'pill-red') + '">' + (g.ativo === 'Sim' ? 'Ativo' : 'Inativo') + '</span></td>' +
+          '<td class="text-end text-nowrap td-acoes">' +
+            '<button class="btn btn-sm btn-outline-secondary me-1" title="Editar" onclick="editarLoginId(\'' + id + '\')"><i class="fas fa-pen"></i></button>' +
+            '<button class="btn btn-sm btn-outline-secondary me-1" title="Redefinir senha" onclick="abrirResetSenha(\'' + id + '\')"><i class="fas fa-key"></i></button>' +
+            '<button class="btn btn-sm btn-outline-' + (g.ativo === 'Sim' ? 'danger' : 'success') + '" title="' + (g.ativo === 'Sim' ? 'Desativar' : 'Ativar') + '" onclick="alternarLogin(\'' + id + '\')"><i class="fas fa-power-off"></i></button>' +
           '</td></tr>';
       }).join('') + '</tbody></table></div>';
   }
 
+  function atualizarDica() {
+    document.getElementById('lgPerfilDica').innerText = PERFIL_DICA[document.getElementById('lgPerfil').value] || '';
+  }
+  document.getElementById('lgPerfil').addEventListener('change', atualizarDica);
+
   window.abrirModalLogin = function() {
     document.getElementById('modalLoginTitulo').innerText = 'Novo login';
     document.getElementById('lgId').value = '';
-    ['lgNome','lgSetor','lgCargo'].forEach(function(id){ document.getElementById(id).value = ''; });
-    document.getElementById('lgPerfil').value = 'Recepcao';
-    document.getElementById('lgSenha').value = '';
-    document.getElementById('lgSenhaLabel').innerText = 'Senha *';
+    ['lgNome','lgSetor','lgCargo','lgSenha'].forEach(function(id){ document.getElementById(id).value = ''; });
+    document.getElementById('lgPerfil').value = 'Organizador';
+    document.getElementById('lgSenhaCol').style.display = '';
+    atualizarDica();
     new bootstrap.Modal(document.getElementById('modalLogin')).show();
   };
 
@@ -162,9 +301,10 @@
     document.getElementById('lgNome').value = g.nome;
     document.getElementById('lgSetor').value = g.setor;
     document.getElementById('lgCargo').value = g.cargo || '';
-    document.getElementById('lgPerfil').value = g.perfil;
+    document.getElementById('lgPerfil').value = g.perfil === 'Organizacao' ? 'Gestor' : g.perfil;
     document.getElementById('lgSenha').value = '';
-    document.getElementById('lgSenhaLabel').innerText = 'Nova senha (opcional)';
+    document.getElementById('lgSenhaCol').style.display = 'none';   // senha: botão próprio
+    atualizarDica();
     new bootstrap.Modal(document.getElementById('modalLogin')).show();
   };
 
@@ -174,27 +314,45 @@
     var setor = document.getElementById('lgSetor').value.trim();
     var senha = document.getElementById('lgSenha').value;
     if (!nome || !setor) { toast('Informe nome e usuário.', 'err'); return; }
-    if (!id && (!senha || senha.length < 3)) { toast('Informe uma senha com pelo menos 3 caracteres.', 'err'); return; }
+    if (!id && (!senha || senha.length < 4)) { toast('Informe uma senha com pelo menos 4 caracteres.', 'err'); return; }
     var dados = { Nome: nome, Setor: setor, Cargo: document.getElementById('lgCargo').value, Perfil: document.getElementById('lgPerfil').value };
-    if (senha) dados.Senha = senha;
+    if (!id) dados.Senha = senha;
     var btn = document.getElementById('btnSalvarLogin'); btn.disabled = true;
-    var call = id
-      ? google.script.run.withSuccessHandler(onSalvo).withFailureHandler(onErro).apiEditarLogin(window.TOKEN, id, dados)
-      : google.script.run.withSuccessHandler(onSalvo).withFailureHandler(onErro).apiCriarLogin(window.TOKEN, dados);
-    function onSalvo(resp) {
+    var runner = google.script.run.withSuccessHandler(function(resp) {
       btn.disabled = false;
-      if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
+      if (erroResp(resp)) return;
       bootstrap.Modal.getInstance(document.getElementById('modalLogin')).hide();
       toast(resp.mensagem, 'ok'); carregar();
-    }
-    function onErro(err) { btn.disabled = false; toast(err.message, 'err'); }
+    }).withFailureHandler(function(err) { btn.disabled = false; falha(err); });
+    if (id) runner.apiEditarLogin(window.TOKEN, id, dados); else runner.apiCriarLogin(window.TOKEN, dados);
+  };
+
+  window.abrirResetSenha = function(id) {
+    var g = logins.filter(function(x){ return x.id === id; })[0];
+    if (!g) return;
+    document.getElementById('rsId').value = id;
+    document.getElementById('rsNome').innerText = g.nome + ' (' + g.setor + ')';
+    document.getElementById('rsSenha').value = '';
+    new bootstrap.Modal(document.getElementById('modalResetSenha')).show();
+  };
+  window.confirmarResetSenha = function() {
+    var senha = document.getElementById('rsSenha').value;
+    if (!senha || senha.length < 4) { toast('A senha precisa ter pelo menos 4 caracteres.', 'err'); return; }
+    var btn = document.getElementById('btnResetSenha'); btn.disabled = true;
+    google.script.run.withSuccessHandler(function(resp) {
+      btn.disabled = false;
+      if (erroResp(resp)) return;
+      bootstrap.Modal.getInstance(document.getElementById('modalResetSenha')).hide();
+      toast(resp.mensagem, 'ok');
+    }).withFailureHandler(function(err){ btn.disabled = false; falha(err); })
+      .apiRedefinirSenhaLogin(window.TOKEN, document.getElementById('rsId').value, senha);
   };
 
   window.alternarLogin = function(id) {
     google.script.run.withSuccessHandler(function(resp) {
-      if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
+      if (erroResp(resp)) return;
       toast(resp.mensagem, 'ok'); carregar();
-    }).withFailureHandler(function(err){ toast(err.message, 'err'); }).apiAlternarLogin(window.TOKEN, id);
+    }).withFailureHandler(falha).apiAlternarLogin(window.TOKEN, id);
   };
 })();
 </script>

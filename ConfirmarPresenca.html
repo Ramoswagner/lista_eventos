@@ -24,7 +24,11 @@
     .status-badge { display:inline-flex; align-items:center; gap:8px; padding:8px 18px; border-radius:50px; font-weight:700; font-size:.9rem; margin-bottom:6px; }
     .status-ok { background:#EAFBF3; color:var(--success); }
     .status-warn { background:#FFF6E9; color:#B4790A; }
+    .qr-box { background:#F8FAFC; border-radius:16px; padding:16px; margin:18px auto 6px; display:inline-block; }
+    .qr-box img, .qr-box canvas { display:block; margin:0 auto; }
+    .qr-legenda { font-size:.78rem; color:#64748B; }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
 
@@ -36,12 +40,23 @@
 </div>
 
 <script>
-  var TOKEN = <?= JSON.stringify(qrToken) ?>;
+  // Token validado no servidor (doGet): só letras, números e hífen — ou vazio.
+  var TOKEN = <?!= JSON.stringify(qrToken) ?>;
 
-  google.script.run
-    .withSuccessHandler(render)
-    .withFailureHandler(function(err) { renderErro(err.message); })
-    .apiInfoConvitePublico(TOKEN);
+  function esc(v) {
+    return String(v === null || v === undefined ? '' : v).replace(/[&<>"']/g, function(c) {
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+  }
+
+  if (!TOKEN) {
+    renderErro('Link inválido. Confira se copiou o link inteiro.');
+  } else {
+    google.script.run
+      .withSuccessHandler(render)
+      .withFailureHandler(function(err) { renderErro('Não foi possível carregar o convite. Tente de novo em instantes.'); })
+      .apiInfoConvitePublico(TOKEN);
+  }
 
   google.script.run.withSuccessHandler(function(resp) {
     if (!resp || !resp.ok) return;
@@ -50,29 +65,72 @@
     img.style.height = Math.round(60 * (resp.dados.escala || 1)) + 'px';
   }).apiLogoPublico();
 
+  // QR Code da entrada: contém só o token do convite. A recepção lê na
+  // aba Check-in do sistema.
+  function blocoQR() {
+    return '<div class="qr-box"><div id="qrCode"></div></div>' +
+      '<div class="qr-legenda mb-3"><i class="fas fa-qrcode"></i> Apresente este QR Code na entrada (pode ser pela tela do celular).</div>';
+  }
+  function desenharQR() {
+    var el = document.getElementById('qrCode');
+    if (!el) return;
+    if (window.QRCode) {
+      new QRCode(el, { text: TOKEN, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M });
+    } else {
+      el.innerHTML = '<p class="small text-muted mb-0">Não foi possível gerar o QR Code. Na entrada, informe seu nome.</p>';
+    }
+  }
+
   function render(resp) {
     if (!resp.ok) { renderErro(resp.mensagem); return; }
     var d = resp.dados;
     var corpo = document.getElementById('corpo');
+    var meta = esc(d.dataEvento || 'data a definir') + (d.local ? ' · ' + esc(d.local) : '');
 
-    if (d.status === 'Confirmado' || d.status === 'Recusado') {
+    if (d.status === 'Presente') {
       corpo.innerHTML =
-        '<div class="status-badge ' + (d.status === 'Confirmado' ? 'status-ok' : 'status-warn') + '"><i class="fas ' + (d.status === 'Confirmado' ? 'fa-circle-check' : 'fa-circle-info') + '"></i> ' +
-        (d.status === 'Confirmado' ? 'Presença confirmada' : 'Você avisou que não vai') + '</div>' +
-        '<div class="evt-nome mt-2">' + d.evento + '</div>' +
-        '<div class="evt-meta">' + d.dataEvento + (d.local ? ' · ' + d.local : '') + '</div>' +
-        '<p class="text-muted small mb-0">Olá, ' + d.nome + '. ' + (d.status === 'Confirmado' ? 'Te esperamos lá!' : 'Mudou de ideia?') + '</p>' +
-        (d.status !== 'Confirmado' ? '<button class="btn-confirmar mt-3" onclick="responder(\'Confirmado\')"><i class="fas fa-check"></i> Confirmar presença</button>' : '');
+        '<div class="status-badge status-ok"><i class="fas fa-circle-check"></i> Entrada registrada</div>' +
+        '<div class="evt-nome mt-2">' + esc(d.evento) + '</div>' +
+        '<div class="evt-meta">' + meta + '</div>' +
+        '<p class="text-muted small mb-0">Olá, ' + esc(d.nome) + '. Seja bem-vindo(a)!</p>';
+      return;
+    }
+
+    if (d.status === 'Confirmado') {
+      corpo.innerHTML =
+        '<div class="status-badge status-ok"><i class="fas fa-circle-check"></i> Presença confirmada</div>' +
+        '<div class="evt-nome mt-2">' + esc(d.evento) + '</div>' +
+        '<div class="evt-meta mb-0">' + meta + '</div>' +
+        blocoQR() +
+        '<p class="text-muted small mb-2">Olá, ' + esc(d.nome) + '. Te esperamos lá!</p>' +
+        '<button class="btn-recusar mt-2" onclick="responder(\'Recusado\')"><i class="fas fa-xmark"></i> Não vou mais poder ir</button>';
+      desenharQR();
+      return;
+    }
+
+    if (d.status === 'Recusado') {
+      corpo.innerHTML =
+        '<div class="status-badge status-warn"><i class="fas fa-circle-info"></i> Você avisou que não vai</div>' +
+        '<div class="evt-nome mt-2">' + esc(d.evento) + '</div>' +
+        '<div class="evt-meta">' + meta + '</div>' +
+        '<p class="text-muted small mb-0">Olá, ' + esc(d.nome) + '. Mudou de ideia?</p>' +
+        '<button class="btn-confirmar mt-3" onclick="responder(\'Confirmado\')"><i class="fas fa-check"></i> Confirmar presença</button>';
       return;
     }
 
     corpo.innerHTML =
       '<p class="text-muted small mb-1">Você foi convidado(a) para</p>' +
-      '<div class="evt-nome">' + d.evento + '</div>' +
-      '<div class="evt-meta">' + (d.dataEvento || 'data a definir') + (d.local ? ' · ' + d.local : '') + '</div>' +
-      '<p class="mb-4">Olá, <strong>' + d.nome + '</strong>' + (d.empresa ? ' (' + d.empresa + ')' : '') + '. Você vai?</p>' +
+      '<div class="evt-nome">' + esc(d.evento) + '</div>' +
+      '<div class="evt-meta">' + meta + '</div>' +
+      '<p class="mb-4">Olá, <strong>' + esc(d.nome) + '</strong>' + (d.empresa ? ' (' + esc(d.empresa) + ')' : '') + '. Você vai?</p>' +
       '<button class="btn-confirmar" onclick="responder(\'Confirmado\')"><i class="fas fa-check"></i> Sim, vou comparecer</button>' +
       '<button class="btn-recusar" onclick="responder(\'Recusado\')"><i class="fas fa-xmark"></i> Não vou poder ir</button>';
+  }
+
+  function recarregar() {
+    google.script.run.withSuccessHandler(render)
+      .withFailureHandler(function() { renderErro('Resposta registrada, mas não foi possível atualizar a página. Recarregue.'); })
+      .apiInfoConvitePublico(TOKEN);
   }
 
   function responder(resposta) {
@@ -80,16 +138,15 @@
     google.script.run
       .withSuccessHandler(function(resp) {
         if (!resp.ok) { renderErro(resp.mensagem); return; }
-        document.getElementById('corpo').innerHTML =
-          '<div class="status-badge ' + (resposta === 'Confirmado' ? 'status-ok' : 'status-warn') + '"><i class="fas fa-circle-check"></i> ' + resp.mensagem + '</div>';
+        recarregar();   // mostra o novo estado (com QR Code se confirmou)
       })
-      .withFailureHandler(function(err) { renderErro(err.message); })
+      .withFailureHandler(function(err) { renderErro('Não foi possível registrar agora. Tente de novo em instantes.'); })
       .apiResponderConvitePublico(TOKEN, resposta);
   }
 
   function renderErro(msg) {
     document.getElementById('corpo').innerHTML =
-      '<i class="fas fa-triangle-exclamation fa-2x text-danger mb-3"></i><p class="text-muted mb-0">' + msg + '</p>';
+      '<i class="fas fa-triangle-exclamation fa-2x text-danger mb-3"></i><p class="text-muted mb-0">' + esc(msg) + '</p>';
   }
 </script>
 </body>

@@ -65,7 +65,9 @@ const DB = {
     ],
     validacoes: {
       Ativo: ['Sim', 'Não'],
-      Perfil: ['Admin', 'Organizacao', 'Recepcao', 'Consulta']
+      // "Organizacao" fica na lista só para logins antigos continuarem válidos
+      // (o sistema trata "Organizacao" como "Gestor").
+      Perfil: ['Admin', 'Gestor', 'Organizador', 'Recepcao', 'Consulta', 'Organizacao']
     }
   },
 
@@ -173,7 +175,17 @@ const DB = {
 // usa o sistema: se CONFIG.SPREADSHEET_ID (Config.js) já tiver um ID
 // válido, usamos ele; senão criamos uma planilha nova automaticamente.
 // ------------------------------------------------------------
-function _getSpreadsheet() {
+// Memória da execução atual: abrir a planilha e achar abas custa caro,
+// então cada chamada ao servidor faz isso uma vez só.
+let _ssMemo_ = null;
+const _abaMemo_ = {};
+
+function _getSpreadsheet_() {
+  if (!_ssMemo_) _ssMemo_ = _abrirSpreadsheet_();
+  return _ssMemo_;
+}
+
+function _abrirSpreadsheet_() {
   const props = PropertiesService.getScriptProperties();
   const idSalvo = props.getProperty('SPREADSHEET_ID');
   if (idSalvo) {
@@ -194,12 +206,13 @@ function _getSpreadsheet() {
 
 // ------------------------------------------------------------
 // SETUP DO BANCO (idempotente) — garante todas as abas de uma vez.
-// Chamado automaticamente sob demanda por _getAba(); pode também ser
+// Chamado automaticamente sob demanda por _getAba_(); pode também ser
 // executado manualmente no editor do Apps Script se quiser forçar.
 // ------------------------------------------------------------
 function setupDatabase() {
-  const ss = _getSpreadsheet();
-  Object.values(DB).forEach(schema => _garantirAba(ss, schema));
+  _somenteEditor_();
+  const ss = _getSpreadsheet_();
+  Object.values(DB).forEach(schema => _garantirAba_(ss, schema));
 
   ['Página1', 'Sheet1', 'Plan1'].forEach(nome => {
     const aba = ss.getSheetByName(nome);
@@ -209,157 +222,328 @@ function setupDatabase() {
   Logger.log('✅ setupDatabase() concluído com sucesso.');
 }
 
-function _garantirAba(ss, schema) {
+// Versão das listas de validação (ex.: perfis aceitos). Quando muda,
+// as abas que já existiam recebem as listas novas uma única vez.
+const VALIDACOES_VERSAO = '2';
+
+function _garantirAba_(ss, schema) {
   let aba = ss.getSheetByName(schema.nome);
-  if (aba) return aba;
+  if (aba) {
+    _atualizarValidacoesSePreciso_(aba, schema);
+    return aba;
+  }
 
   aba = ss.insertSheet(schema.nome);
   const header = aba.getRange(1, 1, 1, schema.colunas.length);
   header.setValues([schema.colunas]);
   header.setFontWeight('bold').setBackground('#041D56').setFontColor('#FFFFFF');
   aba.setFrozenRows(1);
+  _aplicarValidacoes_(aba, schema);
+  PropertiesService.getScriptProperties().setProperty('VALID_' + schema.nome, VALIDACOES_VERSAO);
 
+  aba.autoResizeColumns(1, schema.colunas.length);
+  return aba;
+}
+
+function _aplicarValidacoes_(aba, schema) {
   Object.keys(schema.validacoes).forEach(nomeColuna => {
     const idx = schema.colunas.indexOf(nomeColuna);
     if (idx === -1) return;
     const regra = SpreadsheetApp.newDataValidation()
       .requireValueInList(schema.validacoes[nomeColuna], true)
       .setAllowInvalid(false).build();
-    aba.getRange(2, idx + 1, 5000, 1).setDataValidation(regra);
+    aba.getRange(2, idx + 1, Math.max(5000, aba.getMaxRows() - 1), 1).setDataValidation(regra);
   });
+}
 
-  aba.autoResizeColumns(1, schema.colunas.length);
-  return aba;
+function _atualizarValidacoesSePreciso_(aba, schema) {
+  if (!Object.keys(schema.validacoes).length) return;
+  if (_versaoProp_('VALID_' + schema.nome) === VALIDACOES_VERSAO) return;
+  _aplicarValidacoes_(aba, schema);
+  PropertiesService.getScriptProperties().setProperty('VALID_' + schema.nome, VALIDACOES_VERSAO);
+  if (_versoesMemo_) _versoesMemo_['VALID_' + schema.nome] = VALIDACOES_VERSAO;
 }
 
 // ------------------------------------------------------------
-// GERAÇÃO DE IDs com LockService (seguro para uso simultâneo)
+// LOCK REENTRANTE — toda escrita (e toda regra do tipo "confere e
+// grava", como vagas de lote e check-in) roda dentro deste lock, para
+// que duas pessoas ao mesmo tempo não estourem vagas nem gravem por
+// cima uma da outra. Reentrante: chamadas aninhadas na mesma execução
+// não tentam pegar o lock de novo.
 // ------------------------------------------------------------
-function gerarId(schema) {
+let _lockProfundidade = 0;
+
+function _comLock_(fn) {
+  if (_lockProfundidade > 0) return fn();
   const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
+  if (!lock.tryLock(20000)) throw new Error('Sistema ocupado no momento. Tente novamente em alguns segundos.');
+  _lockProfundidade++;
+  // Com o lock na mão, descarta o que foi lido antes: outra pessoa pode
+  // ter gravado nesse meio-tempo (ex.: ocupado a última vaga).
+  _recarregarVersoes_();
   try {
+    return fn();
+  } finally {
+    _lockProfundidade--;
+    SpreadsheetApp.flush();
+    lock.releaseLock();
+  }
+}
+
+// ------------------------------------------------------------
+// UTILITÁRIOS DE TEXTO E DATA
+// ------------------------------------------------------------
+// Texto seguro: a planilha pode devolver número (ex.: CPF sem pontuação)
+// onde o código espera string — String() evita "replace is not a function".
+function _s_(v) { return v === null || v === undefined ? '' : String(v).trim(); }
+function _soDigitos_(v) { return _s_(v).replace(/\D/g, ''); }
+
+// "2026-10-05" (input type=date) vira meia-noite no fuso do script.
+// new Date('2026-10-05') seria meia-noite UTC = 21h do dia anterior em
+// São Paulo — o evento aparecia um dia antes.
+function _parseDataLocal_(v, fimDoDia) {
+  if (!v) return '';
+  if (v instanceof Date) return v;
+  const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) {
+    return fimDoDia
+      ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 23, 59, 59)
+      : new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  }
+  const d = new Date(v);
+  if (isNaN(d.getTime())) throw new Error('Data inválida: ' + v);
+  return d;
+}
+
+function _fmtData_(v, formato) {
+  if (!v) return '';
+  const d = v instanceof Date ? v : new Date(v);
+  if (isNaN(d.getTime())) return '';
+  return Utilities.formatDate(d, CONFIG.TIMEZONE, formato || 'dd/MM/yyyy');
+}
+
+// ------------------------------------------------------------
+// GERAÇÃO DE IDs (sequencial, dentro do lock)
+// ------------------------------------------------------------
+function gerarId_(schema) {
+  return _comLock_(function() {
     const props = PropertiesService.getScriptProperties();
     const chave = 'SEQ_' + schema.prefixoId;
     const atual = Number(props.getProperty(chave) || 0) + 1;
     props.setProperty(chave, String(atual));
     return schema.prefixoId + '-' + String(atual).padStart(5, '0');
-  } finally {
-    lock.releaseLock();
-  }
+  });
 }
 
 // Compatibilidade com código legado
-function generateRecordId() { return Utilities.getUuid(); }
-function generateUUID()     { return Utilities.getUuid(); }
+function generateRecordId_() { return Utilities.getUuid(); }
+function generateUUID_()     { return Utilities.getUuid(); }
 
 // ------------------------------------------------------------
 // FUNÇÕES INTERNAS
 // ------------------------------------------------------------
-function _getAba(schema) {
-  return _garantirAba(_getSpreadsheet(), schema);
+function _getAba_(schema) {
+  if (!_abaMemo_[schema.nome]) _abaMemo_[schema.nome] = _garantirAba_(_getSpreadsheet_(), schema);
+  return _abaMemo_[schema.nome];
 }
 
-function _linhaParaObjeto(schema, linha) {
+function _linhaParaObjeto_(schema, linha) {
   const obj = {};
   schema.colunas.forEach((col, i) => obj[col] = linha[i]);
   return obj;
 }
 
-function _objetoParaLinha(schema, obj) {
-  return schema.colunas.map(col => obj[col] !== undefined ? obj[col] : '');
+// Todo texto é gravado com apóstrofo na frente, o que força a planilha a
+// guardá-lo como texto puro (o apóstrofo não aparece nem volta no getValues):
+//  - CPF/telefone com zero à esquerda não perdem o zero;
+//  - "+55 31..." não vira fórmula com erro;
+//  - nome digitado como "=IMPORTXML(...)" num formulário público não executa.
+function _objetoParaLinha_(schema, obj) {
+  return schema.colunas.map(col => {
+    const v = obj[col];
+    if (v === undefined || v === null) return '';
+    if (typeof v === 'string' && v !== '') return "'" + v;
+    return v;
+  });
 }
 
 // ------------------------------------------------------------
-// CACHE COM VERSIONAMENTO
+// CACHE EM 3 NÍVEIS (do mais rápido para o mais lento)
+//  1. Memória da execução: dentro de uma mesma chamada ao servidor,
+//     cada aba é lida uma vez só (antes, abrir a lista de um evento
+//     lia a aba Pessoas várias vezes).
+//  2. CacheService (compartilhado entre usuários, até 6h): a aba é
+//     guardada em blocos de ~90KB, então funciona com qualquer tamanho
+//     (o limite do Cache é 100KB por item; antes, aba grande nunca
+//     entrava no cache e toda leitura ia para a planilha).
+//  3. Planilha (só quando o cache não tem a versão atual).
+// Toda gravação sobe a "versão" da aba: o cache antigo deixa de ser
+// usado na hora, por isso a validade longa é segura.
 // ------------------------------------------------------------
-function _versaoTabela(schema) {
-  return Number(PropertiesService.getScriptProperties()
-    .getProperty('VER_' + schema.nome) || 0);
+const CACHE_TTL_SEG = 21600;          // 6h (máximo do CacheService)
+const CACHE_BLOCO = 90 * 1024;        // caracteres por bloco
+let _versoesMemo_ = null;             // Script Properties, lidas de uma vez
+const _tabelaMemo_ = {};              // linhas já lidas nesta execução
+
+function _versaoProp_(chave) {
+  if (!_versoesMemo_) _versoesMemo_ = PropertiesService.getScriptProperties().getProperties();
+  return _versoesMemo_[chave];
 }
 
-function _bumpVersao(schema) {
+function _versaoTabela_(schema) {
+  return Number(_versaoProp_('VER_' + schema.nome) || 0);
+}
+
+function _bumpVersao_(schema) {
+  // Dentro do lock: lê o valor atual direto (não o da memória).
   const props = PropertiesService.getScriptProperties();
-  props.setProperty('VER_' + schema.nome, String(_versaoTabela(schema) + 1));
+  const nova = Number(props.getProperty('VER_' + schema.nome) || 0) + 1;
+  props.setProperty('VER_' + schema.nome, String(nova));
+  if (!_versoesMemo_) _versoesMemo_ = props.getProperties();
+  _versoesMemo_['VER_' + schema.nome] = String(nova);
+  delete _tabelaMemo_[schema.nome];
 }
 
-function _lerTabelaComCache(schema) {
+// Esquece o que foi lido nesta execução (usado ao pegar o lock).
+function _recarregarVersoes_() {
+  _versoesMemo_ = null;
+  Object.keys(_tabelaMemo_).forEach(k => delete _tabelaMemo_[k]);
+}
+
+function _cacheLer_(chave) {
   const cache = CacheService.getScriptCache();
-  const chave = 'tab_' + schema.nome + '_' + _versaoTabela(schema);
-  const raw = cache.get(chave);
-  if (raw) { try { return JSON.parse(raw); } catch (e) {} }
-  const aba = _getAba(schema);
-  const ultimaLinha = aba.getLastRow();
-  if (ultimaLinha < 2) return [];
-  const dados = aba.getRange(2, 1, ultimaLinha - 1, schema.colunas.length).getValues();
-  const objetos = dados.map(linha => _linhaParaObjeto(schema, linha));
-  try { cache.put(chave, JSON.stringify(objetos), 300); } catch (e) {}
+  const n = Number(cache.get(chave) || 0);
+  if (!n) return null;
+  const chaves = [];
+  for (let i = 0; i < n; i++) chaves.push(chave + '_' + i);
+  const partes = cache.getAll(chaves);
+  let json = '';
+  for (let i = 0; i < n; i++) {
+    const p = partes[chave + '_' + i];
+    if (p === undefined || p === null) return null;
+    json += p;
+  }
+  try { return JSON.parse(json); } catch (e) { return null; }
+}
+
+function _cacheGravar_(chave, valor) {
+  try {
+    const json = JSON.stringify(valor);
+    const blocos = {};
+    let n = 0;
+    for (let i = 0; i < json.length; i += CACHE_BLOCO) blocos[chave + '_' + (n++)] = json.substr(i, CACHE_BLOCO);
+    if (n === 0 || n > 80) return;   // vazio ou enorme (>7MB): não cacheia
+    const cache = CacheService.getScriptCache();
+    cache.putAll(blocos, CACHE_TTL_SEG);
+    cache.put(chave, String(n), CACHE_TTL_SEG);
+  } catch (e) { /* cache é só otimização — falhar aqui não quebra nada */ }
+}
+
+function _lerTabelaComCache_(schema) {
+  const versao = _versaoTabela_(schema);
+  const memo = _tabelaMemo_[schema.nome];
+  if (memo && memo.versao === versao) return memo.objetos;
+
+  const chave = 'tab_' + schema.nome + '_' + versao;
+  let linhas = _cacheLer_(chave);
+  if (!linhas) {
+    const aba = _getAba_(schema);
+    const ultimaLinha = aba.getLastRow();
+    linhas = ultimaLinha < 2 ? [] : aba.getRange(2, 1, ultimaLinha - 1, schema.colunas.length).getValues();
+    // Guarda como listas (não objetos): o JSON fica bem menor.
+    _cacheGravar_(chave, linhas);
+  }
+  const objetos = linhas.map(linha => _linhaParaObjeto_(schema, linha));
+  _tabelaMemo_[schema.nome] = { versao: versao, objetos: objetos };
   return objetos;
 }
 
 // ------------------------------------------------------------
 // CRUD GENÉRICO
 // ------------------------------------------------------------
-function dbInserir(schema, dados) {
-  const colunaId = schema.colunas[0];
-  if (!dados[colunaId]) dados[colunaId] = gerarId(schema);
-  const aba = _getAba(schema);
-  aba.appendRow(_objetoParaLinha(schema, dados));
-  _bumpVersao(schema);
-  return dados;
+function dbInserir_(schema, dados) {
+  return _comLock_(function() {
+    const colunaId = schema.colunas[0];
+    if (!dados[colunaId]) dados[colunaId] = gerarId_(schema);
+    const aba = _getAba_(schema);
+    aba.appendRow(_objetoParaLinha_(schema, dados));
+    _bumpVersao_(schema);
+    return dados;
+  });
 }
 
-function dbListar(schema, filtro) {
-  const objetos = _lerTabelaComCache(schema);
+function dbListar_(schema, filtro) {
+  const objetos = _lerTabelaComCache_(schema);
   return filtro ? objetos.filter(filtro) : objetos;
 }
 
-function dbBuscarPorId(schema, id) {
+function dbBuscarPorId_(schema, id) {
   const colunaId = schema.colunas[0];
-  const resultado = dbListar(schema, r => r[colunaId] === id);
+  const resultado = dbListar_(schema, r => r[colunaId] === id);
   return resultado.length ? resultado[0] : null;
 }
 
-function dbAtualizar(schema, id, novosDados) {
-  const aba = _getAba(schema);
-  const ultimaLinha = aba.getLastRow();
-  if (ultimaLinha < 2) return null;
-  const colunaIds = aba.getRange(2, 1, ultimaLinha - 1, 1).getValues();
-  for (let i = 0; i < colunaIds.length; i++) {
-    if (colunaIds[i][0] === id) {
-      const numLinha = i + 2;
-      const linhaAtual = aba.getRange(numLinha, 1, 1, schema.colunas.length).getValues()[0];
-      const registro = _linhaParaObjeto(schema, linhaAtual);
-      Object.keys(novosDados).forEach(campo => {
-        if (schema.colunas.indexOf(campo) !== -1) registro[campo] = novosDados[campo];
-      });
-      aba.getRange(numLinha, 1, 1, schema.colunas.length).setValues([_objetoParaLinha(schema, registro)]);
-      _bumpVersao(schema);
-      return registro;
+function dbAtualizar_(schema, id, novosDados) {
+  return _comLock_(function() {
+    const aba = _getAba_(schema);
+    const ultimaLinha = aba.getLastRow();
+    if (ultimaLinha < 2) return null;
+    const colunaIds = aba.getRange(2, 1, ultimaLinha - 1, 1).getValues();
+    for (let i = 0; i < colunaIds.length; i++) {
+      if (_s_(colunaIds[i][0]) === _s_(id)) {
+        const numLinha = i + 2;
+        const linhaAtual = aba.getRange(numLinha, 1, 1, schema.colunas.length).getValues()[0];
+        const registro = _linhaParaObjeto_(schema, linhaAtual);
+        Object.keys(novosDados).forEach(campo => {
+          if (schema.colunas.indexOf(campo) !== -1) registro[campo] = novosDados[campo];
+        });
+        aba.getRange(numLinha, 1, 1, schema.colunas.length).setValues([_objetoParaLinha_(schema, registro)]);
+        _bumpVersao_(schema);
+        return registro;
+      }
     }
-  }
-  return null;
+    return null;
+  });
 }
 
-function dbExcluir(schema, id) {
-  const aba = _getAba(schema);
-  const ultimaLinha = aba.getLastRow();
-  if (ultimaLinha < 2) return false;
-  const colunaIds = aba.getRange(2, 1, ultimaLinha - 1, 1).getValues();
-  for (let i = 0; i < colunaIds.length; i++) {
-    if (colunaIds[i][0] === id) {
-      aba.deleteRow(i + 2);
-      _bumpVersao(schema);
-      return true;
+function dbExcluir_(schema, id) {
+  return _comLock_(function() {
+    const aba = _getAba_(schema);
+    const ultimaLinha = aba.getLastRow();
+    if (ultimaLinha < 2) return false;
+    const colunaIds = aba.getRange(2, 1, ultimaLinha - 1, 1).getValues();
+    for (let i = 0; i < colunaIds.length; i++) {
+      if (_s_(colunaIds[i][0]) === _s_(id)) {
+        aba.deleteRow(i + 2);
+        _bumpVersao_(schema);
+        return true;
+      }
     }
-  }
-  return false;
+    return false;
+  });
 }
 
-function dbBuscarPor(schema, campo, valor) {
-  return dbListar(schema, r => r[campo] === valor);
+// Exclui várias linhas numa passada só (de baixo pra cima, para os
+// números de linha não "andarem" enquanto apaga).
+function dbExcluirVarios_(schema, filtro) {
+  return _comLock_(function() {
+    const aba = _getAba_(schema);
+    const ultimaLinha = aba.getLastRow();
+    if (ultimaLinha < 2) return 0;
+    const dados = aba.getRange(2, 1, ultimaLinha - 1, schema.colunas.length).getValues();
+    let total = 0;
+    for (let i = dados.length - 1; i >= 0; i--) {
+      if (filtro(_linhaParaObjeto_(schema, dados[i]))) { aba.deleteRow(i + 2); total++; }
+    }
+    if (total) _bumpVersao_(schema);
+    return total;
+  });
 }
 
-function dbContar(schema, filtro) {
-  return dbListar(schema, filtro).length;
+function dbBuscarPor_(schema, campo, valor) {
+  return dbListar_(schema, r => r[campo] === valor);
+}
+
+function dbContar_(schema, filtro) {
+  return dbListar_(schema, filtro).length;
 }

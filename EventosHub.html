@@ -4,14 +4,14 @@
     <h4><i class="fas fa-calendar-days me-2 text-primary"></i>Eventos</h4>
     <p>Escolha um evento para montar a lista, gerar convites e acompanhar o check-in.</p>
   </div>
-  <button class="btn-hb" onclick="abrirModalEvento()"><i class="fas fa-plus"></i> Novo evento</button>
+  <button class="btn-hb" id="btnNovoEvento" onclick="abrirModalEvento()"><i class="fas fa-plus"></i> Novo evento</button>
 </div>
 
 <div class="row g-3 mb-3">
-  <div class="col-md-5">
+  <div class="col-12 col-md-5">
     <input type="text" class="form-control" id="buscaEvento" placeholder="Buscar evento por nome ou local...">
   </div>
-  <div class="col-md-3">
+  <div class="col-12 col-md-3">
     <select class="form-select" id="filtroStatusEvento">
       <option value="">Todos os status</option>
       <option value="Planejamento">Planejamento</option>
@@ -25,7 +25,7 @@
 
 <!-- Modal Novo/Editar Evento -->
 <div class="modal fade" id="modalEvento" tabindex="-1">
-  <div class="modal-dialog">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down">
     <div class="modal-content" style="border-radius:16px;border:none;">
       <div class="modal-header" style="border-bottom:1px solid var(--border);">
         <h6 class="modal-title fw-bold" id="modalEventoTitulo">Novo evento</h6>
@@ -38,10 +38,16 @@
           <div class="col-6"><label class="form-label">Data</label><input type="date" class="form-control" id="evData"></div>
           <div class="col-6"><label class="form-label">Capacidade</label><input type="number" min="0" class="form-control" id="evCapacidade" placeholder="opcional"></div>
         </div>
-        <div class="mb-3 mt-2"><label class="form-label">Local</label><input class="form-control" id="evLocal" placeholder="opcional"></div>
+        <div class="row g-2 mt-2 mb-3">
+          <div class="col-7"><label class="form-label">Local</label><input class="form-control" id="evLocal" placeholder="opcional"></div>
+          <div class="col-5"><label class="form-label">Status</label>
+            <select class="form-select" id="evStatus"><option value="Planejamento">Planejamento</option><option value="Ativo">Ativo</option><option value="Encerrado">Encerrado</option></select>
+          </div>
+        </div>
         <div class="mb-1"><label class="form-label">Observações</label><textarea class="form-control" id="evObs" rows="2"></textarea></div>
       </div>
       <div class="modal-footer" style="border-top:1px solid var(--border);">
+        <button class="btn btn-sm btn-outline-danger me-auto" id="btnExcluirEvento" style="display:none;" onclick="excluirEvento()"><i class="fas fa-trash"></i> Excluir</button>
         <button class="btn-hb-outline" data-bs-dismiss="modal">Cancelar</button>
         <button class="btn-hb" id="btnSalvarEvento" onclick="salvarEvento()"><i class="fas fa-check"></i> Salvar</button>
       </div>
@@ -52,6 +58,7 @@
 <script>
 (function() {
   var STATUS_PILL = { 'Ativo':'pill-green', 'Planejamento':'pill-amber', 'Encerrado':'pill-gray' };
+  var podeEditar = pode('eventos.editar');
 
   function render() {
     var busca = (document.getElementById('buscaEvento').value || '').toLowerCase();
@@ -66,18 +73,20 @@
     if (!lista.length) {
       wrap.innerHTML = '<div class="card-hb"><div class="empty-state"><i class="fas fa-calendar-plus"></i><h6>Nenhum evento por aqui ainda</h6>' +
         '<p>Crie o primeiro evento para começar a montar a lista de convidados.</p>' +
-        '<button class="btn-hb" onclick="abrirModalEvento()"><i class="fas fa-plus"></i> Novo evento</button></div></div>';
+        (pode('eventos.criar') ? '<button class="btn-hb" onclick="abrirModalEvento()"><i class="fas fa-plus"></i> Novo evento</button>' : '') + '</div></div>';
       return;
     }
 
-    wrap.innerHTML = '<div class="card-hb"><table class="table-hb"><thead><tr><th>Evento</th><th>Data</th><th>Local</th><th>Status</th><th></th></tr></thead><tbody>' +
+    wrap.innerHTML = '<div class="card-hb"><table class="table-hb resp"><thead><tr><th>Evento</th><th>Data</th><th>Local</th><th>Status</th><th></th></tr></thead><tbody>' +
       lista.map(function(e) {
-        return '<tr style="cursor:pointer" onclick="abrirEvento(\'' + e.id + '\')">' +
-          '<td><strong>' + e.nome + '</strong></td>' +
-          '<td>' + (e.data || '<span class="text-muted">—</span>') + '</td>' +
-          '<td>' + (e.local || '<span class="text-muted">—</span>') + '</td>' +
-          '<td><span class="pill ' + (STATUS_PILL[e.status] || 'pill-gray') + '">' + (e.status || '—') + '</span></td>' +
-          '<td class="text-end"><i class="fas fa-chevron-right text-muted"></i></td>' +
+        return '<tr style="cursor:pointer" onclick="abrirEvento(\'' + esc(e.id) + '\')">' +
+          '<td class="td-titulo"><strong>' + esc(e.nome) + '</strong></td>' +
+          '<td data-label="Data">' + (e.data ? esc(e.data) : '<span class="text-muted">—</span>') + '</td>' +
+          '<td data-label="Local">' + (e.local ? esc(e.local) : '<span class="text-muted">—</span>') + '</td>' +
+          '<td data-label="Status"><span class="pill ' + (STATUS_PILL[e.status] || 'pill-gray') + '">' + esc(e.status || '—') + '</span></td>' +
+          '<td class="text-end text-nowrap td-acoes">' +
+            (podeEditar ? '<button class="btn btn-sm btn-outline-secondary me-2" title="Editar evento" onclick="event.stopPropagation(); editarEvento(\'' + esc(e.id) + '\')"><i class="fas fa-pen"></i></button>' : '') +
+            '<i class="fas fa-chevron-right text-muted"></i></td>' +
         '</tr>';
       }).join('') + '</tbody></table></div>';
   }
@@ -86,40 +95,64 @@
     document.getElementById('modalEventoTitulo').innerText = ev ? 'Editar evento' : 'Novo evento';
     document.getElementById('evId').value = ev ? ev.id : '';
     document.getElementById('evNome').value = ev ? ev.nome : '';
-    document.getElementById('evLocal').value = ev ? ev.local : '';
+    document.getElementById('evLocal').value = ev ? (ev.local || '') : '';
     document.getElementById('evCapacidade').value = ev ? (ev.capacidade || '') : '';
-    document.getElementById('evData').value = '';
-    document.getElementById('evObs').value = '';
+    document.getElementById('evData').value = ev ? (ev.dataISO || '') : '';
+    document.getElementById('evStatus').value = ev ? (ev.status || 'Planejamento') : 'Planejamento';
+    document.getElementById('evObs').value = ev ? (ev.observacoes || '') : '';
+    document.getElementById('btnExcluirEvento').style.display = (ev && pode('eventos.excluir')) ? '' : 'none';
     new bootstrap.Modal(document.getElementById('modalEvento')).show();
+  };
+
+  window.editarEvento = function(id) {
+    var ev = window.EVENTOS_CACHE.filter(function(e){ return e.id === id; })[0];
+    if (ev) abrirModalEvento(ev);
+  };
+
+  window.excluirEvento = function() {
+    var id = document.getElementById('evId').value;
+    var ev = window.EVENTOS_CACHE.filter(function(e){ return e.id === id; })[0];
+    if (!ev) return;
+    if (!confirm('Excluir o evento "' + ev.nome + '" com TODOS os convites e lotes dele? Não dá para desfazer.')) return;
+    google.script.run.withSuccessHandler(function(resp) {
+      if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
+      bootstrap.Modal.getInstance(document.getElementById('modalEvento')).hide();
+      toast(resp.mensagem, 'ok');
+      recarregarEventosCache(render);
+    }).withFailureHandler(function(err){ toast(err.message, 'err'); }).apiExcluirEvento(window.TOKEN, id);
   };
 
   window.salvarEvento = function() {
     var nome = document.getElementById('evNome').value.trim();
     if (!nome) { toast('Informe o nome do evento.', 'err'); return; }
+    var idEdicao = document.getElementById('evId').value;
     var dados = {
       Nome: nome,
       Data: document.getElementById('evData').value || '',
       Local: document.getElementById('evLocal').value || '',
+      Status: document.getElementById('evStatus').value,
       Capacidade: document.getElementById('evCapacidade').value || '',
       Observacoes: document.getElementById('evObs').value || ''
     };
     var btn = document.getElementById('btnSalvarEvento');
     btn.disabled = true;
-    google.script.run
+    var runner = google.script.run
       .withSuccessHandler(function(resp) {
         btn.disabled = false;
         if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
         bootstrap.Modal.getInstance(document.getElementById('modalEvento')).hide();
-        toast('Evento criado.', 'ok');
-        var novoId = resp.dados && resp.dados.id;
+        toast(idEdicao ? 'Evento atualizado.' : 'Evento criado.', 'ok');
+        var novoId = !idEdicao && resp.dados && resp.dados.id;
         recarregarEventosCache(function() {
           if (novoId) abrirEvento(novoId, 'evento-lista'); else render();
         });
       })
-      .withFailureHandler(function(err) { btn.disabled = false; toast(err.message, 'err'); })
-      .apiCadastrarEvento(window.TOKEN, dados);
+      .withFailureHandler(function(err) { btn.disabled = false; toast(err.message, 'err'); });
+    if (idEdicao) runner.apiEditarEvento(window.TOKEN, idEdicao, dados);
+    else runner.apiCadastrarEvento(window.TOKEN, dados);
   };
 
+  if (!pode('eventos.criar')) document.getElementById('btnNovoEvento').style.display = 'none';
   document.getElementById('buscaEvento').addEventListener('input', render);
   document.getElementById('filtroStatusEvento').addEventListener('change', render);
   render();

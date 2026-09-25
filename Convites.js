@@ -3,22 +3,26 @@
  * CONVITES.GS - Regras de negócio dos convites
  * ============================================================
  * Operações:
- *  - convidarPessoa / convidarLote
- *  - responderConvite (Confirmado / Recusado)
- *  - substituirConvidado (nunca apaga o original)
- *  - registrarWalkin
- *  - fazerCheckin / fazerCheckinPorQR
- *  - janelaEvento (verifica se check-in está aberto)
- *  - resumoEvento
+ *  - convidarPessoa_ / convidarLote_
+ *  - responderConvite_ (Confirmado / Recusado)
+ *  - apiInfoConvitePublico / apiResponderConvitePublico (link pessoal)
+ *  - substituirConvidado_ (nunca apaga o original)
+ *  - registrarWalkin_
+ *  - fazerCheckin_ / fazerCheckinPorQR_
+ *  - janelaEvento_ (verifica se check-in está aberto)
+ *  - resumoEvento_ / _vagasEvento_
  * ============================================================
  */
+
+const STATUS_INATIVOS = ['Cancelado', 'Substituído'];
+function _conviteAtivo_(c) { return STATUS_INATIVOS.indexOf(c.Status) === -1; }
 
 // ------------------------------------------------------------
 // JANELA DE CHECK-IN
 // Abre no dia do evento; fecha no fim do dia seguinte (+1 dia).
 // Admin pode operar fora da janela para correções.
 // ------------------------------------------------------------
-function janelaEvento(evento) {
+function janelaEvento_(evento) {
   if (!evento || !evento.Data) {
     return { janela: 'sem-data', mensagem: 'Evento sem data definida.', dataFmt: '' };
   }
@@ -26,23 +30,25 @@ function janelaEvento(evento) {
   if (isNaN(d.getTime())) {
     return { janela: 'sem-data', mensagem: 'Data do evento inválida.', dataFmt: '' };
   }
-  const inicio  = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const fim     = new Date(inicio.getTime() + 2 * 24 * 60 * 60 * 1000 - 1);
-  const agora   = new Date();
-  const dataFmt = d.toLocaleDateString('pt-BR');
+  // Compara só o dia (yyyyMMdd) no fuso do sistema.
+  const diaEvento = Number(_fmtData_(d, 'yyyyMMdd'));
+  const diaSeguinte = Number(_fmtData_(new Date(d.getTime() + 24 * 60 * 60 * 1000), 'yyyyMMdd'));
+  const hoje = Number(_fmtData_(new Date(), 'yyyyMMdd'));
+  const dataFmt = _fmtData_(d);
 
-  if (agora < inicio) {
+  if (hoje < diaEvento) {
     return { janela: 'antes',  dataFmt, mensagem: 'Este evento acontecerá em ' + dataFmt + '. O check-in abre no dia do evento.' };
   }
-  if (agora > fim) {
+  if (hoje > diaSeguinte) {
     return { janela: 'depois', dataFmt, mensagem: 'Este evento já aconteceu (' + dataFmt + '). O check-in está encerrado.' };
   }
   return { janela: 'aberto', dataFmt, mensagem: '' };
 }
 
-function _validarJanela(idEvento, sessao) {
-  const evento = dbBuscarPorId(DB.EVENTOS, idEvento);
-  const j = janelaEvento(evento);
+function _validarJanela_(idEvento, sessao) {
+  const evento = dbBuscarPorId_(DB.EVENTOS, idEvento);
+  if (!evento) throw new Error('Evento não encontrado.');
+  const j = janelaEvento_(evento);
   if (j.janela !== 'aberto' && j.janela !== 'sem-data' && sessao.perfil !== 'Admin') {
     throw new Error(j.mensagem);
   }
@@ -54,36 +60,36 @@ function _validarJanela(idEvento, sessao) {
 // Bloqueia duplicidade: mesma pessoa não pode ter dois convites
 // "vivos" no mesmo evento (Cancelado/Substituído não contam).
 // ------------------------------------------------------------
-function convidarPessoa(idEvento, idPessoa, gestor, idLote, obs) {
-  if (!dbBuscarPorId(DB.EVENTOS, idEvento)) throw new Error('Evento não encontrado: ' + idEvento);
-  if (!dbBuscarPorId(DB.PESSOAS, idPessoa)) throw new Error('Pessoa não encontrada: ' + idPessoa);
+function convidarPessoa_(idEvento, idPessoa, gestor, idLote, obs) {
+  return _comLock_(function() {
+    if (!dbBuscarPorId_(DB.EVENTOS, idEvento)) throw new Error('Evento não encontrado.');
+    if (!dbBuscarPorId_(DB.PESSOAS, idPessoa)) throw new Error('Pessoa não encontrada.');
 
-  const statusMortos = ['Cancelado', 'Substituído'];
-  const jaConvidada = dbListar(DB.CONVITES, c =>
-    c.ID_Evento === idEvento && c.ID_Pessoa === idPessoa &&
-    statusMortos.indexOf(c.Status) === -1
-  );
-  if (jaConvidada.length > 0) throw new Error('Esta pessoa já possui convite ativo neste evento.');
+    const jaConvidada = dbListar_(DB.CONVITES, c =>
+      c.ID_Evento === idEvento && c.ID_Pessoa === idPessoa && _conviteAtivo_(c)
+    );
+    if (jaConvidada.length > 0) throw new Error('Esta pessoa já possui convite ativo neste evento.');
 
-  return dbInserir(DB.CONVITES, {
-    ID_Evento:   idEvento,
-    ID_Pessoa:   idPessoa,
-    ID_Lote:     idLote || '',
-    Gestor:      gestor || '',
-    Status:      'Convidado',
-    Origem:      idLote ? 'Lote público' : 'Lista original',
-    QR_Token:    Utilities.getUuid(),
-    QR_Valido:   'Sim',
-    Data_Convite: new Date(),
-    Observacoes: obs || ''
+    return dbInserir_(DB.CONVITES, {
+      ID_Evento:   idEvento,
+      ID_Pessoa:   idPessoa,
+      ID_Lote:     idLote || '',
+      Gestor:      gestor || '',
+      Status:      'Convidado',
+      Origem:      idLote ? 'Lote público' : 'Lista original',
+      QR_Token:    Utilities.getUuid(),
+      QR_Valido:   'Sim',
+      Data_Convite: new Date(),
+      Observacoes: obs || ''
+    });
   });
 }
 
-function convidarLote(idEvento, idsPessoas, gestor) {
+function convidarLote_(idEvento, idsPessoas, gestor) {
   const resultado = { criados: [], erros: [] };
   idsPessoas.forEach(idPessoa => {
     try {
-      const convite = convidarPessoa(idEvento, idPessoa, gestor);
+      const convite = convidarPessoa_(idEvento, idPessoa, gestor);
       resultado.criados.push(convite.ID_Convite);
     } catch (e) {
       resultado.erros.push({ idPessoa, erro: e.message });
@@ -95,47 +101,61 @@ function convidarLote(idEvento, idsPessoas, gestor) {
 // ------------------------------------------------------------
 // RESPOSTA DO CONVIDADO
 // ------------------------------------------------------------
-function responderConvite(idConvite, resposta) {
+function responderConvite_(idConvite, resposta) {
   if (['Confirmado', 'Recusado'].indexOf(resposta) === -1) {
     throw new Error('Resposta inválida. Use "Confirmado" ou "Recusado".');
   }
-  const convite = dbAtualizar(DB.CONVITES, idConvite, { Status: resposta, Data_Resposta: new Date() });
-  if (!convite) throw new Error('Convite não encontrado: ' + idConvite);
+  const convite = dbAtualizar_(DB.CONVITES, idConvite, { Status: resposta, Data_Resposta: new Date() });
+  if (!convite) throw new Error('Convite não encontrado.');
   return convite;
 }
 
 // ------------------------------------------------------------
-// LINK PESSOAL DE CONFIRMAÇÃO — todo convidado (manual, lote ou
-// substituição) recebe um link público (pelo próprio QR_Token) para
-// confirmar ou recusar presença sozinho, sem precisar de login.
+// LINK PESSOAL DE CONFIRMAÇÃO (tela ConfirmarPresenca.html)
+// Acessado via ?pagina=confirmar&token=QR_TOKEN — sem login.
+// Todo convidado (manual, lote ou substituição) tem o seu.
 // ------------------------------------------------------------
+function _convitePorQR_(qrToken) {
+  const t = _s_(qrToken);
+  if (!t) return null;
+  return dbListar_(DB.CONVITES, c => _s_(c.QR_Token) === t)[0] || null;
+}
+
 function apiInfoConvitePublico(qrToken) {
   try {
-    const convite = dbListar(DB.CONVITES, c => c.QR_Token === qrToken)[0];
-    if (!convite) return { ok: false, mensagem: 'Link inválido.' };
-    if (['Cancelado', 'Substituído'].indexOf(convite.Status) !== -1) {
-      return { ok: false, mensagem: 'Este convite não está mais ativo.' };
+    const convite = _convitePorQR_(qrToken);
+    if (!convite) return { ok: false, mensagem: 'Link inválido ou convite não encontrado.' };
+    if (convite.QR_Valido === 'Não' || !_conviteAtivo_(convite)) {
+      return { ok: false, mensagem: 'Este convite não está mais ativo (foi substituído ou cancelado).' };
     }
-    const evento = dbBuscarPorId(DB.EVENTOS, convite.ID_Evento);
+    const evento = dbBuscarPorId_(DB.EVENTOS, convite.ID_Evento);
     if (!evento) return { ok: false, mensagem: 'Evento não encontrado.' };
-    const pessoa = dbBuscarPorId(DB.PESSOAS, convite.ID_Pessoa) || {};
-    const empresa = pessoa.ID_Empresa ? dbBuscarPorId(DB.EMPRESAS, pessoa.ID_Empresa) : null;
+    const pessoa  = dbBuscarPorId_(DB.PESSOAS, convite.ID_Pessoa) || {};
+    const empresa = pessoa.ID_Empresa ? dbBuscarPorId_(DB.EMPRESAS, pessoa.ID_Empresa) : null;
     return { ok: true, dados: {
-      nome: pessoa.Nome || '', empresa: empresa ? empresa.Nome : '',
-      evento: evento.Nome, dataEvento: evento.Data ? new Date(evento.Data).toLocaleDateString('pt-BR') : '',
-      local: evento.Local || '', status: convite.Status
+      nome:       _s_(pessoa.Nome),
+      empresa:    empresa ? _s_(empresa.Nome) : '',
+      evento:     _s_(evento.Nome),
+      dataEvento: _fmtData_(evento.Data),
+      local:      _s_(evento.Local),
+      status:     _s_(convite.Status)
     } };
   } catch (e) { return { ok: false, mensagem: e.message }; }
 }
 
 function apiResponderConvitePublico(qrToken, resposta) {
   try {
-    const convite = dbListar(DB.CONVITES, c => c.QR_Token === qrToken)[0];
-    if (!convite) return { ok: false, mensagem: 'Link inválido.' };
-    if (convite.Status === 'Presente') return { ok: false, mensagem: 'Você já fez check-in. Não é possível alterar.' };
-    if (['Cancelado', 'Substituído'].indexOf(convite.Status) !== -1) return { ok: false, mensagem: 'Este convite não está mais ativo.' };
-    responderConvite(convite.ID_Convite, resposta);
-    return { ok: true, mensagem: resposta === 'Confirmado' ? 'Presença confirmada! Até breve.' : 'Recebemos sua resposta. Obrigado por avisar.' };
+    if (['Confirmado', 'Recusado'].indexOf(resposta) === -1) return { ok: false, mensagem: 'Resposta inválida.' };
+    return _comLock_(function() {
+      const convite = _convitePorQR_(qrToken);
+      if (!convite) return { ok: false, mensagem: 'Link inválido.' };
+      if (convite.QR_Valido === 'Não' || !_conviteAtivo_(convite)) return { ok: false, mensagem: 'Este convite não está mais ativo.' };
+      if (convite.Status === 'Presente') return { ok: false, mensagem: 'Você já fez check-in. Não é possível alterar.' };
+      responderConvite_(convite.ID_Convite, resposta);
+      return { ok: true, mensagem: resposta === 'Confirmado'
+        ? 'Presença confirmada! Te esperamos no evento.'
+        : 'Resposta registrada. Obrigado por avisar.' };
+    });
   } catch (e) { return { ok: false, mensagem: e.message }; }
 }
 
@@ -144,47 +164,51 @@ function apiResponderConvitePublico(qrToken, resposta) {
 // O original ganha status Substituído; nasce um convite novo.
 // Regra de ouro: nunca editar o convite original para "virar" outra pessoa.
 // ------------------------------------------------------------
-function substituirConvidado(idConviteOriginal, idNovaPessoa, motivo, autorizadoPor) {
-  const original = dbBuscarPorId(DB.CONVITES, idConviteOriginal);
-  if (!original) throw new Error('Convite original não encontrado.');
-  if (original.Status === 'Substituído') throw new Error('Este convite já foi substituído anteriormente.');
-  if (!dbBuscarPorId(DB.PESSOAS, idNovaPessoa)) throw new Error('Nova pessoa não encontrada.');
+function substituirConvidado_(idConviteOriginal, idNovaPessoa, motivo, autorizadoPor) {
+  return _comLock_(function() {
+    const original = dbBuscarPorId_(DB.CONVITES, idConviteOriginal);
+    if (!original) throw new Error('Convite original não encontrado.');
+    if (original.Status === 'Substituído') throw new Error('Este convite já foi substituído anteriormente.');
+    if (original.Status === 'Cancelado')   throw new Error('Este convite está cancelado e não pode ser substituído.');
+    if (original.Status === 'Presente')    throw new Error('O convidado original já entrou; não é possível substituí-lo.');
+    if (!dbBuscarPorId_(DB.PESSOAS, idNovaPessoa)) throw new Error('Nova pessoa não encontrada.');
 
-  dbAtualizar(DB.CONVITES, idConviteOriginal, {
-    Status: 'Substituído',
-    Motivo_Substituicao: motivo || '',
-    Autorizado_Por: autorizadoPor || '',
-    QR_Valido: 'Não'
-  });
+    dbAtualizar_(DB.CONVITES, idConviteOriginal, {
+      Status: 'Substituído',
+      Motivo_Substituicao: motivo || '',
+      Autorizado_Por: autorizadoPor || '',
+      QR_Valido: 'Não'
+    });
 
-  return dbInserir(DB.CONVITES, {
-    ID_Evento:           original.ID_Evento,
-    ID_Pessoa:           idNovaPessoa,
-    ID_Lote:             original.ID_Lote || '',
-    Gestor:              original.Gestor,
-    Status:              'Confirmado',
-    Origem:              'Substituição',
-    ID_Convite_Original: idConviteOriginal,
-    Motivo_Substituicao: motivo || '',
-    Autorizado_Por:      autorizadoPor || '',
-    QR_Token:            Utilities.getUuid(),
-    QR_Valido:           'Sim',
-    Data_Convite:        new Date()
+    return dbInserir_(DB.CONVITES, {
+      ID_Evento:           original.ID_Evento,
+      ID_Pessoa:           idNovaPessoa,
+      ID_Lote:             original.ID_Lote || '',
+      Gestor:              original.Gestor,
+      Status:              'Confirmado',
+      Origem:              'Substituição',
+      ID_Convite_Original: idConviteOriginal,
+      Motivo_Substituicao: motivo || '',
+      Autorizado_Por:      autorizadoPor || '',
+      QR_Token:            Utilities.getUuid(),
+      QR_Valido:           'Sim',
+      Data_Convite:        new Date()
+    });
   });
 }
 
 // ------------------------------------------------------------
 // WALK-IN — pessoa que aparece sem convite e é autorizada a entrar
 // ------------------------------------------------------------
-function registrarWalkin(idEvento, opcoes) {
-  if (!dbBuscarPorId(DB.EVENTOS, idEvento)) throw new Error('Evento não encontrado.');
+function registrarWalkin_(idEvento, opcoes) {
+  if (!dbBuscarPorId_(DB.EVENTOS, idEvento)) throw new Error('Evento não encontrado.');
 
   let idPessoa = opcoes.idPessoa;
   if (!idPessoa) {
     if (!opcoes.dadosNovaPessoa || !opcoes.dadosNovaPessoa.Nome) {
       throw new Error('Informe idPessoa ou dadosNovaPessoa.Nome.');
     }
-    const nova = dbInserir(DB.PESSOAS, {
+    const nova = dbInserir_(DB.PESSOAS, {
       Nome:          opcoes.dadosNovaPessoa.Nome,
       Categoria:     opcoes.dadosNovaPessoa.Categoria || 'Outro',
       Observacoes:   'Cadastro criado no check-in (walk-in)',
@@ -194,7 +218,7 @@ function registrarWalkin(idEvento, opcoes) {
     idPessoa = nova.ID_Pessoa;
   }
 
-  return dbInserir(DB.CONVITES, {
+  return dbInserir_(DB.CONVITES, {
     ID_Evento:      idEvento,
     ID_Pessoa:      idPessoa,
     Gestor:         '',
@@ -213,32 +237,52 @@ function registrarWalkin(idEvento, opcoes) {
 // ------------------------------------------------------------
 // CHECK-IN
 // ------------------------------------------------------------
-function fazerCheckin(idConvite, usuario) {
-  const convite = dbBuscarPorId(DB.CONVITES, idConvite);
-  if (!convite) throw new Error('Convite não encontrado.');
-  if (convite.Status === 'Presente') throw new Error('Check-in já realizado para este convite.');
-  if (['Cancelado', 'Substituído'].indexOf(convite.Status) !== -1) {
-    throw new Error('Convite ' + convite.Status.toLowerCase() + ' não pode fazer check-in.');
-  }
-  return dbAtualizar(DB.CONVITES, idConvite, {
-    Status: 'Presente', Checkin_DataHora: new Date(), Checkin_Por: usuario || ''
+function fazerCheckin_(idConvite, usuario) {
+  return _comLock_(function() {
+    const convite = dbBuscarPorId_(DB.CONVITES, idConvite);
+    if (!convite) throw new Error('Convite não encontrado.');
+    if (convite.Status === 'Presente') {
+      throw new Error('Check-in já realizado' + (convite.Checkin_DataHora ? ' às ' + _fmtData_(convite.Checkin_DataHora, 'HH:mm') : '') + '.');
+    }
+    if (!_conviteAtivo_(convite)) {
+      throw new Error('Convite ' + convite.Status.toLowerCase() + ' não pode fazer check-in.');
+    }
+    if (convite.Status === 'Recusado') {
+      // Convidado tinha recusado mas apareceu: libera, registrando no histórico.
+      convite.Observacoes = (convite.Observacoes ? _s_(convite.Observacoes) + ' | ' : '') + 'Havia recusado, mas compareceu';
+    }
+    return dbAtualizar_(DB.CONVITES, idConvite, {
+      Status: 'Presente', Checkin_DataHora: new Date(), Checkin_Por: usuario || '',
+      Observacoes: convite.Observacoes || ''
+    });
   });
+}
+
+// O QR pode conter só o token ou o link pessoal inteiro (…?pagina=confirmar&token=XYZ).
+function _extrairTokenQR_(conteudo) {
+  const t = _s_(conteudo);
+  const m = t.match(/[?&]token=([A-Za-z0-9-]+)/);
+  return m ? m[1] : t;
 }
 
 /**
  * Check-in via QR Code (scanner na porta).
+ * Se idEvento vier, recusa QR de outro evento.
  */
-function fazerCheckinPorQR(qrToken, usuario) {
-  const convites = dbListar(DB.CONVITES, c => c.QR_Token === qrToken && c.QR_Valido === 'Sim');
-  if (!convites.length) throw new Error('QR Code inválido ou não encontrado.');
-  return fazerCheckin(convites[0].ID_Convite, usuario);
+function fazerCheckinPorQR_(conteudoQR, usuario, idEvento, sessao) {
+  const qrToken = _extrairTokenQR_(conteudoQR);
+  const convite = _convitePorQR_(qrToken);
+  if (!convite || convite.QR_Valido !== 'Sim') throw new Error('QR Code inválido ou não encontrado.');
+  if (idEvento && convite.ID_Evento !== idEvento) throw new Error('Este QR Code é de outro evento.');
+  if (sessao) _validarJanela_(convite.ID_Evento, sessao);
+  return fazerCheckin_(convite.ID_Convite, usuario);
 }
 
 // ------------------------------------------------------------
 // RESUMO DO EVENTO
 // ------------------------------------------------------------
-function resumoEvento(idEvento) {
-  const convites  = dbListar(DB.CONVITES, c => c.ID_Evento === idEvento);
+function resumoEvento_(idEvento) {
+  const convites  = dbListar_(DB.CONVITES, c => c.ID_Evento === idEvento);
   const porStatus = {};
   const porOrigem = {};
   convites.forEach(c => {
@@ -259,11 +303,13 @@ function resumoEvento(idEvento) {
 // VAGAS DISPONÍVEIS — respeita a capacidade cadastrada no evento.
 // disponiveis === null significa evento sem limite de capacidade.
 // ------------------------------------------------------------
-function _vagasEvento(idEvento) {
-  const evento = dbBuscarPorId(DB.EVENTOS, idEvento);
+function _vagasEvento_(idEvento) {
+  const evento = dbBuscarPorId_(DB.EVENTOS, idEvento);
   const capacidade = Number(evento && evento.Capacidade) || 0;
-  if (!capacidade) return { capacidade: 0, ativos: 0, disponiveis: null };
-  const statusMortos = ['Cancelado', 'Substituído'];
-  const ativos = dbContar(DB.CONVITES, c => c.ID_Evento === idEvento && statusMortos.indexOf(c.Status) === -1);
-  return { capacidade, ativos, disponiveis: Math.max(0, capacidade - ativos) };
+  const ativos = dbContar_(DB.CONVITES, c => c.ID_Evento === idEvento && _conviteAtivo_(c));
+  return {
+    capacidade:  capacidade,
+    ativos:      ativos,
+    disponiveis: capacidade > 0 ? Math.max(0, capacidade - ativos) : null
+  };
 }

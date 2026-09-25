@@ -19,11 +19,11 @@
   google.script.run
     .withSuccessHandler(function(resp) {
       if (resp && resp.auth === false) { forcarLogout('Sessão expirada.'); return; }
-      if (!resp.ok) { document.getElementById('visaoWrap').innerHTML = '<div class="empty-state"><i class="fas fa-triangle-exclamation"></i><p>' + resp.mensagem + '</p></div>'; return; }
+      if (!resp.ok) { document.getElementById('visaoWrap').innerHTML = '<div class="empty-state"><i class="fas fa-triangle-exclamation"></i><p>' + esc(resp.mensagem) + '</p></div>'; return; }
       render(resp.dados);
     })
     .withFailureHandler(function(err) {
-      document.getElementById('visaoWrap').innerHTML = '<div class="empty-state"><i class="fas fa-triangle-exclamation"></i><p>' + err.message + '</p></div>';
+      document.getElementById('visaoWrap').innerHTML = '<div class="empty-state"><i class="fas fa-triangle-exclamation"></i><p>' + esc(err.message) + '</p></div>';
     })
     .apiDashboardEvento(window.TOKEN, idEvento);
 
@@ -90,8 +90,8 @@
   }
 
   function kpi(lbl, val, sub) {
-    return '<div class="col-6 col-lg-3"><div class="kpi"><div class="lbl">' + lbl + '</div><div class="val">' + val + '</div>' +
-      (sub ? '<div class="sub">' + sub + '</div>' : '') + '</div></div>';
+    return '<div class="col-6 col-lg-3"><div class="kpi"><div class="lbl">' + lbl + '</div><div class="val">' + esc(val) + '</div>' +
+      (sub ? '<div class="sub">' + esc(sub) + '</div>' : '') + '</div></div>';
   }
 
   function rankHtml(list, chaveNome, chaveVal) {
@@ -100,7 +100,7 @@
     return list.map(function(g) {
       var pct = Math.round(100 * g[chaveVal] / max);
       return '<div class="mb-2">' +
-        '<div class="d-flex justify-content-between" style="font-size:.82rem;"><span>' + g[chaveNome] + '</span><strong>' + g[chaveVal] + '</strong></div>' +
+        '<div class="d-flex justify-content-between" style="font-size:.82rem;"><span>' + esc(g[chaveNome]) + '</span><strong>' + esc(g[chaveVal]) + '</strong></div>' +
         '<div style="height:6px;background:var(--bg);border-radius:20px;overflow:hidden;"><div style="height:100%;width:' + pct + '%;background:var(--blue-600);border-radius:20px;"></div></div>' +
       '</div>';
     }).join('');
@@ -113,7 +113,7 @@
     return labels.sort(function(a,b){ return porOrigem[b]-porOrigem[a]; }).map(function(l) {
       var pct = Math.round(100 * porOrigem[l] / total);
       return '<div class="d-flex justify-content-between align-items-center mb-2">' +
-        '<span style="font-size:.82rem;"><i class="fas ' + (ORIGEM_ICON[l] || 'fa-circle') + ' me-2 text-muted" style="width:14px;"></i>' + l + '</span>' +
+        '<span style="font-size:.82rem;"><i class="fas ' + (ORIGEM_ICON[l] || 'fa-circle') + ' me-2 text-muted" style="width:14px;"></i>' + esc(l) + '</span>' +
         '<span><strong>' + porOrigem[l] + '</strong> <span class="text-muted small">(' + pct + '%)</span></span>' +
       '</div>';
     }).join('');

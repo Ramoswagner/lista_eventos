@@ -21,6 +21,17 @@ const VIEW_MAP = {
   'config':         'ConfigPainel'     // gestão de logins
 };
 
+// Tokens públicos (lote e convite) são UUIDs. Qualquer outra coisa na URL
+// é descartada antes de chegar ao template.
+function _tokenPublicoValido_(t) { return /^[A-Za-z0-9-]{8,64}$/.test(_s_(t)); }
+
+// Lança erro se o perfil logado não pode fazer a ação (matriz PERMISSOES em Auth.js).
+function _exigirPermissao_(s, modulo, acao) {
+  if (!temPermissao_(s.perfil, modulo, acao)) {
+    throw new Error('Seu perfil (' + s.perfil + ') não tem permissão para esta ação.');
+  }
+}
+
 // ------------------------------------------------------------
 // ENTRY POINT
 // ------------------------------------------------------------
@@ -31,8 +42,7 @@ function doGet(e) {
   // Tela pública de lote (sem login) — empresa se inscreve num lote com vagas
   if (pagina === 'convite' && token) {
     const tpl = HtmlService.createTemplateFromFile('ConvitePublico');
-    tpl.loteToken = token;
-    tpl.urlBase   = ScriptApp.getService().getUrl();
+    tpl.loteToken = _tokenPublicoValido_(token) ? token : '';
     return tpl.evaluate()
       .setTitle('Inscrição — Eventos Hospital da Baleia')
       .addMetaTag('viewport', 'width=device-width, initial-scale=1');
@@ -42,7 +52,7 @@ function doGet(e) {
   // (manual, lote ou substituição) confirma/recusa presença pelo próprio link
   if (pagina === 'confirmar' && token) {
     const tpl = HtmlService.createTemplateFromFile('ConfirmarPresenca');
-    tpl.qrToken = token;
+    tpl.qrToken = _tokenPublicoValido_(token) ? token : '';
     return tpl.evaluate()
       .setTitle('Confirmar presença — Eventos Hospital da Baleia')
       .addMetaTag('viewport', 'width=device-width, initial-scale=1');
@@ -63,20 +73,79 @@ function doGet(e) {
 function getViewContent(viewName) {
   const fileName = VIEW_MAP[viewName];
   if (!fileName) {
-    return '<div class="alert alert-danger">Página não encontrada: ' + viewName + '</div>';
+    return '<div class="alert alert-danger">Página não encontrada.</div>';
   }
   try {
     return HtmlService.createHtmlOutputFromFile(fileName).getContent();
   } catch (e) {
-    return '<div class="alert alert-danger">Erro ao carregar view: ' + e.message + '</div>';
+    return '<div class="alert alert-danger">Erro ao carregar a tela.</div>';
   }
+}
+
+// ------------------------------------------------------------
+// ENDEREÇO PÚBLICO DOS LINKS (lote e confirmação)
+// Os links nunca ficam gravados na planilha: são montados na hora a
+// partir do token + este endereço. Então, se o endereço mudar, basta
+// ajustar aqui (ou em Configurações) e todos os links voltam a valer.
+//  1. Se o Admin fixou um endereço em Configurações, usa ele.
+//  2. Senão usa o da implantação atual, trocando /dev por /exec
+//     (/dev só abre para editores do script — convidado veria erro).
+// ------------------------------------------------------------
+let _urlBaseMemo_ = null;
+function _urlBase_() {
+  if (_urlBaseMemo_) return _urlBaseMemo_;
+  _urlBaseMemo_ = _calcularUrlBase_();
+  return _urlBaseMemo_;
+}
+
+function _calcularUrlBase_() {
+  const fixa = _s_(_configObter_('URL_PUBLICA', ''));
+  if (fixa) return fixa;
+  return _s_(ScriptApp.getService().getUrl()).replace(/\/dev$/, '/exec');
+}
+
+function _urlPublicaValida_(url) {
+  return /^https:\/\/script\.google\.com\/(a\/macros\/[^\/]+\/)?macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(url);
+}
+
+function apiObterUrlPublica(token) {
+  const s = validarSessao_(token);
+  if (!s) return NEGADO;
+  const fixa = _s_(_configObter_('URL_PUBLICA', ''));
+  const detectada = _s_(ScriptApp.getService().getUrl());
+  return { ok: true, dados: {
+    atual: _urlBase_(),
+    fixa: fixa,
+    detectada: detectada,
+    avisoDev: /\/dev$/.test(detectada) && !fixa
+  } };
+}
+
+// url vazia = volta a usar a detecção automática.
+function apiSalvarUrlPublica(token, url) {
+  try {
+    const s = validarSessao_(token);
+    if (!s) return NEGADO;
+    if (s.perfil !== 'Admin') return { ok: false, mensagem: 'Apenas o administrador altera o endereço dos links.' };
+    const limpa = _s_(url).replace(/\?.*$/, '').replace(/\/dev$/, '/exec');
+    if (limpa && !_urlPublicaValida_(limpa)) {
+      throw new Error('Endereço inválido. Use o "URL do app da Web" da implantação, terminado em /exec.');
+    }
+    if (limpa) _configSalvar_('URL_PUBLICA', limpa);
+    else if (_configObter_('URL_PUBLICA', '')) dbExcluir_(DB.CONFIG, 'URL_PUBLICA');
+    _urlBaseMemo_ = null;
+    return { ok: true, mensagem: limpa ? 'Endereço dos links salvo.' : 'Voltou para o endereço automático.', dados: { atual: _urlBase_() } };
+  } catch (e) { return { ok: false, mensagem: e.message }; }
+}
+function _linkConfirmacao_(qrToken, urlBase) {
+  return qrToken ? (urlBase || _urlBase_()) + '?pagina=confirmar&token=' + qrToken : '';
 }
 
 // ------------------------------------------------------------
 // BOOTSTRAP (tudo em uma chamada só)
 // ------------------------------------------------------------
 function apiBootstrapGestao(token) {
-  const s = validarSessao(token);
+  const s = validarSessao_(token);
   if (!s) return NEGADO;
   return { ok: true, dados: {
     pessoas:  apiListarPessoas(token).dados   || [],
@@ -89,87 +158,113 @@ function apiBootstrapGestao(token) {
 // Uma chamada só para abrir a tela "Lista & Convites" de um evento
 // (em vez de 4 chamadas separadas: convidados, lotes, empresas, gestores).
 function apiBootstrapEvento(token, idEvento) {
-  const s = validarSessao(token);
+  const s = validarSessao_(token);
   if (!s) return NEGADO;
   return { ok: true, dados: {
     convidados: apiListaConvidados(token, idEvento).dados     || [],
     lotes:      apiListarLotes(token, idEvento).dados          || [],
     empresas:   apiListarEmpresas(token).dados                 || [],
     gestores:   apiListarGestoresNomes(token).dados             || [],
-    vagas:      _vagasEvento(idEvento)
+    vagas:      _vagasEvento_(idEvento),
+    perfil:     s.perfil,
+    permissoes: _permissoesDoPerfil_(s.perfil)
   } };
+}
+
+// Dados da sessão atual (nome, perfil e o que pode fazer) — a tela
+// chama ao entrar para mostrar/esconder botões conforme as permissões.
+function apiSessaoAtual(token) {
+  const s = validarSessao_(token);
+  if (!s) return NEGADO;
+  return { ok: true, dados: { gestor: s.gestor, setor: s.setor, perfil: s.perfil, permissoes: _permissoesDoPerfil_(s.perfil) } };
 }
 
 // ------------------------------------------------------------
 // EVENTOS
 // ------------------------------------------------------------
+function _eventoParaCliente_(e) {
+  return {
+    id:          e.ID_Evento,
+    nome:        _s_(e.Nome),
+    data:        _fmtData_(e.Data),
+    dataISO:     _fmtData_(e.Data, 'yyyy-MM-dd'),
+    local:       _s_(e.Local),
+    status:      _s_(e.Status),
+    capacidade:  Number(e.Capacidade) || 0,
+    observacoes: _s_(e.Observacoes)
+  };
+}
+
 function apiListarEventos(token) {
-  const s = validarSessao(token);
+  const s = validarSessao_(token);
   if (!s) return NEGADO;
-  return { ok: true, dados: dbListar(DB.EVENTOS, e => e.Status !== 'Encerrado').map(e => ({
-    id:     e.ID_Evento,
-    nome:   e.Nome,
-    data:   e.Data ? new Date(e.Data).toLocaleDateString('pt-BR') : '',
-    local:  e.Local || '',
-    status: e.Status || ''
-  })) };
+  return { ok: true, dados: dbListar_(DB.EVENTOS, e => e.Status !== 'Encerrado').map(_eventoParaCliente_) };
 }
 
 function apiListarEventosTodos(token) {
-  const s = validarSessao(token);
+  const s = validarSessao_(token);
   if (!s) return NEGADO;
-  return { ok: true, dados: dbListar(DB.EVENTOS).map(e => ({
-    id:         e.ID_Evento,
-    nome:       e.Nome,
-    data:       e.Data ? new Date(e.Data).toLocaleDateString('pt-BR') : '',
-    local:      e.Local || '',
-    status:     e.Status || '',
-    capacidade: e.Capacidade || 0
-  })) };
+  return { ok: true, dados: dbListar_(DB.EVENTOS).map(_eventoParaCliente_) };
+}
+
+function _dadosEvento_(dados, atual) {
+  const status = _s_(dados.Status) || (atual ? atual.Status : 'Planejamento');
+  if (DB.EVENTOS.validacoes.Status.indexOf(status) === -1) throw new Error('Status inválido.');
+  const cap = _s_(dados.Capacidade);
+  if (cap && (isNaN(Number(cap)) || Number(cap) < 0)) throw new Error('Capacidade inválida.');
+  const novos = {
+    Nome:        _s_(dados.Nome),
+    Local:       _s_(dados.Local),
+    Status:      status,
+    Capacidade:  cap ? Number(cap) : '',
+    Observacoes: _s_(dados.Observacoes)
+  };
+  novos.Data = dados.Data ? _parseDataLocal_(dados.Data) : '';
+  return novos;
 }
 
 function apiCadastrarEvento(token, dados) {
-  const s = validarSessao(token);
+  const s = validarSessao_(token);
   if (!s) return NEGADO;
-  if (s.perfil !== 'Admin') return { ok: false, mensagem: 'Apenas o administrador cria eventos.' };
   try {
-    if (!dados || !dados.Nome) throw new Error('Nome do evento é obrigatório.');
-    if (dados.Data) dados.Data = new Date(dados.Data);
-    dados.Status    = dados.Status || 'Planejamento';
-    dados.Criado_Em = new Date();
-    const ev = dbInserir(DB.EVENTOS, dados);
-    logAudit('INSERT', 'Eventos', ev.ID_Evento, 'Evento criado por ' + rotuloSessao(s));
-    return { ok: true, mensagem: 'Evento criado: ' + ev.ID_Evento, dados: { id: ev.ID_Evento } };
+    _exigirPermissao_(s, 'eventos', 'criar');
+    if (!dados || !_s_(dados.Nome)) throw new Error('Nome do evento é obrigatório.');
+    const novo = _dadosEvento_(dados, null);
+    novo.Criado_Em = new Date();
+    const ev = dbInserir_(DB.EVENTOS, novo);
+    logAudit_('INSERT', 'Eventos', ev.ID_Evento, 'Evento criado por ' + rotuloSessao_(s));
+    return { ok: true, mensagem: 'Evento criado.', dados: { id: ev.ID_Evento } };
   } catch (e) { return { ok: false, mensagem: e.message }; }
 }
 
 function apiEditarEvento(token, idEvento, dados) {
-  const s = validarSessao(token);
+  const s = validarSessao_(token);
   if (!s) return NEGADO;
-  if (s.perfil !== 'Admin') return { ok: false, mensagem: 'Apenas o administrador edita eventos.' };
   try {
-    const ev = dbBuscarPorId(DB.EVENTOS, idEvento);
+    _exigirPermissao_(s, 'eventos', 'editar');
+    const ev = dbBuscarPorId_(DB.EVENTOS, idEvento);
     if (!ev) throw new Error('Evento não encontrado.');
-    if (!dados.Nome) throw new Error('Nome é obrigatório.');
-    const novos = { Nome: dados.Nome.trim(), Local: dados.Local || '', Status: dados.Status || ev.Status,
-                    Capacidade: dados.Capacidade || '', Observacoes: dados.Observacoes || '' };
-    if (dados.Data) novos.Data = new Date(dados.Data);
-    dbAtualizar(DB.EVENTOS, idEvento, novos);
-    return { ok: true, mensagem: 'Evento atualizado.' };
+    if (!dados || !_s_(dados.Nome)) throw new Error('Nome é obrigatório.');
+    dbAtualizar_(DB.EVENTOS, idEvento, _dadosEvento_(dados, ev));
+    logAudit_('UPDATE', 'Eventos', idEvento, 'Evento editado por ' + rotuloSessao_(s));
+    return { ok: true, mensagem: 'Evento atualizado.', dados: { id: idEvento } };
   } catch (e) { return { ok: false, mensagem: e.message }; }
 }
 
 function apiExcluirEvento(token, idEvento) {
-  const s = validarSessao(token);
+  const s = validarSessao_(token);
   if (!s) return NEGADO;
-  if (s.perfil !== 'Admin') return { ok: false, mensagem: 'Apenas o administrador exclui eventos.' };
   try {
-    const ev = dbBuscarPorId(DB.EVENTOS, idEvento);
-    if (!ev) throw new Error('Evento não encontrado.');
-    const convites = dbListar(DB.CONVITES, c => c.ID_Evento === idEvento);
-    convites.forEach(c => dbExcluir(DB.CONVITES, c.ID_Convite));
-    dbExcluir(DB.EVENTOS, idEvento);
-    return { ok: true, mensagem: 'Evento "' + ev.Nome + '" excluído com ' + convites.length + ' convite(s).' };
+    _exigirPermissao_(s, 'eventos', 'excluir');
+    return _comLock_(function() {
+      const ev = dbBuscarPorId_(DB.EVENTOS, idEvento);
+      if (!ev) throw new Error('Evento não encontrado.');
+      const nConvites = dbExcluirVarios_(DB.CONVITES, c => _s_(c.ID_Evento) === idEvento);
+      dbExcluirVarios_(DB.LOTES, l => _s_(l.ID_Evento) === idEvento);
+      dbExcluir_(DB.EVENTOS, idEvento);
+      logAudit_('DELETE', 'Eventos', idEvento, 'Evento excluído por ' + rotuloSessao_(s));
+      return { ok: true, mensagem: 'Evento "' + ev.Nome + '" excluído com ' + nConvites + ' convite(s).' };
+    });
   } catch (e) { return { ok: false, mensagem: e.message }; }
 }
 
@@ -177,39 +272,55 @@ function apiExcluirEvento(token, idEvento) {
 // PESSOAS
 // ------------------------------------------------------------
 function apiListarPessoas(token) {
-  const s = validarSessao(token);
+  const s = validarSessao_(token);
   if (!s) return NEGADO;
   const empresas = {};
-  dbListar(DB.EMPRESAS).forEach(e => empresas[e.ID_Empresa] = e.Nome);
-  return { ok: true, dados: dbListar(DB.PESSOAS).map(p => ({
+  dbListar_(DB.EMPRESAS).forEach(e => empresas[e.ID_Empresa] = e.Nome);
+  return { ok: true, dados: dbListar_(DB.PESSOAS).map(p => ({
     id:         p.ID_Pessoa,
-    nome:       p.Nome,
-    documento:  p.Documento || '',
-    telefone:   p.Telefone || '',
-    email:      p.Email || '',
-    cargo:      p.Cargo || '',
-    categoria:  p.Categoria || '',
-    empresa:    empresas[p.ID_Empresa] || '',
-    idEmpresa:  p.ID_Empresa || '',
-    cidade:     (p.Cidade || '') + (p.UF ? '/' + p.UF : ''),
-    ativo:      p.Ativo || 'Sim'
+    nome:       _s_(p.Nome),
+    documento:  _s_(p.Documento),
+    telefone:   _s_(p.Telefone),
+    email:      _s_(p.Email),
+    cargo:      _s_(p.Cargo),
+    categoria:  _s_(p.Categoria),
+    empresa:    _s_(empresas[p.ID_Empresa]),
+    idEmpresa:  _s_(p.ID_Empresa),
+    cidade:     _s_(p.Cidade) + (p.UF ? '/' + _s_(p.UF) : ''),
+    ativo:      _s_(p.Ativo) || 'Sim'
   })) };
 }
 
+// Procura pessoa já cadastrada com o mesmo documento (só dígitos).
+function _pessoaPorDocumento_(documento) {
+  const doc = _soDigitos_(documento);
+  if (!doc) return null;
+  return dbListar_(DB.PESSOAS, p => _soDigitos_(p.Documento) === doc)[0] || null;
+}
+
+function _categoriaValida_(c) {
+  return DB.PESSOAS.validacoes.Categoria.indexOf(c) !== -1 ? c : 'Outro';
+}
+
 function apiCadastrarPessoa(token, dados) {
-  const s = validarSessao(token);
+  const s = validarSessao_(token);
   if (!s) return NEGADO;
   try {
-    if (!dados || !dados.Nome) throw new Error('Nome é obrigatório.');
-    const p = dbInserir(DB.PESSOAS, {
-      Nome: dados.Nome.trim(), Documento: dados.Documento || '',
-      Telefone: dados.Telefone || '', Email: dados.Email || '',
-      ID_Empresa: dados.ID_Empresa || '', Cargo: dados.Cargo || '',
-      Cidade: dados.Cidade || '', UF: dados.UF || '',
-      Categoria: dados.Categoria || 'Outro',
-      Data_Cadastro: new Date(), Ativo: 'Sim'
+    _exigirPermissao_(s, 'pessoas', 'criar');
+    if (!dados || !_s_(dados.Nome)) throw new Error('Nome é obrigatório.');
+    return _comLock_(function() {
+      const existente = _pessoaPorDocumento_(dados.Documento);
+      if (existente) throw new Error('Já existe uma pessoa com este documento: ' + existente.Nome + '.');
+      const p = dbInserir_(DB.PESSOAS, {
+        Nome: _s_(dados.Nome), Documento: _s_(dados.Documento),
+        Telefone: _s_(dados.Telefone), Email: _s_(dados.Email),
+        ID_Empresa: _s_(dados.ID_Empresa), Cargo: _s_(dados.Cargo),
+        Cidade: _s_(dados.Cidade), UF: _s_(dados.UF).toUpperCase(),
+        Categoria: _categoriaValida_(_s_(dados.Categoria)),
+        Data_Cadastro: new Date(), Ativo: 'Sim'
+      });
+      return { ok: true, mensagem: 'Pessoa cadastrada.', dados: { id: p.ID_Pessoa } };
     });
-    return { ok: true, mensagem: 'Pessoa cadastrada.', dados: { id: p.ID_Pessoa } };
   } catch (e) { return { ok: false, mensagem: e.message }; }
 }
 
@@ -217,24 +328,29 @@ function apiCadastrarPessoa(token, dados) {
 // EMPRESAS
 // ------------------------------------------------------------
 function apiListarEmpresas(token) {
-  const s = validarSessao(token);
+  const s = validarSessao_(token);
   if (!s) return NEGADO;
-  return { ok: true, dados: dbListar(DB.EMPRESAS).map(e => ({
+  return { ok: true, dados: dbListar_(DB.EMPRESAS).map(e => ({
     id:       e.ID_Empresa,
-    nome:     e.Nome,
-    segmento: e.Segmento || '',
-    cidade:   (e.Cidade || '') + (e.UF ? '/' + e.UF : ''),
-    contato:  e.Contato || ''
+    nome:     _s_(e.Nome),
+    segmento: _s_(e.Segmento),
+    cidade:   _s_(e.Cidade) + (e.UF ? '/' + _s_(e.UF) : ''),
+    contato:  _s_(e.Contato)
   })) };
 }
 
 function apiCadastrarEmpresa(token, dados) {
-  const s = validarSessao(token);
+  const s = validarSessao_(token);
   if (!s) return NEGADO;
   try {
-    if (!dados || !dados.Nome) throw new Error('Nome da empresa é obrigatório.');
-    dados.Criado_Em = new Date();
-    const e = dbInserir(DB.EMPRESAS, dados);
+    _exigirPermissao_(s, 'empresas', 'criar');
+    if (!dados || !_s_(dados.Nome)) throw new Error('Nome da empresa é obrigatório.');
+    const e = dbInserir_(DB.EMPRESAS, {
+      Nome: _s_(dados.Nome), Segmento: _s_(dados.Segmento), Contato: _s_(dados.Contato),
+      Cidade: _s_(dados.Cidade), UF: _s_(dados.UF).toUpperCase(),
+      Telefone: _s_(dados.Telefone), Website: _s_(dados.Website),
+      Criado_Em: new Date()
+    });
     return { ok: true, mensagem: 'Empresa cadastrada.', dados: { id: e.ID_Empresa } };
   } catch (e) { return { ok: false, mensagem: e.message }; }
 }
@@ -243,19 +359,19 @@ function apiCadastrarEmpresa(token, dados) {
 // CONVITES
 // ------------------------------------------------------------
 function apiListaConvidados(token, idEvento) {
-  const s = validarSessao(token);
+  const s = validarSessao_(token);
   if (!s) return NEGADO;
 
   const pessoas  = {};
   const empresas = {};
-  dbListar(DB.PESSOAS).forEach(p => pessoas[p.ID_Pessoa] = p);
-  dbListar(DB.EMPRESAS).forEach(e => empresas[e.ID_Empresa] = e);
+  dbListar_(DB.PESSOAS).forEach(p => pessoas[p.ID_Pessoa] = p);
+  dbListar_(DB.EMPRESAS).forEach(e => empresas[e.ID_Empresa] = e);
 
-  const convites = dbListar(DB.CONVITES, c => c.ID_Evento === idEvento);
+  const convites = dbListar_(DB.CONVITES, c => c.ID_Evento === idEvento);
   const substitutoDe = {};
   convites.forEach(c => { if (c.ID_Convite_Original) substitutoDe[c.ID_Convite_Original] = c; });
 
-  const urlBase = ScriptApp.getService().getUrl();
+  const urlBase = _urlBase_();
   return { ok: true, dados: convites.map(c => {
     const p    = pessoas[c.ID_Pessoa]   || {};
     const emp  = empresas[p.ID_Empresa] || {};
@@ -263,93 +379,92 @@ function apiListaConvidados(token, idEvento) {
     const pSub = sub ? (pessoas[sub.ID_Pessoa] || {}) : null;
     return {
       idConvite:        c.ID_Convite,
-      nome:             p.Nome || '(pessoa não encontrada)',
-      documento:        p.Documento || '',
-      categoria:        p.Categoria || '',
-      empresa:          emp.Nome || '',
-      cargo:            p.Cargo || '',
-      cidade:           (p.Cidade || '') + (p.UF ? '/' + p.UF : ''),
-      gestor:           c.Gestor || '',
-      status:           c.Status,
-      origem:           c.Origem,
-      qrToken:          c.QR_Token || '',
-      linkConfirmacao:  c.QR_Token ? urlBase + '?pagina=confirmar&token=' + c.QR_Token : '',
-      checkinHora:      c.Checkin_DataHora
-        ? new Date(c.Checkin_DataHora).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
-      substituidoPor:   pSub ? pSub.Nome : '',
-      idLote:           c.ID_Lote || '',
-      descricao:        c.Observacoes || ''
+      nome:             _s_(p.Nome) || '(pessoa não encontrada)',
+      documento:        _s_(p.Documento),
+      categoria:        _s_(p.Categoria),
+      empresa:          _s_(emp.Nome),
+      cargo:            _s_(p.Cargo),
+      cidade:           _s_(p.Cidade) + (p.UF ? '/' + _s_(p.UF) : ''),
+      gestor:           _s_(c.Gestor),
+      status:           _s_(c.Status),
+      origem:           _s_(c.Origem),
+      linkConfirmacao:  c.QR_Valido === 'Sim' ? _linkConfirmacao_(c.QR_Token, urlBase) : '',
+      checkinHora:      _fmtData_(c.Checkin_DataHora, 'HH:mm'),
+      substituidoPor:   pSub ? _s_(pSub.Nome) : '',
+      idLote:           _s_(c.ID_Lote),
+      descricao:        _s_(c.Observacoes)
     };
   }) };
 }
 
 function apiAdicionarNaLista(token, gestor, pessoa) {
-  const s = validarSessao(token);
+  const s = validarSessao_(token);
   if (!s) return NEGADO;
   try {
-    const idEvento = pessoa.idEvento;
+    _exigirPermissao_(s, 'convites', 'criar');
+    const idEvento = pessoa && pessoa.idEvento;
     if (!idEvento) throw new Error('Evento não informado.');
-    // Gestor é sempre quem está logado — "gestor" só existe como parâmetro
-    // por compatibilidade; o nome nunca vem descrito, sempre o nome puro.
-    const gestorFinal = (gestor || s.gestor || '').trim();
+    // O gestor responsável é sempre quem está logado.
+    const gestorFinal = _s_(s.gestor) || _s_(gestor);
     if (!gestorFinal) throw new Error('Informe o gestor responsável.');
 
-    const vg = _vagasEvento(idEvento);
-    if (vg.disponiveis !== null && vg.disponiveis < 1) {
-      throw new Error('Capacidade do evento atingida (' + vg.ativos + ' de ' + vg.capacidade + '). Aumente a capacidade do evento para continuar.');
-    }
-
-    let idPessoa = pessoa.idPessoa;
-    let reaproveitada = null;
-
-    if (!idPessoa) {
-      if (!pessoa.dados || !pessoa.dados.Nome) throw new Error('Informe o nome.');
-      const doc = (pessoa.dados.Documento || '').replace(/\D/g, '');
-      if (doc) {
-        const igual = dbListar(DB.PESSOAS, p => (p.Documento || '').replace(/\D/g, '') === doc);
-        if (igual.length) { idPessoa = igual[0].ID_Pessoa; reaproveitada = igual[0].Nome; }
+    return _comLock_(function() {
+      const vg = _vagasEvento_(idEvento);
+      if (vg.disponiveis !== null && vg.disponiveis < 1) {
+        throw new Error('Capacidade do evento atingida (' + vg.ativos + ' de ' + vg.capacidade + '). Aumente a capacidade do evento para continuar.');
       }
+
+      let idPessoa = pessoa.idPessoa;
+      let reaproveitada = null;
+
       if (!idPessoa) {
-        const nova = dbInserir(DB.PESSOAS, {
-          Nome: pessoa.dados.Nome.trim(), Documento: (pessoa.dados.Documento || '').trim(),
-          Categoria: pessoa.dados.Categoria || 'Outro', ID_Empresa: pessoa.dados.ID_Empresa || '',
-          Cargo: pessoa.dados.Cargo || '', Data_Cadastro: new Date(), Ativo: 'Sim'
-        });
-        idPessoa = nova.ID_Pessoa;
+        if (!pessoa.dados || !_s_(pessoa.dados.Nome)) throw new Error('Informe o nome.');
+        const igual = _pessoaPorDocumento_(pessoa.dados.Documento);
+        if (igual) { idPessoa = igual.ID_Pessoa; reaproveitada = igual.Nome; }
+        if (!idPessoa) {
+          const nova = dbInserir_(DB.PESSOAS, {
+            Nome: _s_(pessoa.dados.Nome), Documento: _s_(pessoa.dados.Documento),
+            Categoria: _categoriaValida_(_s_(pessoa.dados.Categoria)), ID_Empresa: _s_(pessoa.dados.ID_Empresa),
+            Cargo: _s_(pessoa.dados.Cargo), Data_Cadastro: new Date(), Ativo: 'Sim'
+          });
+          idPessoa = nova.ID_Pessoa;
+        }
       }
-    }
 
-    // Descrição/observação vai na coluna própria (Observacoes) do convite —
-    // nunca é misturada com o nome do gestor.
-    const c = convidarPessoa(idEvento, idPessoa, gestorFinal, null, pessoa.descricao || '');
-    dbAtualizar(DB.CONVITES, c.ID_Convite, { Cadastrado_Por: rotuloSessao(s) });
+      // Descrição/observação vai na coluna própria (Observacoes) do convite.
+      const c = convidarPessoa_(idEvento, idPessoa, gestorFinal, null, _s_(pessoa.descricao));
+      dbAtualizar_(DB.CONVITES, c.ID_Convite, { Cadastrado_Por: rotuloSessao_(s) });
 
-    const msg = reaproveitada
-      ? 'Documento já cadastrado como "' + reaproveitada + '": pessoa reaproveitada.'
-      : 'Adicionado à lista.';
-    const urlBase = ScriptApp.getService().getUrl();
-    return { ok: true, mensagem: msg, dados: {
-      idConvite:       c.ID_Convite,
-      qrToken:         c.QR_Token,
-      linkConfirmacao: urlBase + '?pagina=confirmar&token=' + c.QR_Token
-    }};
+      const msg = reaproveitada
+        ? 'Documento já cadastrado como "' + reaproveitada + '": pessoa reaproveitada.'
+        : 'Adicionado à lista.';
+      return { ok: true, mensagem: msg, dados: {
+        idConvite:       c.ID_Convite,
+        linkConfirmacao: _linkConfirmacao_(c.QR_Token)
+      }};
+    });
   } catch (e) { return { ok: false, mensagem: e.message }; }
 }
 
 function apiCancelarConvite(token, idConvite) {
-  const s = validarSessao(token);
+  const s = validarSessao_(token);
   if (!s) return NEGADO;
   try {
-    const c = dbBuscarPorId(DB.CONVITES, idConvite);
-    if (!c) throw new Error('Convite não encontrado.');
-    if (c.Status === 'Presente')  throw new Error('Convidado já fez check-in; não é possível cancelar.');
-    if (c.Status === 'Cancelado') throw new Error('Este convite já está cancelado.');
-    const marca = 'Cancelado por ' + rotuloSessao(s) + ' em ' + new Date().toLocaleString('pt-BR');
-    dbAtualizar(DB.CONVITES, idConvite, {
-      Status: 'Cancelado',
-      Observacoes: (c.Observacoes ? c.Observacoes + ' | ' : '') + marca
+    _exigirPermissao_(s, 'convites', 'excluir');
+    return _comLock_(function() {
+      const c = dbBuscarPorId_(DB.CONVITES, idConvite);
+      if (!c) throw new Error('Convite não encontrado.');
+      if (c.Status === 'Presente')  throw new Error('Convidado já fez check-in; não é possível cancelar.');
+      if (c.Status === 'Cancelado') throw new Error('Este convite já está cancelado.');
+      if (c.Status === 'Substituído') throw new Error('Este convite já foi substituído.');
+      const marca = 'Cancelado por ' + rotuloSessao_(s) + ' em ' + _fmtData_(new Date(), 'dd/MM/yyyy HH:mm');
+      dbAtualizar_(DB.CONVITES, idConvite, {
+        Status: 'Cancelado',
+        QR_Valido: 'Não',
+        Observacoes: (c.Observacoes ? _s_(c.Observacoes) + ' | ' : '') + marca
+      });
+      return { ok: true, mensagem: 'Convite cancelado.' };
     });
-    return { ok: true, mensagem: 'Convite cancelado.' };
   } catch (e) { return { ok: false, mensagem: e.message }; }
 }
 
@@ -357,55 +472,73 @@ function apiCancelarConvite(token, idConvite) {
 // CHECK-IN
 // ------------------------------------------------------------
 function apiCheckin(token, idConvite) {
-  const s = validarSessao(token);
+  const s = validarSessao_(token);
   if (!s) return NEGADO;
   try {
-    const convite = dbBuscarPorId(DB.CONVITES, idConvite);
-    if (!convite) throw new Error('Convite não encontrado.');
-    _validarJanela(convite.ID_Evento, s);
-    fazerCheckin(idConvite, rotuloSessao(s));
-    return { ok: true, mensagem: 'Entrada confirmada.' };
+    _exigirPermissao_(s, 'checkin', 'criar');
+    return _comLock_(function() {
+      const convite = dbBuscarPorId_(DB.CONVITES, idConvite);
+      if (!convite) throw new Error('Convite não encontrado.');
+      _validarJanela_(convite.ID_Evento, s);
+      fazerCheckin_(idConvite, rotuloSessao_(s));
+      return { ok: true, mensagem: 'Entrada confirmada.' };
+    });
   } catch (e) { return { ok: false, mensagem: e.message }; }
 }
 
-function apiCheckinQR(token, qrToken) {
-  const s = validarSessao(token);
+// idEvento: evento aberto na tela de check-in — QR de outro evento é recusado.
+function apiCheckinQR(token, qrToken, idEvento) {
+  const s = validarSessao_(token);
   if (!s) return NEGADO;
   try {
-    const convite = fazerCheckinPorQR(qrToken, rotuloSessao(s));
-    const pessoa  = dbBuscarPorId(DB.PESSOAS, convite.ID_Pessoa);
-    return { ok: true, mensagem: 'Bem-vindo, ' + (pessoa ? pessoa.Nome : '') + '!', dados: { nome: pessoa ? pessoa.Nome : '' } };
+    _exigirPermissao_(s, 'checkin', 'criar');
+    return _comLock_(function() {
+      const convite = fazerCheckinPorQR_(qrToken, rotuloSessao_(s), idEvento, s);
+      const pessoa  = dbBuscarPorId_(DB.PESSOAS, convite.ID_Pessoa);
+      const nome    = pessoa ? _s_(pessoa.Nome) : '';
+      return { ok: true, mensagem: 'Bem-vindo(a), ' + nome + '!', dados: { nome: nome } };
+    });
   } catch (e) { return { ok: false, mensagem: e.message }; }
 }
 
 function apiWalkin(token, idEvento, nome, categoria, autorizadoPor) {
-  const s = validarSessao(token);
+  const s = validarSessao_(token);
   if (!s) return NEGADO;
   try {
-    _validarJanela(idEvento, s);
-    registrarWalkin(idEvento, {
-      dadosNovaPessoa: { Nome: nome, Categoria: categoria || 'Outro' },
-      autorizadoPor:   autorizadoPor,
-      checkinPor:      rotuloSessao(s)
+    _exigirPermissao_(s, 'checkin', 'criar');
+    if (!_s_(nome)) throw new Error('Informe o nome.');
+    if (!_s_(autorizadoPor)) throw new Error('Informe quem autorizou.');
+    return _comLock_(function() {
+      _validarJanela_(idEvento, s);
+      registrarWalkin_(idEvento, {
+        dadosNovaPessoa: { Nome: _s_(nome), Categoria: _categoriaValida_(_s_(categoria)) },
+        autorizadoPor:   _s_(autorizadoPor),
+        checkinPor:      rotuloSessao_(s)
+      });
+      return { ok: true, mensagem: 'Walk-in registrado. ' + _s_(nome) + ' está presente.' };
     });
-    return { ok: true, mensagem: 'Walk-in registrado. ' + nome + ' está presente.' };
   } catch (e) { return { ok: false, mensagem: e.message }; }
 }
 
 function apiSubstituirEEntrar(token, idConviteOriginal, nomeSubstituto, categoria, motivo, autorizadoPor) {
-  const s = validarSessao(token);
+  const s = validarSessao_(token);
   if (!s) return NEGADO;
   try {
-    const original = dbBuscarPorId(DB.CONVITES, idConviteOriginal);
-    if (!original) throw new Error('Convite original não encontrado.');
-    _validarJanela(original.ID_Evento, s);
-    const nova = dbInserir(DB.PESSOAS, {
-      Nome: nomeSubstituto, Categoria: categoria || 'Outro',
-      Data_Cadastro: new Date(), Ativo: 'Sim'
+    _exigirPermissao_(s, 'checkin', 'criar');
+    if (!_s_(nomeSubstituto)) throw new Error('Informe o nome de quem vai entrar.');
+    if (!_s_(autorizadoPor)) throw new Error('Informe quem autorizou.');
+    return _comLock_(function() {
+      const original = dbBuscarPorId_(DB.CONVITES, idConviteOriginal);
+      if (!original) throw new Error('Convite original não encontrado.');
+      _validarJanela_(original.ID_Evento, s);
+      const nova = dbInserir_(DB.PESSOAS, {
+        Nome: _s_(nomeSubstituto), Categoria: _categoriaValida_(_s_(categoria)),
+        Data_Cadastro: new Date(), Ativo: 'Sim'
+      });
+      const novoConvite = substituirConvidado_(idConviteOriginal, nova.ID_Pessoa, _s_(motivo), _s_(autorizadoPor));
+      fazerCheckin_(novoConvite.ID_Convite, rotuloSessao_(s));
+      return { ok: true, mensagem: 'Substituição registrada. ' + _s_(nomeSubstituto) + ' está presente.' };
     });
-    const novoConvite = substituirConvidado(idConviteOriginal, nova.ID_Pessoa, motivo, autorizadoPor);
-    fazerCheckin(novoConvite.ID_Convite, rotuloSessao(s));
-    return { ok: true, mensagem: 'Substituição registrada. ' + nomeSubstituto + ' está presente.' };
   } catch (e) { return { ok: false, mensagem: e.message }; }
 }
 
@@ -413,15 +546,15 @@ function apiSubstituirEEntrar(token, idConviteOriginal, nomeSubstituto, categori
 // DASHBOARD
 // ------------------------------------------------------------
 function apiDashboardEvento(token, idEvento) {
-  const s = validarSessao(token);
+  const s = validarSessao_(token);
   if (!s) return NEGADO;
-  const evento = dbBuscarPorId(DB.EVENTOS, idEvento);
+  const evento = dbBuscarPorId_(DB.EVENTOS, idEvento);
   if (!evento) return { ok: false, mensagem: 'Evento não encontrado.' };
 
-  const resumo   = resumoEvento(idEvento);
+  const resumo   = resumoEvento_(idEvento);
   const pessoas  = {};
-  dbListar(DB.PESSOAS).forEach(p => pessoas[p.ID_Pessoa] = p);
-  const convites = dbListar(DB.CONVITES, c => c.ID_Evento === idEvento);
+  dbListar_(DB.PESSOAS).forEach(p => pessoas[p.ID_Pessoa] = p);
+  const convites = dbListar_(DB.CONVITES, c => c.ID_Evento === idEvento);
 
   const porCategoria = {};
   const porGestor    = {};
@@ -430,12 +563,12 @@ function apiDashboardEvento(token, idEvento) {
   convites.forEach(c => {
     if (c.Status === 'Cancelado' || c.Status === 'Substituído') return;
     const p   = pessoas[c.ID_Pessoa] || {};
-    const cat = p.Categoria || 'Outro';
+    const cat = _s_(p.Categoria) || 'Outro';
     porCategoria[cat] = (porCategoria[cat] || 0) + 1;
     if (c.Gestor) porGestor[c.Gestor] = (porGestor[c.Gestor] || 0) + 1;
     if (c.Status === 'Presente' && c.Checkin_DataHora) {
-      const hora = new Date(c.Checkin_DataHora).getHours() + ':00';
-      checkinsPorHora[hora] = (checkinsPorHora[hora] || 0) + 1;
+      const hora = _fmtData_(c.Checkin_DataHora, 'H') + ':00';
+      if (hora !== ':00') checkinsPorHora[hora] = (checkinsPorHora[hora] || 0) + 1;
     }
   });
 
@@ -444,24 +577,28 @@ function apiDashboardEvento(token, idEvento) {
     .sort((a, b) => b.total - a.total).slice(0, 6);
 
   return { ok: true, dados: {
-    evento: { id: evento.ID_Evento, nome: evento.Nome,
-              data: evento.Data ? new Date(evento.Data).toLocaleDateString('pt-BR') : '',
-              capacidade: evento.Capacidade || 0 },
+    evento: { id: evento.ID_Evento, nome: _s_(evento.Nome),
+              data: _fmtData_(evento.Data),
+              capacidade: Number(evento.Capacidade) || 0 },
     resumo, porCategoria, topGestores, checkinsPorHora
   } };
 }
 
 function apiInfoCheckin(token, idEvento) {
-  const s = validarSessao(token);
+  const s = validarSessao_(token);
   if (!s) return NEGADO;
-  const evento = dbBuscarPorId(DB.EVENTOS, idEvento);
+  const evento = dbBuscarPorId_(DB.EVENTOS, idEvento);
   if (!evento) return { ok: false, mensagem: 'Evento não encontrado.' };
-  const j = janelaEvento(evento);
-  return { ok: true, dados: { janela: j.janela, mensagem: j.mensagem, dataFmt: j.dataFmt, admin: s.perfil === 'Admin' } };
+  const j = janelaEvento_(evento);
+  return { ok: true, dados: {
+    janela: j.janela, mensagem: j.mensagem, dataFmt: j.dataFmt,
+    admin: s.perfil === 'Admin',
+    podeCheckin: temPermissao_(s.perfil, 'checkin', 'criar')
+  } };
 }
 
 function apiDadosCheckin(token, idEvento) {
-  const s = validarSessao(token);
+  const s = validarSessao_(token);
   if (!s) return NEGADO;
   const info  = apiInfoCheckin(token, idEvento);
   const lista = apiListaConvidados(token, idEvento);
@@ -473,23 +610,9 @@ function apiDadosCheckin(token, idEvento) {
 // ------------------------------------------------------------
 // AUDITORIA
 // ------------------------------------------------------------
-function _vagasEvento(idEvento) {
-  const evento = dbBuscarPorId(DB.EVENTOS, idEvento);
-  const capacidade = evento ? Number(evento.Capacidade) || 0 : 0;
-  const ativos = dbContar(DB.CONVITES, c =>
-    c.ID_Evento === idEvento &&
-    ['Cancelado', 'Substituído'].indexOf(c.Status) === -1
-  );
-  return {
-    capacidade:   capacidade,
-    ativos:       ativos,
-    disponiveis:  capacidade > 0 ? Math.max(0, capacidade - ativos) : null
-  };
-}
-
-function logAudit(acao, tabela, idRegistro, descricao) {
+function logAudit_(acao, tabela, idRegistro, descricao) {
   try {
-    dbInserir(DB.AUDIT_LOG, {
+    dbInserir_(DB.AUDIT_LOG, {
       Timestamp:  new Date(),
       Acao:       acao,
       Tabela:     tabela,

@@ -1,5 +1,16 @@
 <!-- CheckinScanner.html — check-in do evento (QR + busca manual + walk-in + substituição) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
+<style>
+  /* Celular: cada convidado vira um bloco com o botão de entrada largo (fácil de tocar na porta). */
+  @media (max-width:640px) {
+    .checkin-lista tr { display:block; padding:10px 12px; border-bottom:1px solid var(--border); }
+    .checkin-lista tr:last-child { border-bottom:none; }
+    .checkin-lista td { display:block; border:none !important; padding:2px 0 !important; text-align:left !important; white-space:normal !important; }
+    .checkin-lista td:last-child { display:flex; gap:8px; justify-content:flex-end; padding-top:8px !important; }
+    .checkin-lista td:last-child .btn-hb { flex:1; justify-content:center; min-height:44px; font-size:.9rem !important; }
+    #buscaCheckin { font-size:16px; min-height:46px; }
+  }
+</style>
 
 <div id="checkinWrap">
   <div class="skel" style="height:60px;margin-bottom:14px;"></div>
@@ -7,7 +18,7 @@
 </div>
 
 <!-- Modal: walk-in -->
-<div class="modal fade" id="modalWalkin" tabindex="-1"><div class="modal-dialog"><div class="modal-content" style="border-radius:16px;border:none;">
+<div class="modal fade" id="modalWalkin" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down"><div class="modal-content" style="border-radius:16px;border:none;">
   <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold"><i class="fas fa-door-open me-2 text-primary"></i>Entrada sem convite (walk-in)</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
   <div class="modal-body">
     <div class="mb-3"><label class="form-label">Nome completo *</label><input class="form-control" id="wkNome"></div>
@@ -18,7 +29,7 @@
 </div></div></div>
 
 <!-- Modal: substituição -->
-<div class="modal fade" id="modalSub" tabindex="-1"><div class="modal-dialog"><div class="modal-content" style="border-radius:16px;border:none;">
+<div class="modal fade" id="modalSub" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down"><div class="modal-content" style="border-radius:16px;border:none;">
   <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold"><i class="fas fa-right-left me-2 text-primary"></i>Substituir convidado</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
   <div class="modal-body">
     <p class="small text-muted mb-2">Substituindo: <strong id="subOriginalNome"></strong></p>
@@ -39,85 +50,120 @@
 
   var CATEGORIAS = ['Pessoa Física','Empresário','Deputado','Senador','Vereador','Prefeito','Secretário','Político','Médico','Corpo Clínico','Fornecedor','Parceiro','Patrocinador','Imprensa','Doador','Conselheiro','Instituição','Outro'];
   var convidados = [];
+  var info = null;
   var subOriginalId = null;
   var scanning = false, scanLock = false, stream = null;
 
-  carregar();
+  document.getElementById('wkCategoria').innerHTML = CATEGORIAS.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('');
+  document.getElementById('subCategoria').innerHTML = CATEGORIAS.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('');
 
-  function carregar() {
+  carregar(true);
+
+  function msgErro(texto) {
+    document.getElementById('checkinWrap').innerHTML = '<div class="empty-state"><i class="fas fa-triangle-exclamation"></i><p>' + esc(texto) + '</p></div>';
+  }
+
+  // primeira = monta a tela. Nas recargas seguintes só atualiza os dados
+  // (contador e resultados), sem recriar o vídeo — a câmera continua ligada.
+  function carregar(primeira) {
     google.script.run.withSuccessHandler(function(resp) {
-      if (!resp.ok) { document.getElementById('checkinWrap').innerHTML = '<div class="empty-state"><i class="fas fa-triangle-exclamation"></i><p>' + resp.mensagem + '</p></div>'; return; }
-      convidados = resp.dados.convidados;
-      render(resp.dados.info);
+      if (resp && resp.auth === false) { pararCamera(); forcarLogout('Sessão expirada.'); return; }
+      if (!resp.ok) { if (primeira) msgErro(resp.mensagem); else toast(resp.mensagem, 'err'); return; }
+      convidados = resp.dados.convidados || [];
+      info = resp.dados.info;
+      if (primeira || !document.getElementById('buscaCheckin')) render(); else atualizarContagem();
+      renderResultados();
     }).withFailureHandler(function(err) {
-      document.getElementById('checkinWrap').innerHTML = '<div class="empty-state"><i class="fas fa-triangle-exclamation"></i><p>' + err.message + '</p></div>';
+      if (primeira) msgErro(err.message); else toast(err.message, 'err');
     }).apiDadosCheckin(window.TOKEN, idEvento);
   }
 
-  function render(info) {
-    var presentes = convidados.filter(function(c){return c.status==='Presente';}).length;
+  function contagemTexto() {
+    var ativos = convidados.filter(function(c){ return c.status !== 'Cancelado' && c.status !== 'Substituído'; });
+    var presentes = ativos.filter(function(c){ return c.status === 'Presente'; }).length;
+    return presentes + ' de ' + ativos.length + ' presentes';
+  }
+  function atualizarContagem() {
+    var el = document.getElementById('contagemCheckin');
+    if (el) el.textContent = contagemTexto();
+  }
+
+  function render() {
     var janelaPill = info.janela === 'aberto' ? 'pill-green' : (info.janela === 'sem-data' ? 'pill-blue' : 'pill-amber');
+    var aviso = '';
+    if (!info.podeCheckin) aviso = '<div class="alert alert-warning small mb-3"><i class="fas fa-eye me-1"></i>Seu perfil pode apenas consultar a lista — o check-in fica com a recepção.</div>';
+    else if (info.janela !== 'aberto' && info.janela !== 'sem-data') aviso = '<div class="alert alert-warning small mb-3">' + esc(info.mensagem) + (info.admin ? ' Como administrador, você ainda pode registrar entradas para correção.' : '') + '</div>';
     document.getElementById('checkinWrap').innerHTML =
+      aviso +
       '<div class="card-hb card-hb-body mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">' +
-        '<div><span class="pill ' + janelaPill + '">' + (info.janela === 'aberto' ? 'Check-in aberto' : info.mensagem) + '</span> <span class="text-muted small ms-2">' + presentes + ' de ' + convidados.length + ' presentes</span></div>' +
-        '<button class="btn-hb-outline" onclick="abrirWalkin()"><i class="fas fa-door-open"></i> Walk-in</button>' +
+        '<div><span class="pill ' + janelaPill + '">' + (info.janela === 'aberto' ? 'Check-in aberto' : esc(info.mensagem)) + '</span> <span class="text-muted small ms-2" id="contagemCheckin">' + contagemTexto() + '</span></div>' +
+        (info.podeCheckin ? '<button class="btn-hb-outline" onclick="abrirWalkin()"><i class="fas fa-door-open"></i> Walk-in</button>' : '') +
       '</div>' +
       '<div class="d-flex gap-2 mb-3">' +
         '<div class="evt-tab active" id="tabBusca" onclick="mudarModo(\'busca\')" style="background:var(--ink-900);color:#fff;"><i class="fas fa-magnifying-glass"></i> Buscar</div>' +
-        '<div class="evt-tab" id="tabScan" onclick="mudarModo(\'scan\')"><i class="fas fa-qrcode"></i> Ler QR Code</div>' +
+        (info.podeCheckin ? '<div class="evt-tab" id="tabScan" onclick="mudarModo(\'scan\')"><i class="fas fa-qrcode"></i> Ler QR Code</div>' : '') +
       '</div>' +
       '<div id="modoBusca"><input class="form-control mb-3" id="buscaCheckin" placeholder="🔍 Nome ou documento..."><div id="resultadosBusca"></div></div>' +
       '<div id="modoScan" style="display:none;">' +
         '<div class="card-hb card-hb-body text-center">' +
-          '<video id="video" playsinline style="width:100%;max-width:380px;border-radius:14px;background:#000;margin:0 auto;display:block;"></video>' +
+          '<video id="video" playsinline muted style="width:100%;max-width:380px;border-radius:14px;background:#000;margin:0 auto;display:block;"></video>' +
           '<canvas id="canvas" style="display:none;"></canvas>' +
           '<div id="scanResult" class="mt-3"></div>' +
+          '<p class="small text-muted mt-2 mb-0">Aponte a câmera para o QR Code da página de confirmação do convidado.</p>' +
         '</div>' +
       '</div>';
-
-    document.getElementById('wkCategoria').innerHTML = CATEGORIAS.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('');
-    document.getElementById('subCategoria').innerHTML = CATEGORIAS.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('');
     document.getElementById('buscaCheckin').addEventListener('input', renderResultados);
-    renderResultados();
   }
 
   window.mudarModo = function(modo) {
-    document.getElementById('tabBusca').classList.toggle('active', modo === 'busca');
-    document.getElementById('tabBusca').style.background = modo === 'busca' ? 'var(--ink-900)' : '';
-    document.getElementById('tabBusca').style.color = modo === 'busca' ? '#fff' : '';
-    document.getElementById('tabScan').classList.toggle('active', modo === 'scan');
-    document.getElementById('tabScan').style.background = modo === 'scan' ? 'var(--ink-900)' : '';
-    document.getElementById('tabScan').style.color = modo === 'scan' ? '#fff' : '';
+    ['busca','scan'].forEach(function(m) {
+      var tab = document.getElementById(m === 'busca' ? 'tabBusca' : 'tabScan');
+      if (!tab) return;
+      tab.classList.toggle('active', modo === m);
+      tab.style.background = modo === m ? 'var(--ink-900)' : '';
+      tab.style.color = modo === m ? '#fff' : '';
+    });
     document.getElementById('modoBusca').style.display = modo === 'busca' ? '' : 'none';
     document.getElementById('modoScan').style.display = modo === 'scan' ? '' : 'none';
     if (modo === 'scan') iniciarCamera(); else pararCamera();
   };
 
   function renderResultados() {
-    var q = (document.getElementById('buscaCheckin').value || '').toLowerCase().trim();
+    var input = document.getElementById('buscaCheckin');
     var wrap = document.getElementById('resultadosBusca');
+    if (!input || !wrap) return;
+    var q = (input.value || '').toLowerCase().trim();
     if (!q) { wrap.innerHTML = '<p class="text-muted small">Digite para buscar um convidado.</p>'; return; }
-    var achados = convidados.filter(function(c) { return (c.nome + ' ' + c.documento).toLowerCase().indexOf(q) !== -1; }).slice(0, 25);
-    if (!achados.length) { wrap.innerHTML = '<p class="text-muted small">Nenhum convidado encontrado com "' + q + '".</p>'; return; }
-    wrap.innerHTML = '<div class="card-hb"><table class="table-hb"><tbody>' + achados.map(function(c) {
-      return '<tr><td><strong>' + c.nome + '</strong><div class="small text-muted">' + (c.empresa || '') + (c.documento ? ' · ' + c.documento : '') + '</div></td>' +
-        '<td class="text-end">' + linhaAcoes(c) + '</td></tr>';
+    var qDig = q.replace(/\D/g, '');
+    var achados = convidados.filter(function(c) {
+      if ((c.nome + ' ' + c.documento).toLowerCase().indexOf(q) !== -1) return true;
+      return qDig.length >= 3 && String(c.documento).replace(/\D/g, '').indexOf(qDig) !== -1;
+    }).slice(0, 25);
+    if (!achados.length) { wrap.innerHTML = '<p class="text-muted small">Nenhum convidado encontrado com "' + esc(q) + '".</p>'; return; }
+    wrap.innerHTML = '<div class="card-hb"><table class="table-hb checkin-lista" style="min-width:0;"><tbody>' + achados.map(function(c) {
+      return '<tr><td><strong>' + esc(c.nome) + '</strong><div class="small text-muted">' + esc(c.empresa) + (c.documento ? ' · ' + esc(c.documento) : '') + (c.status === 'Recusado' ? ' · <span class="text-warning">tinha recusado</span>' : '') + '</div></td>' +
+        '<td class="text-end text-nowrap">' + linhaAcoes(c) + '</td></tr>';
     }).join('') + '</tbody></table></div>';
   }
 
   function linhaAcoes(c) {
-    if (c.status === 'Presente') return '<span class="pill pill-green">Presente ' + (c.checkinHora||'') + '</span>';
+    if (c.status === 'Presente') return '<span class="pill pill-green">Presente ' + esc(c.checkinHora) + '</span>';
     if (c.status === 'Cancelado') return '<span class="pill pill-red">Cancelado</span>';
     if (c.status === 'Substituído') return '<span class="pill pill-gray">Substituído</span>';
-    return '<button class="btn btn-sm btn-outline-secondary me-1" onclick="abrirSubstituicao(\'' + c.idConvite + '\',\'' + c.nome.replace(/'/g,"\\'") + '\')" title="Substituir"><i class="fas fa-right-left"></i></button>' +
-           '<button class="btn-hb" style="padding:6px 12px;font-size:.78rem;" onclick="fazerCheckinManual(\'' + c.idConvite + '\')"><i class="fas fa-check"></i> Confirmar entrada</button>';
+    if (!info || !info.podeCheckin) return '<span class="pill pill-blue">' + esc(c.status) + '</span>';
+    var id = esc(c.idConvite);
+    return '<button class="btn btn-sm btn-outline-secondary me-1" onclick="abrirSubstituicao(\'' + id + '\')" title="Substituir"><i class="fas fa-right-left"></i></button>' +
+           '<button class="btn-hb" style="padding:6px 12px;font-size:.78rem;" onclick="fazerCheckinManual(\'' + id + '\', this)"><i class="fas fa-check"></i> Confirmar entrada</button>';
   }
 
-  window.fazerCheckinManual = function(idConvite) {
+  window.fazerCheckinManual = function(idConvite, btn) {
+    if (btn) btn.disabled = true;
     google.script.run.withSuccessHandler(function(resp) {
+      if (btn) btn.disabled = false;
+      if (resp && resp.auth === false) { forcarLogout('Sessão expirada.'); return; }
       if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
-      toast(resp.mensagem, 'ok'); carregar();
-    }).withFailureHandler(function(err){ toast(err.message,'err'); }).apiCheckin(window.TOKEN, idConvite);
+      toast(resp.mensagem, 'ok'); carregar(false);
+    }).withFailureHandler(function(err){ if (btn) btn.disabled = false; toast(err.message,'err'); }).apiCheckin(window.TOKEN, idConvite);
   };
 
   // ---------- walk-in ----------
@@ -135,15 +181,17 @@
       btn.disabled = false;
       if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
       bootstrap.Modal.getInstance(document.getElementById('modalWalkin')).hide();
-      toast(resp.mensagem, 'ok'); carregar();
+      toast(resp.mensagem, 'ok'); carregar(false);
     }).withFailureHandler(function(err){ btn.disabled=false; toast(err.message,'err'); })
       .apiWalkin(window.TOKEN, idEvento, nome, document.getElementById('wkCategoria').value, autorizado);
   };
 
   // ---------- substituição ----------
-  window.abrirSubstituicao = function(idConvite, nomeOriginal) {
+  window.abrirSubstituicao = function(idConvite) {
+    var c = convidados.filter(function(x){ return x.idConvite === idConvite; })[0];
+    if (!c) return;
     subOriginalId = idConvite;
-    document.getElementById('subOriginalNome').innerText = nomeOriginal;
+    document.getElementById('subOriginalNome').innerText = c.nome;
     document.getElementById('subNome').value = ''; document.getElementById('subMotivo').value = ''; document.getElementById('subAutorizado').value = ''; document.getElementById('subCategoria').value = 'Outro';
     new bootstrap.Modal(document.getElementById('modalSub')).show();
   };
@@ -157,7 +205,7 @@
       btn.disabled = false;
       if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
       bootstrap.Modal.getInstance(document.getElementById('modalSub')).hide();
-      toast(resp.mensagem, 'ok'); carregar();
+      toast(resp.mensagem, 'ok'); carregar(false);
     }).withFailureHandler(function(err){ btn.disabled=false; toast(err.message,'err'); })
       .apiSubstituirEEntrar(window.TOKEN, subOriginalId, nome, document.getElementById('subCategoria').value, document.getElementById('subMotivo').value, autorizado);
   };
@@ -165,14 +213,20 @@
   // ---------- scanner QR (jsQR) ----------
   function iniciarCamera() {
     if (scanning) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      document.getElementById('scanResult').innerHTML = '<p class="text-danger small">Este navegador não libera a câmera aqui. Use a busca manual.</p>';
+      return;
+    }
     navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(function(s) {
       stream = s;
       var video = document.getElementById('video');
+      if (!video) { pararCamera(); return; }
       video.srcObject = s; video.play();
       scanning = true;
       requestAnimationFrame(tickScan);
     }).catch(function() {
-      document.getElementById('scanResult').innerHTML = '<p class="text-danger small">Não foi possível acessar a câmera. Use a busca manual.</p>';
+      var box = document.getElementById('scanResult');
+      if (box) box.innerHTML = '<p class="text-danger small">Não foi possível acessar a câmera (permita o acesso no navegador). Use a busca manual.</p>';
     });
   }
   function pararCamera() {
@@ -181,10 +235,12 @@
   }
   // Ler o quadro ~6x/seg é suficiente para QR parado na frente da câmera
   // e evita esquentar o celular decodificando a 60fps sem necessidade.
+  // Se a pessoa saiu desta aba (o vídeo sumiu da página), desliga a câmera.
   function tickScan() {
     if (!scanning) return;
     var video = document.getElementById('video'), canvas = document.getElementById('canvas');
-    if (video && video.readyState === video.HAVE_ENOUGH_DATA && !scanLock) {
+    if (!video || !document.body.contains(video)) { pararCamera(); return; }
+    if (video.readyState === video.HAVE_ENOUGH_DATA && !scanLock) {
       canvas.width = video.videoWidth; canvas.height = video.videoHeight;
       var ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -194,20 +250,22 @@
     }
     setTimeout(function(){ requestAnimationFrame(tickScan); }, 160);
   }
-  function processarQR(token) {
+  function mostrarScan(html) { var box = document.getElementById('scanResult'); if (box) box.innerHTML = html; }
+  function processarQR(conteudo) {
     google.script.run.withSuccessHandler(function(resp) {
-      var box = document.getElementById('scanResult');
+      if (resp && resp.auth === false) { pararCamera(); forcarLogout('Sessão expirada.'); return; }
       if (!resp.ok) {
-        box.innerHTML = '<div class="pill pill-red" style="font-size:.8rem;padding:8px 14px;">' + resp.mensagem + '</div>';
+        mostrarScan('<div class="pill pill-red" style="font-size:.8rem;padding:8px 14px;">' + esc(resp.mensagem) + '</div>');
       } else {
-        box.innerHTML = '<div class="pill pill-green" style="font-size:.8rem;padding:8px 14px;"><i class="fas fa-circle-check"></i> ' + resp.mensagem + '</div>';
-        carregar();
+        mostrarScan('<div class="pill pill-green" style="font-size:.8rem;padding:8px 14px;"><i class="fas fa-circle-check"></i> ' + esc(resp.mensagem) + '</div>');
+        if (navigator.vibrate) navigator.vibrate(120);
+        carregar(false);
       }
-      setTimeout(function() { scanLock = false; box.innerHTML = ''; }, 2200);
+      setTimeout(function() { scanLock = false; mostrarScan(''); }, 2200);
     }).withFailureHandler(function(err) {
-      document.getElementById('scanResult').innerHTML = '<div class="pill pill-red">' + err.message + '</div>';
+      mostrarScan('<div class="pill pill-red">' + esc(err.message) + '</div>');
       setTimeout(function(){ scanLock = false; }, 2000);
-    }).apiCheckinQR(window.TOKEN, token);
+    }).apiCheckinQR(window.TOKEN, conteudo, idEvento);
   }
 })();
 </script>

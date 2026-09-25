@@ -6,7 +6,7 @@
 
 <!-- Modal: adicionar pessoa manualmente -->
 <div class="modal fade" id="modalPessoa" tabindex="-1">
-  <div class="modal-dialog">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down">
     <div class="modal-content" style="border-radius:16px;border:none;">
       <div class="modal-header" style="border-bottom:1px solid var(--border);">
         <h6 class="modal-title fw-bold"><i class="fas fa-user-plus me-2 text-primary"></i>Adicionar à lista</h6>
@@ -37,7 +37,7 @@
 
 <!-- Modal: criar lote para empresa -->
 <div class="modal fade" id="modalLote" tabindex="-1">
-  <div class="modal-dialog">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down">
     <div class="modal-content" style="border-radius:16px;border:none;">
       <div class="modal-header" style="border-bottom:1px solid var(--border);">
         <h6 class="modal-title fw-bold"><i class="fas fa-link me-2 text-primary"></i>Criar lote de convite</h6>
@@ -62,13 +62,16 @@
 
 <!-- Modal: link gerado -->
 <div class="modal fade" id="modalLinkGerado" tabindex="-1">
-  <div class="modal-dialog">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down">
     <div class="modal-content" style="border-radius:16px;border:none;">
       <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold"><i class="fas fa-circle-check me-2" style="color:var(--success)"></i><span id="linkGeradoTitulo">Lote criado</span></h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
       <div class="modal-body">
         <p class="small text-muted mb-2" id="linkGeradoDesc">Copie e envie este link para a empresa:</p>
-        <div class="link-box" id="linkGeradoBox" onclick="copiarLinkGerado()"></div>
-        <button class="btn-hb-outline mt-3 w-100" onclick="copiarLinkGerado()"><i class="fas fa-copy"></i> Copiar link</button>
+        <input class="form-control link-box" id="linkGeradoBox" readonly onclick="this.select()">
+        <div class="d-flex gap-2 mt-3">
+          <button class="btn-hb-outline flex-fill justify-content-center" onclick="copiarLinkGerado()"><i class="fas fa-copy"></i> Copiar link</button>
+          <a class="btn-hb-outline flex-fill justify-content-center" id="linkGeradoAbrir" href="#" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i> Abrir para testar</a>
+        </div>
       </div>
     </div>
   </div>
@@ -81,7 +84,7 @@
 
   var CATEGORIAS = ['Pessoa Física','Empresário','Deputado','Senador','Vereador','Prefeito','Secretário','Político','Médico','Corpo Clínico','Fornecedor','Parceiro','Patrocinador','Imprensa','Doador','Conselheiro','Instituição','Outro'];
   var ORIGIN_PILL = { 'Lista original':'pill-blue', 'Lote público':'pill-violet', 'Walk-in':'pill-amber', 'Substituição':'pill-gray' };
-  var STATUS_PILL = { 'Convidado':'pill-gray', 'Confirmado':'pill-blue', 'Presente':'pill-green', 'Cancelado':'pill-red', 'Substituído':'pill-gray' };
+  var STATUS_PILL = { 'Convidado':'pill-gray', 'Confirmado':'pill-blue', 'Recusado':'pill-amber', 'Presente':'pill-green', 'Cancelado':'pill-red', 'Substituído':'pill-gray' };
 
   var convidados = [];
   var lotes = [];
@@ -105,16 +108,17 @@
       lotes = resp.dados.lotes || [];
       empresas = resp.dados.empresas || [];
       vagas = resp.dados.vagas || { capacidade:0, ativos:0, disponiveis:null };
+      if (resp.dados.permissoes && window.SESSAO) window.SESSAO.permissoes = resp.dados.permissoes;
       loteEmpresaMap = {}; lotes.forEach(function(l){ loteEmpresaMap[l.id] = l.empresa; });
 
-      var opts = '<option value="">—</option>' + empresas.map(function(e){ return '<option value="'+e.id+'">'+e.nome+'</option>'; }).join('');
-      document.getElementById('pEmpresa').innerHTML = opts;
-      document.getElementById('lEmpresa').innerHTML = '<option value="">Sem empresa (grupo avulso)</option>' + empresas.map(function(e){ return '<option value="'+e.id+'">'+e.nome+'</option>'; }).join('');
+      var optsEmp = empresas.map(function(e){ return '<option value="'+esc(e.id)+'">'+esc(e.nome)+'</option>'; }).join('');
+      document.getElementById('pEmpresa').innerHTML = '<option value="">—</option>' + optsEmp;
+      document.getElementById('lEmpresa').innerHTML = '<option value="">Sem empresa (grupo avulso)</option>' + optsEmp;
       render();
     }).withFailureHandler(erro).apiBootstrapEvento(window.TOKEN, idEvento);
   }
 
-  function erro(err) { toast(err.message, 'err'); }
+  function erro(err) { toast((err && (err.message || err.mensagem)) || 'Erro inesperado.', 'err'); }
 
   function origemLabel(c) {
     if (c.origem === 'Lote público') return 'Lote: ' + (loteEmpresaMap[c.idLote] || 'avulso');
@@ -128,8 +132,8 @@
       wrap.innerHTML = '<div class="card-hb"><div class="empty-state"><i class="fas fa-list-check"></i><h6>Montar lista</h6>' +
         '<p>Adicione convidados manualmente ou crie um lote com link público para uma empresa distribuir.</p>' +
         '<div class="d-flex gap-2 justify-content-center flex-wrap">' +
-        '<button class="btn-hb" onclick="abrirModalPessoa()"><i class="fas fa-user-plus"></i> Adicionar manualmente</button>' +
-        '<button class="btn-hb-outline" onclick="abrirModalLote()"><i class="fas fa-link"></i> Criar lote para empresa</button>' +
+        (pode('convites.criar') ? '<button class="btn-hb" onclick="abrirModalPessoa()"><i class="fas fa-user-plus"></i> Adicionar manualmente</button>' : '') +
+        (pode('lotes.criar') ? '<button class="btn-hb-outline" onclick="abrirModalLote()"><i class="fas fa-link"></i> Criar lote para empresa</button>' : '') +
         '</div></div></div>';
       return;
     }
@@ -160,8 +164,8 @@
       '<div class="d-flex justify-content-between align-items-center flex-wrap gap-2">' +
         '<div><strong style="color:var(--ink-900)">' + convidados.length + ' na lista</strong> <span class="text-muted small">· quem está, de onde é e quem convidou</span>' + vagasPill + '</div>' +
         '<div class="d-flex gap-2 flex-wrap">' +
-          '<button class="btn-hb-outline" onclick="abrirModalLote()"><i class="fas fa-link"></i> Criar lote</button>' +
-          '<button class="btn-hb" onclick="abrirModalPessoa()"><i class="fas fa-user-plus"></i> Adicionar</button>' +
+          (pode('lotes.criar') ? '<button class="btn-hb-outline" onclick="abrirModalLote()"><i class="fas fa-link"></i> Criar lote</button>' : '') +
+          (pode('convites.criar') ? '<button class="btn-hb" onclick="abrirModalPessoa()"><i class="fas fa-user-plus"></i> Adicionar</button>' : '') +
         '</div>' +
       '</div>' +
     '</div>' +
@@ -171,17 +175,17 @@
         (meuNome ? '<span class="pill pill-blue" style="cursor:pointer;" onclick="filtrarMeusConvidados()"><i class="fas fa-user"></i> Meus convidados</span>' : '') +
       '</div>' +
       '<div class="row g-2">' +
-        '<div class="col-md-3"><input class="form-control" id="fBusca" placeholder="🔍 Nome ou documento..."></div>' +
+        '<div class="col-12 col-md-3"><input class="form-control" id="fBusca" placeholder="🔍 Nome ou documento..."></div>' +
         selectFilter('fEmpresa', 'Empresa', opts.empresas) +
         selectFilter('fCategoria', 'Categoria', opts.categorias) +
         selectFilter('fGestor', 'Gestor', opts.gestores) +
         selectFilter('fCidade', 'Cidade/UF', opts.cidades) +
       '</div>' +
       '<div class="row g-2 mt-1">' +
-        '<div class="col-md-3">' + selectRaw('fStatus', 'Status', ['Convidado','Confirmado','Presente','Cancelado','Substituído']) + '</div>' +
-        '<div class="col-md-3">' + selectRaw('fOrigem', 'Origem', ['Lista original','Lote público','Walk-in','Substituição']) + '</div>' +
-        '<div class="col-md-3">' + selectRaw('fPresenca', 'Presença', ['Presente','Ausente']) + '</div>' +
-        '<div class="col-md-3 d-flex align-items-end"><button class="btn-hb-outline w-100" onclick="limparFiltros()"><i class="fas fa-xmark"></i> Limpar filtros</button></div>' +
+        '<div class="col-6 col-md-3">' + selectRaw('fStatus', 'Status', ['Convidado','Confirmado','Recusado','Presente','Cancelado','Substituído']) + '</div>' +
+        '<div class="col-6 col-md-3">' + selectRaw('fOrigem', 'Origem', ['Lista original','Lote público','Walk-in','Substituição']) + '</div>' +
+        '<div class="col-6 col-md-3">' + selectRaw('fPresenca', 'Presença', ['Presente','Ausente']) + '</div>' +
+        '<div class="col-12 col-md-3 d-flex align-items-end"><button class="btn-hb-outline w-100" onclick="limparFiltros()"><i class="fas fa-xmark"></i> Limpar filtros</button></div>' +
       '</div>' +
     '</div>';
   }
@@ -189,19 +193,32 @@
     var el = document.getElementById('fGestor');
     if (el) { el.value = (window.SESSAO && window.SESSAO.gestor) || ''; renderTabela(); }
   };
-  function selectFilter(id, label, values) { return '<div class="col-md-3"><select class="form-select" id="' + id + '"><option value="">' + label + '</option>' + values.map(function(v){return '<option value="'+v+'">'+v+'</option>';}).join('') + '</select></div>'; }
-  function selectRaw(id, label, values) { return '<select class="form-select" id="' + id + '"><option value="">' + label + '</option>' + values.map(function(v){return '<option value="'+v+'">'+v+'</option>';}).join('') + '</select>'; }
+  function selectFilter(id, label, values) { return '<div class="col-6 col-md-3">' + selectRaw(id, label, values) + '</div>'; }
+  function selectRaw(id, label, values) { return '<select class="form-select" id="' + id + '"><option value="">' + label + '</option>' + values.map(function(v){return '<option value="'+esc(v)+'">'+esc(v)+'</option>';}).join('') + '</select>'; }
 
   function lotesStripHtml() {
-    return '<div class="d-flex gap-2 mb-3" style="overflow-x:auto;padding-bottom:4px;">' + lotes.map(function(l) {
+    var podeEditarLote = pode('lotes.editar');
+    return '<div class="d-flex gap-2 mb-3" style="overflow-x:auto;padding-bottom:4px;">' + lotes.map(function(l, i) {
       var pct = l.vagasTotal ? Math.round(100 * l.vagasUsadas / l.vagasTotal) : 0;
-      var barColor = pct >= 100 ? 'var(--danger)' : (pct >= 70 ? 'var(--warning)' : 'var(--blue-600))');
-      return '<div class="card-hb" style="min-width:230px;padding:13px 15px;flex:none;">' +
-        '<div class="d-flex justify-content-between align-items-center"><strong style="font-size:.83rem;">' + (l.empresa || 'Grupo avulso') + '</strong>' +
-        '<span class="pill ' + (l.status === 'Aberto' ? 'pill-green' : (l.status === 'Expirado' ? 'pill-amber' : 'pill-gray')) + '">' + l.status + '</span></div>' +
-        '<div class="small text-muted mt-1">' + l.vagasUsadas + ' / ' + l.vagasTotal + ' vagas</div>' +
-        '<div style="height:5px;background:var(--bg);border-radius:20px;overflow:hidden;margin:6px 0 8px;"><div style="height:100%;width:' + pct + '%;background:' + barColor + ';"></div></div>' +
-        '<div class="link-box" style="font-size:.68rem;padding:6px 9px;" onclick="copiarTexto(\'' + l.link + '\')" title="Copiar link">' + l.link.replace(window.location.origin || '', '…') + '</div>' +
+      var barColor = pct >= 100 ? 'var(--danger)' : (pct >= 70 ? 'var(--warning)' : 'var(--blue-600)');
+      var lotado = l.status === 'Aberto' && l.vagasLivres <= 0;
+      var pillCls = lotado ? 'pill-red' : (l.status === 'Aberto' ? 'pill-green' : (l.status === 'Expirado' ? 'pill-amber' : 'pill-gray'));
+      var acao = '';
+      if (podeEditarLote) {
+        acao = l.status === 'Aberto'
+          ? '<button class="btn btn-sm btn-outline-secondary py-0 px-2 text-nowrap" style="font-size:.7rem;" onclick="alterarLote(' + i + ', \'encerrar\')"><i class="fas fa-lock"></i> Encerrar</button>'
+          : '<button class="btn btn-sm btn-outline-success py-0 px-2 text-nowrap" style="font-size:.7rem;" onclick="alterarLote(' + i + ', \'reabrir\')"><i class="fas fa-lock-open"></i> Reabrir</button>';
+      }
+      return '<div class="card-hb" style="min-width:250px;padding:13px 15px;flex:none;">' +
+        '<div class="d-flex justify-content-between align-items-center"><strong style="font-size:.83rem;">' + esc(l.empresa || 'Grupo avulso') + '</strong>' +
+        '<span class="pill ' + pillCls + '">' + (lotado ? 'Lotado' : esc(l.status)) + '</span></div>' +
+        '<div class="small text-muted mt-1">' + l.vagasUsadas + ' / ' + l.vagasTotal + ' vagas' + (l.expiracao ? ' · expira ' + esc(l.expiracao) : '') + '</div>' +
+        '<div style="height:5px;background:var(--bg);border-radius:20px;overflow:hidden;margin:6px 0 8px;"><div style="height:100%;width:' + Math.min(100, pct) + '%;background:' + barColor + ';"></div></div>' +
+        '<div class="d-flex gap-1 flex-wrap">' +
+          '<button class="btn btn-sm btn-outline-primary py-0 px-2 text-nowrap" style="font-size:.7rem;" onclick="copiarLinkLote(' + i + ')"><i class="fas fa-copy"></i> Copiar link</button>' +
+          '<a class="btn btn-sm btn-outline-secondary py-0 px-2 text-nowrap" style="font-size:.7rem;" href="' + esc(l.link) + '" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i> Abrir</a>' +
+          acao +
+        '</div>' +
       '</div>';
     }).join('') + '</div>';
   }
@@ -213,6 +230,17 @@
     });
   }
   window.limparFiltros = function() { render(); };
+
+  window.copiarLinkLote = function(i) { if (lotes[i]) copiarTexto(lotes[i].link); };
+  window.alterarLote = function(i, acao) {
+    var l = lotes[i]; if (!l) return;
+    if (acao === 'encerrar' && !confirm('Encerrar este lote? O link continua abrindo para quem já se inscreveu confirmar ou cancelar, mas não aceita novas inscrições.')) return;
+    var runner = google.script.run.withSuccessHandler(function(resp) {
+      if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
+      toast(resp.mensagem, 'ok'); carregarTudo();
+    }).withFailureHandler(erro);
+    if (acao === 'encerrar') runner.apiEncerrarLote(window.TOKEN, l.id); else runner.apiReabrirLote(window.TOKEN, l.id);
+  };
 
   function renderTabela() {
     var busca = (val('fBusca') || '').toLowerCase();
@@ -235,38 +263,44 @@
     var tbl = document.getElementById('tabelaConvidados');
     if (!filtrados.length) { tbl.innerHTML = '<div class="empty-state"><i class="fas fa-filter-circle-xmark"></i><p>Nenhum convidado bate com esses filtros.</p></div>'; return; }
 
-    tbl.innerHTML = '<table class="table-hb"><thead><tr><th>Nome</th><th>Empresa</th><th>Cargo/Doc.</th><th>Categoria</th><th>Cidade/UF</th><th>Origem</th><th>Gestor</th><th>Status</th><th></th></tr></thead><tbody>' +
+    var traco = '<span class="text-muted">—</span>';
+    tbl.innerHTML = '<table class="table-hb resp"><thead><tr><th>Nome</th><th>Empresa</th><th>Cargo/Doc.</th><th>Categoria</th><th>Cidade/UF</th><th>Origem</th><th>Gestor</th><th>Status</th><th></th></tr></thead><tbody>' +
       filtrados.map(function(c) {
         return '<tr>' +
-          '<td><strong>' + c.nome + '</strong>' +
-            (c.substituidoPor ? '<div class="small text-muted">substituído por ' + c.substituidoPor + '</div>' : '') +
-            (c.descricao ? '<div class="small text-muted" title="Descrição"><i class="fas fa-note-sticky me-1"></i>' + c.descricao + '</div>' : '') +
+          '<td class="td-titulo"><strong>' + esc(c.nome) + '</strong>' +
+            (c.substituidoPor ? '<div class="small text-muted">substituído por ' + esc(c.substituidoPor) + '</div>' : '') +
+            (c.descricao ? '<div class="small text-muted" title="Descrição"><i class="fas fa-note-sticky me-1"></i>' + esc(c.descricao) + '</div>' : '') +
           '</td>' +
-          '<td>' + (c.empresa || '<span class="text-muted">—</span>') + '</td>' +
-          '<td><div>' + (c.cargo || '—') + '</div><div class="small text-muted">' + (c.documento || '') + '</div></td>' +
-          '<td>' + (c.categoria || '—') + '</td>' +
-          '<td>' + (c.cidade && c.cidade !== '/' ? c.cidade : '<span class="text-muted">—</span>') + '</td>' +
-          '<td><span class="pill ' + (ORIGIN_PILL[c.origem] || 'pill-gray') + '">' + origemLabel(c) + '</span></td>' +
-          '<td>' + (c.gestor || '<span class="text-muted">—</span>') + '</td>' +
-          '<td><span class="pill ' + (STATUS_PILL[c.status] || 'pill-gray') + '">' + c.status + '</span>' + (c.checkinHora ? '<div class="small text-muted">' + c.checkinHora + '</div>' : '') + '</td>' +
-          '<td class="text-end text-nowrap">' + linhaAcoesConvidado(c) + '</td>' +
+          '<td data-label="Empresa">' + (c.empresa ? esc(c.empresa) : traco) + '</td>' +
+          '<td data-label="Cargo/Doc."><div><div>' + esc(c.cargo || '—') + '</div><div class="small text-muted">' + esc(c.documento) + '</div></div></td>' +
+          '<td data-label="Categoria">' + esc(c.categoria || '—') + '</td>' +
+          '<td data-label="Cidade/UF">' + (c.cidade && c.cidade !== '/' ? esc(c.cidade) : traco) + '</td>' +
+          '<td data-label="Origem"><span class="pill ' + (ORIGIN_PILL[c.origem] || 'pill-gray') + '">' + esc(origemLabel(c)) + '</span></td>' +
+          '<td data-label="Convidado por">' + (c.gestor ? esc(c.gestor) : traco) + '</td>' +
+          '<td data-label="Status"><span class="pill ' + (STATUS_PILL[c.status] || 'pill-gray') + '">' + esc(c.status) + '</span>' + (c.checkinHora ? ' <span class="small text-muted">' + esc(c.checkinHora) + '</span>' : '') + '</td>' +
+          '<td class="text-end text-nowrap td-acoes">' + linhaAcoesConvidado(c) + '</td>' +
         '</tr>';
       }).join('') + '</tbody></table>';
   }
   function val(id) { var el = document.getElementById(id); return el ? el.value : ''; }
 
+  // Link pessoal: vale para Convidado, Confirmado e Recusado (quem recusou
+  // pode mudar de ideia). Vem pronto do servidor — não usa window.location.
   function linhaAcoesConvidado(c) {
-    var ativos = ['Convidado','Confirmado'];
+    var ativos = ['Convidado','Confirmado','Recusado'];
     var botoes = '';
     if (ativos.indexOf(c.status) !== -1 && c.linkConfirmacao) {
-      botoes += '<button class="btn btn-sm btn-outline-secondary me-1" title="Copiar link de confirmação para o convidado" onclick="copiarTexto(\'' + c.linkConfirmacao + '\')"><i class="fas fa-link"></i></button>';
+      botoes += '<button class="btn btn-sm btn-outline-secondary me-1" title="Copiar link pessoal (confirmação + QR Code)" onclick="copiarLinkConvidado(\'' + esc(c.idConvite) + '\')"><i class="fas fa-link"></i></button>';
     }
-    if (ativos.indexOf(c.status) !== -1) {
-      botoes += '<button class="btn btn-sm btn-outline-danger" title="Cancelar convite" onclick="cancelarConvite(\'' + c.idConvite + '\')"><i class="fas fa-ban"></i></button>';
+    if (ativos.indexOf(c.status) !== -1 && pode('convites.excluir')) {
+      botoes += '<button class="btn btn-sm btn-outline-danger" title="Cancelar convite" onclick="cancelarConvite(\'' + esc(c.idConvite) + '\')"><i class="fas fa-ban"></i></button>';
     }
     return botoes;
   }
-  // Link vem pronto do servidor (ScriptApp.getService().getUrl()) — não usa window.location
+  window.copiarLinkConvidado = function(idConvite) {
+    var c = convidados.filter(function(x){ return x.idConvite === idConvite; })[0];
+    if (c) copiarTexto(c.linkConfirmacao);
+  };
 
   window.cancelarConvite = function(idConvite) {
     if (!confirm('Cancelar este convite?')) return;
@@ -295,11 +329,7 @@
       bootstrap.Modal.getInstance(document.getElementById('modalPessoa')).hide();
       toast(resp.mensagem, 'ok');
       if (resp.dados && resp.dados.linkConfirmacao) {
-        lastLinkGerado = resp.dados.linkConfirmacao;
-        document.getElementById('linkGeradoTitulo').innerText = nome + ' adicionado(a)';
-        document.getElementById('linkGeradoDesc').innerText = 'Envie este link pessoal para ' + nome + ' confirmar presença:';
-        document.getElementById('linkGeradoBox').innerText = lastLinkGerado;
-        new bootstrap.Modal(document.getElementById('modalLinkGerado')).show();
+        mostrarLinkGerado(nome + ' adicionado(a)', 'Envie este link pessoal para ' + nome + ' confirmar presença (a página mostra o QR Code da entrada):', resp.dados.linkConfirmacao);
       }
       carregarTudo();
     }).withFailureHandler(function(err){ btn.disabled=false; erro(err); }).apiAdicionarNaLista(window.TOKEN, '', {
@@ -331,11 +361,7 @@
       btn.disabled = false;
       if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
       bootstrap.Modal.getInstance(document.getElementById('modalLote')).hide();
-      lastLinkGerado = resp.dados.link;
-      document.getElementById('linkGeradoTitulo').innerText = 'Lote criado';
-      document.getElementById('linkGeradoDesc').innerText = 'Copie e envie este link para a empresa:';
-      document.getElementById('linkGeradoBox').innerText = lastLinkGerado;
-      new bootstrap.Modal(document.getElementById('modalLinkGerado')).show();
+      mostrarLinkGerado('Lote criado', 'Copie e envie este link para a empresa:', resp.dados.link);
       carregarTudo();
     }).withFailureHandler(function(err){ btn.disabled=false; erro(err); }).apiCriarLote(window.TOKEN, {
       ID_Evento: idEvento, ID_Empresa: document.getElementById('lEmpresa').value, Vagas_Total: vagas,
@@ -343,8 +369,13 @@
     });
   };
   window.copiarLinkGerado = function() { copiarTexto(lastLinkGerado); };
-  window.copiarTexto = function(txt) {
-    navigator.clipboard.writeText(txt).then(function(){ toast('Link copiado.', 'ok'); }).catch(function(){ toast('Não foi possível copiar automaticamente.', 'err'); });
-  };
+  function mostrarLinkGerado(titulo, desc, link) {
+    lastLinkGerado = link;
+    document.getElementById('linkGeradoTitulo').innerText = titulo;
+    document.getElementById('linkGeradoDesc').innerText = desc;
+    document.getElementById('linkGeradoBox').value = link;
+    document.getElementById('linkGeradoAbrir').href = link;
+    new bootstrap.Modal(document.getElementById('modalLinkGerado')).show();
+  }
 })();
 </script>

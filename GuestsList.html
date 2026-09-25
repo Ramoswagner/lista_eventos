@@ -11,7 +11,7 @@
 <div id="dirWrap"><div class="skel" style="height:300px;"></div></div>
 
 <!-- Modal pessoa -->
-<div class="modal fade" id="modalDirPessoa" tabindex="-1"><div class="modal-dialog"><div class="modal-content" style="border-radius:16px;border:none;">
+<div class="modal fade" id="modalDirPessoa" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down"><div class="modal-content" style="border-radius:16px;border:none;">
   <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold"><i class="fas fa-user-plus me-2 text-primary"></i>Nova pessoa</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
   <div class="modal-body">
     <div class="mb-3"><label class="form-label">Nome completo *</label><input class="form-control" id="dpNome"></div>
@@ -34,7 +34,7 @@
 </div></div></div>
 
 <!-- Modal empresa -->
-<div class="modal fade" id="modalDirEmpresa" tabindex="-1"><div class="modal-dialog"><div class="modal-content" style="border-radius:16px;border:none;">
+<div class="modal fade" id="modalDirEmpresa" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down"><div class="modal-content" style="border-radius:16px;border:none;">
   <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold"><i class="fas fa-building me-2 text-primary"></i>Nova empresa</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
   <div class="modal-body">
     <div class="mb-3"><label class="form-label">Nome *</label><input class="form-control" id="deNome"></div>
@@ -66,11 +66,11 @@
       if (!resp.ok) { erro(resp); return; }
       pessoas = resp.dados.pessoas || [];
       empresas = resp.dados.empresas || [];
-      document.getElementById('dpEmpresa').innerHTML = '<option value="">—</option>' + empresas.map(function(e){return '<option value="'+e.id+'">'+e.nome+'</option>';}).join('');
+      document.getElementById('dpEmpresa').innerHTML = '<option value="">—</option>' + empresas.map(function(e){return '<option value="'+esc(e.id)+'">'+esc(e.nome)+'</option>';}).join('');
       renderAba();
     }).withFailureHandler(erro).apiBootstrapGestao(window.TOKEN);
   }
-  function erro(err) { toast(err.message, 'err'); }
+  function erro(err) { toast((err && (err.message || err.mensagem)) || 'Erro inesperado.', 'err'); }
 
   window.mudarAba = function(a) {
     aba = a;
@@ -82,18 +82,18 @@
   function renderAba() {
     var wrap = document.getElementById('dirWrap');
     if (aba === 'pessoas') {
-      wrap.innerHTML = toolbar('Buscar por nome, documento ou e-mail...', 'Nova pessoa', 'abrirModalDirPessoa()') + '<div id="tblPessoas"></div>';
+      wrap.innerHTML = toolbar('Buscar por nome, documento ou e-mail...', pode('pessoas.criar') ? 'Nova pessoa' : '', 'abrirModalDirPessoa()') + '<div id="tblPessoas"></div>';
       document.getElementById('dirBusca').addEventListener('input', renderPessoas);
       renderPessoas();
     } else {
-      wrap.innerHTML = toolbar('Buscar por nome ou cidade...', 'Nova empresa', 'abrirModalDirEmpresa()') + '<div id="tblEmpresas"></div>';
+      wrap.innerHTML = toolbar('Buscar por nome ou cidade...', pode('empresas.criar') ? 'Nova empresa' : '', 'abrirModalDirEmpresa()') + '<div id="tblEmpresas"></div>';
       document.getElementById('dirBusca').addEventListener('input', renderEmpresas);
       renderEmpresas();
     }
   }
   function toolbar(placeholder, btnLabel, onClick) {
     return '<div class="d-flex gap-2 mb-3"><input class="form-control" id="dirBusca" placeholder="🔍 ' + placeholder + '">' +
-      '<button class="btn-hb" style="flex:none;" onclick="' + onClick + '"><i class="fas fa-plus"></i> ' + btnLabel + '</button></div>';
+      (btnLabel ? '<button class="btn-hb" style="flex:none;" onclick="' + onClick + '"><i class="fas fa-plus"></i> ' + btnLabel + '</button>' : '') + '</div>';
   }
 
   function renderPessoas() {
@@ -101,13 +101,14 @@
     var lista = pessoas.filter(function(p) { return !q || (p.nome + ' ' + p.documento + ' ' + p.email).toLowerCase().indexOf(q) !== -1; });
     var tbl = document.getElementById('tblPessoas');
     if (!lista.length) { tbl.innerHTML = emptyState('fa-user', 'Nenhuma pessoa encontrada'); return; }
-    tbl.innerHTML = '<div class="card-hb"><table class="table-hb"><thead><tr><th>Nome</th><th>Empresa</th><th>Cargo</th><th>Categoria</th><th>Cidade/UF</th><th>Contato</th></tr></thead><tbody>' +
+    var traco = '<span class="text-muted">—</span>';
+    tbl.innerHTML = '<div class="card-hb"><table class="table-hb resp"><thead><tr><th>Nome</th><th>Empresa</th><th>Cargo</th><th>Categoria</th><th>Cidade/UF</th><th>Contato</th></tr></thead><tbody>' +
       lista.map(function(p) {
-        return '<tr><td><strong>' + p.nome + '</strong>' + (p.documento ? '<div class="small text-muted">' + p.documento + '</div>' : '') + '</td>' +
-          '<td>' + (p.empresa || '<span class="text-muted">—</span>') + '</td><td>' + (p.cargo || '—') + '</td>' +
-          '<td><span class="pill pill-blue">' + (p.categoria || 'Outro') + '</span></td>' +
-          '<td>' + (p.cidade && p.cidade !== '/' ? p.cidade : '<span class="text-muted">—</span>') + '</td>' +
-          '<td>' + (p.email || p.telefone || '<span class="text-muted">—</span>') + '</td></tr>';
+        return '<tr><td class="td-titulo"><strong>' + esc(p.nome) + '</strong>' + (p.documento ? '<div class="small text-muted">' + esc(p.documento) + '</div>' : '') + '</td>' +
+          '<td data-label="Empresa">' + (p.empresa ? esc(p.empresa) : traco) + '</td><td data-label="Cargo">' + esc(p.cargo || '—') + '</td>' +
+          '<td data-label="Categoria"><span class="pill pill-blue">' + esc(p.categoria || 'Outro') + '</span></td>' +
+          '<td data-label="Cidade/UF">' + (p.cidade && p.cidade !== '/' ? esc(p.cidade) : traco) + '</td>' +
+          '<td data-label="Contato">' + ((p.email || p.telefone) ? esc(p.email || p.telefone) : traco) + '</td></tr>';
       }).join('') + '</tbody></table></div>';
   }
 
@@ -116,10 +117,11 @@
     var lista = empresas.filter(function(e) { return !q || (e.nome + ' ' + e.cidade).toLowerCase().indexOf(q) !== -1; });
     var tbl = document.getElementById('tblEmpresas');
     if (!lista.length) { tbl.innerHTML = emptyState('fa-building', 'Nenhuma empresa encontrada'); return; }
-    tbl.innerHTML = '<div class="card-hb"><table class="table-hb"><thead><tr><th>Nome</th><th>Segmento</th><th>Cidade/UF</th><th>Contato</th></tr></thead><tbody>' +
+    tbl.innerHTML = '<div class="card-hb"><table class="table-hb resp"><thead><tr><th>Nome</th><th>Segmento</th><th>Cidade/UF</th><th>Contato</th></tr></thead><tbody>' +
       lista.map(function(e) {
-        return '<tr><td><strong>' + e.nome + '</strong></td><td>' + (e.segmento || '<span class="text-muted">—</span>') + '</td>' +
-          '<td>' + (e.cidade && e.cidade !== '/' ? e.cidade : '<span class="text-muted">—</span>') + '</td><td>' + (e.contato || '<span class="text-muted">—</span>') + '</td></tr>';
+        var traco = '<span class="text-muted">—</span>';
+        return '<tr><td class="td-titulo"><strong>' + esc(e.nome) + '</strong></td><td data-label="Segmento">' + (e.segmento ? esc(e.segmento) : traco) + '</td>' +
+          '<td data-label="Cidade/UF">' + (e.cidade && e.cidade !== '/' ? esc(e.cidade) : traco) + '</td><td data-label="Contato">' + (e.contato ? esc(e.contato) : traco) + '</td></tr>';
       }).join('') + '</tbody></table></div>';
   }
 

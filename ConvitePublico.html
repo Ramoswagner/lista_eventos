@@ -101,8 +101,18 @@
     .status-Convidado   { background: #EEF2FF; color: #6366F1; }
     .status-Confirmado  { background: #EEF9F4; color: #10B981; }
     .status-Recusado    { background: #FEF2F2; color: #EF4444; }
+    .status-Presente    { background: #EEF9F4; color: #059669; }
 
     #toastContainer { position: fixed; bottom: 24px; right: 24px; z-index: 9999; }
+    @media (max-width: 576px) {
+      body { padding: 12px 10px; }
+      .card-header-custom { padding: 20px 18px; }
+      .card-body-custom { padding: 20px 16px; }
+      #toastContainer { left: 12px; right: 12px; bottom: 12px; }
+      .toast-msg { max-width: none; }
+      .d-flex.gap-2.resp-col { flex-direction: column; }
+    }
+    .link-pessoal { background:#F1F5F9; border-radius:10px; padding:10px 12px; font-family:ui-monospace,Consolas,monospace; font-size:.78rem; word-break:break-all; }
     .toast-msg {
       background: #1E293B;
       color: #fff;
@@ -178,19 +188,17 @@
     <div id="secaoFormulario">
       <h6 class="fw-bold mb-3"><i class="fas fa-user-plus me-2 text-primary"></i>Fazer minha inscrição</h6>
 
-      <div id="alertaVagasEsgotadas" class="alert alert-danger" style="display:none;">
-        <i class="fas fa-times-circle me-2"></i>Todas as vagas deste lote já foram preenchidas.
-      </div>
 
       <form id="formInscrição" novalidate>
         <div class="row g-3">
           <div class="col-12">
             <label class="form-label fw-semibold">Nome completo <span class="text-danger">*</span></label>
-            <input type="text" id="inputNome" class="form-control" placeholder="Seu nome completo" required>
+            <input type="text" id="inputNome" class="form-control" placeholder="Seu nome completo" autocomplete="name" required>
           </div>
+          <div class="col-12"><p class="small text-muted mb-0">Informe CPF <strong>ou</strong> e-mail — é com ele que você confirma ou cancela depois.</p></div>
           <div class="col-md-6">
             <label class="form-label fw-semibold">CPF / Documento</label>
-            <input type="text" id="inputDocumento" class="form-control" placeholder="000.000.000-00">
+            <input type="text" id="inputDocumento" class="form-control" placeholder="000.000.000-00" inputmode="numeric" autocomplete="off">
           </div>
           <div class="col-md-6">
             <label class="form-label fw-semibold">Telefone</label>
@@ -198,7 +206,7 @@
           </div>
           <div class="col-12">
             <label class="form-label fw-semibold">E-mail</label>
-            <input type="email" id="inputEmail" class="form-control" placeholder="seu@email.com">
+            <input type="email" id="inputEmail" class="form-control" placeholder="seu@email.com" autocomplete="email" autocapitalize="off">
           </div>
           <div class="col-12">
             <label class="form-label fw-semibold">Cargo / Função</label>
@@ -217,10 +225,18 @@
     <!-- Confirmação de inscrição feita -->
     <div id="secaoSucesso" style="display:none;" class="text-center py-3">
       <div style="font-size: 3rem;">🎉</div>
-      <h5 class="fw-bold text-success mt-2">Inscrição confirmada!</h5>
-      <p class="text-muted">Você está na lista. Em breve receberá mais informações sobre o evento.</p>
-      <p class="small text-muted mt-3">Você pode voltar a este link antes do evento para <strong>confirmar sua presença</strong> ou cancelar sua inscrição.</p>
+      <h5 class="fw-bold text-success mt-2">Inscrição realizada!</h5>
+      <p class="text-muted mb-3">Você está na lista. Guarde o seu <strong>link pessoal</strong>: nele você confirma presença e encontra o <strong>QR Code da entrada</strong>.</p>
+      <div class="link-pessoal mb-2" id="linkPessoalTexto"></div>
+      <div class="d-flex gap-2 justify-content-center flex-wrap resp-col">
+        <a class="btn btn-success" id="linkPessoalAbrir" href="#" target="_blank" rel="noopener"><i class="fas fa-qrcode me-1"></i> Abrir meu link pessoal</a>
+        <button class="btn btn-outline-secondary" type="button" onclick="copiarLinkPessoal()"><i class="fas fa-copy me-1"></i> Copiar link</button>
+      </div>
+      <p class="small text-muted mt-3 mb-0">Também dá para voltar a esta página e, com seu CPF ou e-mail, confirmar ou cancelar a inscrição.</p>
     </div>
+
+    <!-- Inscrições fechadas -->
+    <div id="secaoFechada" class="alert alert-secondary" style="display:none;"></div>
 
     <!-- Área de confirmação pré-evento (para quem já está inscrito) -->
     <div id="secaoConfirmacao" style="display:none;" class="mt-4">
@@ -249,9 +265,11 @@
 </div>
 
 <script>
-  // Token do lote passado pelo servidor
-  const LOTE_TOKEN = '<?= loteToken ?>';
+  // Token do lote validado no servidor (doGet): só letras, números e hífen — ou vazio.
+  const LOTE_TOKEN = <?!= JSON.stringify(loteToken) ?>;
   let loteInfo = null;
+  let buscaAtual = '';
+  let linkPessoal = '';
 
   google.script.run.withSuccessHandler(function(resp) {
     if (!resp || !resp.ok) return;
@@ -263,10 +281,17 @@
   // ------------------------------------------------------------
   // UTILITÁRIOS
   // ------------------------------------------------------------
+  function esc(v) {
+    return String(v === null || v === undefined ? '' : v).replace(/[&<>"']/g, function(c) {
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+  }
+
   function toast(msg, tipo) {
     const el = document.createElement('div');
     el.className = 'toast-msg ' + (tipo || 'success');
-    el.innerHTML = '<i class="fas fa-' + (tipo === 'error' ? 'exclamation-circle' : 'check-circle') + '"></i>' + msg;
+    el.innerHTML = '<i class="fas fa-' + (tipo === 'error' ? 'exclamation-circle' : 'check-circle') + '"></i><span></span>';
+    el.querySelector('span').textContent = msg;
     document.getElementById('toastContainer').appendChild(el);
     setTimeout(() => el.remove(), 4000);
   }
@@ -277,44 +302,61 @@
     });
   }
 
+  function erroFatal(msg) {
+    document.getElementById('erroMensagem').textContent = msg;
+    mostrarTela('telaErro');
+  }
+
+  function copiarTexto(txt) {
+    function manual() { window.prompt('Copie o link abaixo:', txt); }
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(txt).then(() => toast('Link copiado.')).catch(manual);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = txt; ta.style.position = 'fixed'; ta.style.top = '-1000px';
+      document.body.appendChild(ta); ta.select();
+      let ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+      document.body.removeChild(ta);
+      if (ok) toast('Link copiado.'); else manual();
+    }
+  }
+  function copiarLinkPessoal() { copiarTexto(linkPessoal); }
+
   // ------------------------------------------------------------
   // INICIALIZAÇÃO — carrega info do lote
   // ------------------------------------------------------------
   function init() {
+    if (!LOTE_TOKEN) { erroFatal('Link inválido. Confira se copiou o link inteiro.'); return; }
     google.script.run
       .withSuccessHandler(function(res) {
-        if (!res.ok) {
-          document.getElementById('erroMensagem').textContent = res.mensagem;
-          mostrarTela('telaErro');
-          return;
-        }
+        if (!res.ok) { erroFatal(res.mensagem); return; }
         loteInfo = res.dados;
         renderizarLote(loteInfo);
         mostrarTela('telaInscrição');
       })
-      .withFailureHandler(function(err) {
-        document.getElementById('erroMensagem').textContent = 'Erro de conexão: ' + err.message;
-        mostrarTela('telaErro');
-      })
+      .withFailureHandler(function() { erroFatal('Não foi possível carregar agora. Verifique sua conexão e recarregue a página.'); })
       .apiInfoLotePublico(LOTE_TOKEN);
   }
 
   function renderizarLote(dados) {
-    document.getElementById('nomeEvento').textContent  = dados.evento;
-    document.getElementById('infoEvento').textContent  =
+    document.getElementById('nomeEvento').textContent = dados.evento;
+    document.getElementById('infoEvento').textContent =
       (dados.dataEvento ? '📅 ' + dados.dataEvento : '') +
       (dados.local ? '  📍 ' + dados.local : '');
 
     const badge = document.getElementById('vagasBadge');
     const texto = document.getElementById('vagasTexto');
+    badge.classList.toggle('esgotado', !dados.inscricaoAberta);
+    texto.textContent = dados.inscricaoAberta
+      ? dados.vagasLivres + ' de ' + dados.vagasTotal + ' vagas disponíveis'
+      : (dados.vagasLivres <= 0 ? 'Vagas esgotadas' : 'Inscrições fechadas');
 
-    if (dados.vagasLivres <= 0) {
-      badge.classList.add('esgotado');
-      texto.textContent = 'Vagas esgotadas';
-      document.getElementById('alertaVagasEsgotadas').style.display = '';
-      document.getElementById('formInscrição').style.display = 'none';
-    } else {
-      texto.textContent = dados.vagasLivres + ' de ' + dados.vagasTotal + ' vagas disponíveis';
+    const fechada = document.getElementById('secaoFechada');
+    if (!dados.inscricaoAberta) {
+      document.getElementById('secaoFormulario').style.display = 'none';
+      fechada.style.display = '';
+      fechada.innerHTML = '<i class="fas fa-circle-info me-2"></i>' + esc(dados.motivoFechado) +
+        ' Se você já se inscreveu, use a busca abaixo para confirmar ou cancelar.';
     }
 
     if (dados.empresa) {
@@ -323,23 +365,23 @@
       empBadge.style.display = '';
     }
 
-    // Mostra inscritos
+    const secao = document.getElementById('secaoInscritos');
     if (dados.inscritos && dados.inscritos.length > 0) {
-      document.getElementById('secaoInscritos').style.display = '';
-      const lista = document.getElementById('listaInscritos');
-      lista.innerHTML = dados.inscritos.map(i => `
+      secao.style.display = '';
+      document.getElementById('listaInscritos').innerHTML = dados.inscritos.map(i => `
         <div class="item">
-          <div>
-            <div class="nome"><i class="fas fa-user-circle me-2 text-muted"></i>${i.nome}</div>
-            ${i.cargo ? '<div class="cargo ms-4">' + i.cargo + '</div>' : ''}
+          <div style="min-width:0;">
+            <div class="nome text-truncate"><i class="fas fa-user-circle me-2 text-muted"></i>${esc(i.nome)}</div>
+            ${i.cargo ? '<div class="cargo ms-4">' + esc(i.cargo) + '</div>' : ''}
           </div>
-          <span class="status-badge status-${i.status}">${i.status}</span>
+          <span class="status-badge status-${esc(i.status)}">${esc(i.status)}</span>
         </div>
       `).join('');
+    } else {
+      secao.style.display = 'none';
     }
 
-    // Mostra área de confirmação pré-evento
-    document.getElementById('secaoConfirmacao').style.display = '';
+    document.getElementById('secaoConfirmacao').style.display = dados.inscritos && dados.inscritos.length ? '' : 'none';
   }
 
   // ------------------------------------------------------------
@@ -348,96 +390,87 @@
   document.getElementById('formInscrição').addEventListener('submit', function(e) {
     e.preventDefault();
     const nome = document.getElementById('inputNome').value.trim();
+    const doc = document.getElementById('inputDocumento').value.trim();
+    const email = document.getElementById('inputEmail').value.trim();
     if (!nome) { toast('Nome é obrigatório.', 'error'); return; }
+    if (!doc && !email) { toast('Informe o CPF ou o e-mail.', 'error'); return; }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('E-mail inválido.', 'error'); return; }
 
     const btn = document.getElementById('btnInscrever');
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Enviando...';
-
-    const dadosPessoa = {
-      Nome:      nome,
-      Documento: document.getElementById('inputDocumento').value.trim(),
-      Telefone:  document.getElementById('inputTelefone').value.trim(),
-      Email:     document.getElementById('inputEmail').value.trim(),
-      Cargo:     document.getElementById('inputCargo').value.trim()
-    };
+    function liberar() { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-circle me-2"></i>Confirmar inscrição'; }
 
     google.script.run
       .withSuccessHandler(function(res) {
-        if (res.ok) {
-          document.getElementById('secaoFormulario').style.display = 'none';
-          document.getElementById('secaoSucesso').style.display   = '';
-          toast('Inscrição realizada com sucesso!');
-        } else {
-          toast(res.mensagem, 'error');
-          btn.disabled = false;
-          btn.innerHTML = '<i class="fas fa-check-circle me-2"></i>Confirmar inscrição';
-        }
+        if (!res.ok) { toast(res.mensagem, 'error'); liberar(); return; }
+        linkPessoal = (res.dados && res.dados.linkPessoal) || '';
+        document.getElementById('secaoFormulario').style.display = 'none';
+        document.getElementById('secaoSucesso').style.display = '';
+        document.getElementById('linkPessoalTexto').textContent = linkPessoal;
+        document.getElementById('linkPessoalAbrir').href = linkPessoal || '#';
+        document.getElementById('secaoSucesso').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        toast('Inscrição realizada com sucesso!');
       })
-      .withFailureHandler(function(err) {
-        toast('Erro: ' + err.message, 'error');
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-check-circle me-2"></i>Confirmar inscrição';
-      })
-      .apiInscreverNoLote(LOTE_TOKEN, dadosPessoa);
+      .withFailureHandler(function() { toast('Falha de conexão. Tente novamente.', 'error'); liberar(); })
+      .apiInscreverNoLote(LOTE_TOKEN, {
+        Nome: nome, Documento: doc, Email: email,
+        Telefone: document.getElementById('inputTelefone').value.trim(),
+        Cargo: document.getElementById('inputCargo').value.trim()
+      });
   });
 
   // ------------------------------------------------------------
-  // BUSCAR INSCRIÇÃO PARA CONFIRMAR/CANCELAR
+  // BUSCAR INSCRIÇÃO PARA CONFIRMAR/CANCELAR (a busca é no servidor;
+  // a página nunca recebe e-mail/CPF de ninguém)
   // ------------------------------------------------------------
-  document.getElementById('btnBuscar').addEventListener('click', function() {
+  document.getElementById('btnBuscar').addEventListener('click', buscar);
+  document.getElementById('inputBusca').addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); buscar(); } });
+
+  function buscar() {
     const busca = document.getElementById('inputBusca').value.trim();
     if (!busca) { toast('Informe seu CPF ou e-mail.', 'error'); return; }
-
     const div = document.getElementById('resultadoBusca');
     div.innerHTML = '<div class="text-center text-muted py-2"><i class="fas fa-spinner fa-spin"></i> Buscando...</div>';
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (!res.ok) {
+          div.innerHTML = '<div class="alert alert-warning"><i class="fas fa-exclamation-triangle me-2"></i>' + esc(res.mensagem) + '</div>';
+          return;
+        }
+        buscaAtual = busca;
+        const d = res.dados;
+        div.innerHTML = `
+          <div class="card border-0 shadow-sm rounded-3 p-3">
+            <div class="fw-bold mb-1">${esc(d.nome)}</div>
+            <div class="text-muted small mb-1">${esc(d.cargo)}</div>
+            <div class="small mb-3">Situação: <span class="status-badge status-${esc(d.status)}">${esc(d.status)}</span></div>
+            <div class="d-flex gap-2 resp-col">
+              ${d.status !== 'Confirmado' ? '<button class="btn btn-success btn-sm flex-grow-1" onclick="responder(\'Confirmado\')"><i class="fas fa-check me-1"></i>Confirmar presença</button>' : ''}
+              <button class="btn btn-outline-danger btn-sm flex-grow-1" onclick="responder('Cancelado')"><i class="fas fa-times me-1"></i>Cancelar inscrição</button>
+            </div>
+          </div>`;
+      })
+      .withFailureHandler(function() { div.innerHTML = '<div class="alert alert-warning">Falha de conexão. Tente novamente.</div>'; })
+      .apiBuscarInscricaoLote(LOTE_TOKEN, busca);
+  }
 
-    // Busca nos inscritos do lote carregado
-    if (!loteInfo || !loteInfo.inscritos) {
-      div.innerHTML = '<div class="alert alert-warning">Nenhum inscrito encontrado.</div>';
-      return;
-    }
-
-    const encontrado = loteInfo.inscritos.find(i =>
-      (i.email && i.email.toLowerCase() === busca.toLowerCase()) ||
-      (i.documento && i.documento.replace(/\D/g,'') === busca.replace(/\D/g,''))
-    );
-
-    if (!encontrado) {
-      div.innerHTML = '<div class="alert alert-warning"><i class="fas fa-exclamation-triangle me-2"></i>Nenhuma inscrição encontrada com este dado.</div>';
-      return;
-    }
-
-    div.innerHTML = `
-      <div class="card border-0 shadow-sm rounded-3 p-3">
-        <div class="fw-bold mb-1">${encontrado.nome}</div>
-        <div class="text-muted small mb-3">${encontrado.cargo || ''}</div>
-        <div class="d-flex gap-2">
-          <button class="btn btn-success btn-sm flex-grow-1" onclick="responder('${encontrado.idConvite}', 'Confirmado')">
-            <i class="fas fa-check me-1"></i>Confirmar presença
-          </button>
-          <button class="btn btn-outline-danger btn-sm flex-grow-1" onclick="responder('${encontrado.idConvite}', 'Cancelado')">
-            <i class="fas fa-times me-1"></i>Cancelar inscrição
-          </button>
-        </div>
-      </div>
-    `;
-  });
-
-  function responder(idConvite, resposta) {
+  function responder(resposta) {
+    if (resposta === 'Cancelado' && !confirm('Cancelar sua inscrição? A vaga será liberada para outra pessoa.')) return;
     google.script.run
       .withSuccessHandler(function(res) {
         if (res.ok) {
-          document.getElementById('msgConfirmacao').textContent    = res.mensagem;
+          document.getElementById('msgConfirmacao').textContent = res.mensagem;
           document.getElementById('subMsgConfirmacao').textContent =
             resposta === 'Confirmado' ? 'Sua presença está confirmada. Até breve!' : 'Sua inscrição foi cancelada com sucesso.';
           mostrarTela('telaConfirmacao');
+          window.scrollTo(0, 0);
         } else {
           toast(res.mensagem, 'error');
         }
       })
-      .withFailureHandler(err => toast('Erro: ' + err.message, 'error'))
-      .apiResponderPorLote(LOTE_TOKEN, idConvite, resposta);
+      .withFailureHandler(() => toast('Falha de conexão. Tente novamente.', 'error'))
+      .apiResponderPorLote(LOTE_TOKEN, buscaAtual, resposta);
   }
 
   // Inicia
