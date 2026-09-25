@@ -54,9 +54,6 @@
       .login-card { padding:28px 20px; max-width:100%; }
       .login-badge img { height:64px; }
       .evt-switch-menu { left:0; right:auto; max-width:calc(100vw - 40px); }
-      /* iOS/Android dão zoom automático ao focar campo com letra < 16px
-         e nem sempre devolvem o zoom depois — por isso a tela "prende". */
-      .form-control, .form-select { font-size:16px; }
     }
 
     /* ---------- brand / logo ---------- */
@@ -231,6 +228,20 @@
       .modal-footer > * { margin:0 !important; }
       .modal-footer > .btn-hb, .modal-footer > .btn-hb-outline { flex:1; }
       .link-box { font-size:.72rem; }
+    }
+
+    /* ============================================================
+       ZOOM NO CELULAR — o iPhone dá zoom automático ao tocar num campo
+       com letra menor que 16px e NÃO desfaz o zoom depois (a tela do
+       login ficava "presa" ampliada). Esta regra precisa ficar no FIM
+       do CSS: antes ela era sobrescrita pela regra geral de .form-control
+       (.85rem ≈ 13,6px) e não tinha efeito.
+       ============================================================ */
+    html { -webkit-text-size-adjust:100%; text-size-adjust:100%; }
+    @media (max-width:860px) {
+      input, select, textarea,
+      .form-control, .form-select, .form-control-sm, .form-select-sm,
+      input.link-box { font-size:16px !important; }
     }
   </style>
 </head>
@@ -574,6 +585,9 @@
   function entrarNoApp(sessao) {
     window.TOKEN = sessao.token;
     window.SESSAO = sessao;
+    // Tira o foco do campo de senha: fecha o teclado e o celular volta
+    // ao tamanho normal da tela.
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     aplicarSessaoNaTela();
     document.getElementById('loginGate').style.display = 'none';
     document.getElementById('appShell').style.display = 'flex';
