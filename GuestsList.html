@@ -1,0 +1,169 @@
+<!-- GuestsList.html — Diretório: CRM global de Pessoas & Empresas (reaproveitável entre eventos) -->
+<div class="pg-head">
+  <div><h4><i class="fas fa-address-book me-2 text-primary"></i>Diretório</h4><p>Pessoas e empresas cadastradas, reutilizáveis em qualquer evento.</p></div>
+</div>
+
+<div class="d-flex gap-2 mb-3">
+  <div class="evt-tab active" id="tabPessoas" onclick="mudarAba('pessoas')" style="background:var(--ink-900);color:#fff;"><i class="fas fa-users"></i> Pessoas</div>
+  <div class="evt-tab" id="tabEmpresas" onclick="mudarAba('empresas')"><i class="fas fa-building"></i> Empresas</div>
+</div>
+
+<div id="dirWrap"><div class="skel" style="height:300px;"></div></div>
+
+<!-- Modal pessoa -->
+<div class="modal fade" id="modalDirPessoa" tabindex="-1"><div class="modal-dialog"><div class="modal-content" style="border-radius:16px;border:none;">
+  <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold"><i class="fas fa-user-plus me-2 text-primary"></i>Nova pessoa</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body">
+    <div class="mb-3"><label class="form-label">Nome completo *</label><input class="form-control" id="dpNome"></div>
+    <div class="row g-2 mb-3">
+      <div class="col-6"><label class="form-label">Documento</label><input class="form-control" id="dpDocumento"></div>
+      <div class="col-6"><label class="form-label">Telefone</label><input class="form-control" id="dpTelefone"></div>
+    </div>
+    <div class="mb-3"><label class="form-label">E-mail</label><input class="form-control" id="dpEmail"></div>
+    <div class="row g-2 mb-3">
+      <div class="col-6"><label class="form-label">Cargo</label><input class="form-control" id="dpCargo"></div>
+      <div class="col-6"><label class="form-label">Empresa</label><select class="form-select" id="dpEmpresa"><option value="">—</option></select></div>
+    </div>
+    <div class="mb-3"><label class="form-label">Categoria</label><select class="form-select" id="dpCategoria"></select></div>
+    <div class="row g-2 mb-1">
+      <div class="col-8"><label class="form-label">Cidade</label><input class="form-control" id="dpCidade"></div>
+      <div class="col-4"><label class="form-label">UF</label><input class="form-control" id="dpUF" maxlength="2" style="text-transform:uppercase;"></div>
+    </div>
+  </div>
+  <div class="modal-footer" style="border-top:1px solid var(--border);"><button class="btn-hb-outline" data-bs-dismiss="modal">Cancelar</button><button class="btn-hb" id="btnSalvarDirPessoa" onclick="salvarDirPessoa()"><i class="fas fa-check"></i> Salvar</button></div>
+</div></div></div>
+
+<!-- Modal empresa -->
+<div class="modal fade" id="modalDirEmpresa" tabindex="-1"><div class="modal-dialog"><div class="modal-content" style="border-radius:16px;border:none;">
+  <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold"><i class="fas fa-building me-2 text-primary"></i>Nova empresa</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body">
+    <div class="mb-3"><label class="form-label">Nome *</label><input class="form-control" id="deNome"></div>
+    <div class="row g-2 mb-3">
+      <div class="col-6"><label class="form-label">Segmento</label><input class="form-control" id="deSegmento"></div>
+      <div class="col-6"><label class="form-label">Contato</label><input class="form-control" id="deContato"></div>
+    </div>
+    <div class="row g-2 mb-1">
+      <div class="col-8"><label class="form-label">Cidade</label><input class="form-control" id="deCidade"></div>
+      <div class="col-4"><label class="form-label">UF</label><input class="form-control" id="deUF" maxlength="2" style="text-transform:uppercase;"></div>
+    </div>
+  </div>
+  <div class="modal-footer" style="border-top:1px solid var(--border);"><button class="btn-hb-outline" data-bs-dismiss="modal">Cancelar</button><button class="btn-hb" id="btnSalvarDirEmpresa" onclick="salvarDirEmpresa()"><i class="fas fa-check"></i> Salvar</button></div>
+</div></div></div>
+
+<script>
+(function() {
+  var aba = 'pessoas';
+  var pessoas = [], empresas = [];
+  var CATEGORIAS = ['Pessoa Física','Empresário','Deputado','Senador','Vereador','Prefeito','Secretário','Político','Médico','Corpo Clínico','Fornecedor','Parceiro','Patrocinador','Imprensa','Doador','Conselheiro','Instituição','Outro'];
+  document.getElementById('dpCategoria').innerHTML = CATEGORIAS.map(function(c){ return '<option value="'+c+'">'+c+'</option>'; }).join('');
+
+  carregar();
+
+  function carregar() {
+    // apiBootstrapGestao junta pessoas + empresas numa chamada só.
+    google.script.run.withSuccessHandler(function(resp) {
+      if (resp && resp.auth === false) { forcarLogout('Sessão expirada.'); return; }
+      if (!resp.ok) { erro(resp); return; }
+      pessoas = resp.dados.pessoas || [];
+      empresas = resp.dados.empresas || [];
+      document.getElementById('dpEmpresa').innerHTML = '<option value="">—</option>' + empresas.map(function(e){return '<option value="'+e.id+'">'+e.nome+'</option>';}).join('');
+      renderAba();
+    }).withFailureHandler(erro).apiBootstrapGestao(window.TOKEN);
+  }
+  function erro(err) { toast(err.message, 'err'); }
+
+  window.mudarAba = function(a) {
+    aba = a;
+    document.getElementById('tabPessoas').style.background = a === 'pessoas' ? 'var(--ink-900)' : ''; document.getElementById('tabPessoas').style.color = a === 'pessoas' ? '#fff' : '';
+    document.getElementById('tabEmpresas').style.background = a === 'empresas' ? 'var(--ink-900)' : ''; document.getElementById('tabEmpresas').style.color = a === 'empresas' ? '#fff' : '';
+    renderAba();
+  };
+
+  function renderAba() {
+    var wrap = document.getElementById('dirWrap');
+    if (aba === 'pessoas') {
+      wrap.innerHTML = toolbar('Buscar por nome, documento ou e-mail...', 'Nova pessoa', 'abrirModalDirPessoa()') + '<div id="tblPessoas"></div>';
+      document.getElementById('dirBusca').addEventListener('input', renderPessoas);
+      renderPessoas();
+    } else {
+      wrap.innerHTML = toolbar('Buscar por nome ou cidade...', 'Nova empresa', 'abrirModalDirEmpresa()') + '<div id="tblEmpresas"></div>';
+      document.getElementById('dirBusca').addEventListener('input', renderEmpresas);
+      renderEmpresas();
+    }
+  }
+  function toolbar(placeholder, btnLabel, onClick) {
+    return '<div class="d-flex gap-2 mb-3"><input class="form-control" id="dirBusca" placeholder="🔍 ' + placeholder + '">' +
+      '<button class="btn-hb" style="flex:none;" onclick="' + onClick + '"><i class="fas fa-plus"></i> ' + btnLabel + '</button></div>';
+  }
+
+  function renderPessoas() {
+    var q = (document.getElementById('dirBusca').value || '').toLowerCase();
+    var lista = pessoas.filter(function(p) { return !q || (p.nome + ' ' + p.documento + ' ' + p.email).toLowerCase().indexOf(q) !== -1; });
+    var tbl = document.getElementById('tblPessoas');
+    if (!lista.length) { tbl.innerHTML = emptyState('fa-user', 'Nenhuma pessoa encontrada'); return; }
+    tbl.innerHTML = '<div class="card-hb"><table class="table-hb"><thead><tr><th>Nome</th><th>Empresa</th><th>Cargo</th><th>Categoria</th><th>Cidade/UF</th><th>Contato</th></tr></thead><tbody>' +
+      lista.map(function(p) {
+        return '<tr><td><strong>' + p.nome + '</strong>' + (p.documento ? '<div class="small text-muted">' + p.documento + '</div>' : '') + '</td>' +
+          '<td>' + (p.empresa || '<span class="text-muted">—</span>') + '</td><td>' + (p.cargo || '—') + '</td>' +
+          '<td><span class="pill pill-blue">' + (p.categoria || 'Outro') + '</span></td>' +
+          '<td>' + (p.cidade && p.cidade !== '/' ? p.cidade : '<span class="text-muted">—</span>') + '</td>' +
+          '<td>' + (p.email || p.telefone || '<span class="text-muted">—</span>') + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  function renderEmpresas() {
+    var q = (document.getElementById('dirBusca').value || '').toLowerCase();
+    var lista = empresas.filter(function(e) { return !q || (e.nome + ' ' + e.cidade).toLowerCase().indexOf(q) !== -1; });
+    var tbl = document.getElementById('tblEmpresas');
+    if (!lista.length) { tbl.innerHTML = emptyState('fa-building', 'Nenhuma empresa encontrada'); return; }
+    tbl.innerHTML = '<div class="card-hb"><table class="table-hb"><thead><tr><th>Nome</th><th>Segmento</th><th>Cidade/UF</th><th>Contato</th></tr></thead><tbody>' +
+      lista.map(function(e) {
+        return '<tr><td><strong>' + e.nome + '</strong></td><td>' + (e.segmento || '<span class="text-muted">—</span>') + '</td>' +
+          '<td>' + (e.cidade && e.cidade !== '/' ? e.cidade : '<span class="text-muted">—</span>') + '</td><td>' + (e.contato || '<span class="text-muted">—</span>') + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  function emptyState(icon, msg) { return '<div class="card-hb"><div class="empty-state"><i class="fas ' + icon + '"></i><p>' + msg + '</p></div></div>'; }
+
+  window.abrirModalDirPessoa = function() {
+    ['dpNome','dpDocumento','dpTelefone','dpEmail','dpCargo','dpCidade','dpUF'].forEach(function(id){ document.getElementById(id).value=''; });
+    document.getElementById('dpEmpresa').value = '';
+    document.getElementById('dpCategoria').value = 'Outro';
+    new bootstrap.Modal(document.getElementById('modalDirPessoa')).show();
+  };
+  window.salvarDirPessoa = function() {
+    var nome = document.getElementById('dpNome').value.trim();
+    if (!nome) { toast('Informe o nome.', 'err'); return; }
+    var btn = document.getElementById('btnSalvarDirPessoa'); btn.disabled = true;
+    google.script.run.withSuccessHandler(function(resp) {
+      btn.disabled = false;
+      if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
+      bootstrap.Modal.getInstance(document.getElementById('modalDirPessoa')).hide();
+      toast('Pessoa cadastrada.', 'ok'); carregar();
+    }).withFailureHandler(function(err){ btn.disabled=false; erro(err); }).apiCadastrarPessoa(window.TOKEN, {
+      Nome: nome, Documento: document.getElementById('dpDocumento').value, Telefone: document.getElementById('dpTelefone').value,
+      Email: document.getElementById('dpEmail').value, Cargo: document.getElementById('dpCargo').value, ID_Empresa: document.getElementById('dpEmpresa').value,
+      Cidade: document.getElementById('dpCidade').value, UF: document.getElementById('dpUF').value, Categoria: document.getElementById('dpCategoria').value
+    });
+  };
+
+  window.abrirModalDirEmpresa = function() {
+    ['deNome','deSegmento','deContato','deCidade','deUF'].forEach(function(id){ document.getElementById(id).value=''; });
+    new bootstrap.Modal(document.getElementById('modalDirEmpresa')).show();
+  };
+  window.salvarDirEmpresa = function() {
+    var nome = document.getElementById('deNome').value.trim();
+    if (!nome) { toast('Informe o nome da empresa.', 'err'); return; }
+    var btn = document.getElementById('btnSalvarDirEmpresa'); btn.disabled = true;
+    google.script.run.withSuccessHandler(function(resp) {
+      btn.disabled = false;
+      if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
+      bootstrap.Modal.getInstance(document.getElementById('modalDirEmpresa')).hide();
+      toast('Empresa cadastrada.', 'ok'); carregar();
+    }).withFailureHandler(function(err){ btn.disabled=false; erro(err); }).apiCadastrarEmpresa(window.TOKEN, {
+      Nome: nome, Segmento: document.getElementById('deSegmento').value, Contato: document.getElementById('deContato').value,
+      Cidade: document.getElementById('deCidade').value, UF: document.getElementById('deUF').value
+    });
+  };
+})();
+</script>

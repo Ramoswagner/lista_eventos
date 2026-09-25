@@ -1,0 +1,200 @@
+<!-- ConfigPainel.html — logo da instituição + gestão de logins -->
+<div class="pg-head">
+  <div><h4><i class="fas fa-gear me-2 text-primary"></i>Configurações</h4><p>Identidade visual e logins de acesso ao sistema.</p></div>
+</div>
+
+<div class="card-hb card-hb-body mb-4">
+  <h6 class="fw-bold mb-3" style="color:var(--ink-900)"><i class="fas fa-image me-2 text-primary"></i>Logo da instituição</h6>
+  <div class="d-flex align-items-center gap-4 flex-wrap">
+    <div style="width:200px;height:90px;flex:none;display:flex;align-items:center;justify-content:center;background:var(--bg);border-radius:12px;">
+      <img id="logoPreview" src="" alt="Logo atual" style="max-width:170px;max-height:70px;object-fit:contain;">
+    </div>
+    <div style="min-width:260px;">
+      <p class="small text-muted mb-2">PNG com fundo transparente funciona melhor. Vale para toda a aplicação — sidebar, login e páginas públicas de convite.</p>
+      <div class="d-flex gap-2 align-items-start flex-wrap">
+        <input type="file" accept="image/*" id="logoUploadInput" class="form-control form-control-sm" style="max-width:220px;">
+        <button class="btn btn-sm btn-outline-secondary" id="btnRemoverLogo" style="display:none;" onclick="removerLogo()"><i class="fas fa-rotate-left"></i> Usar padrão</button>
+      </div>
+      <div id="logoUploadMsg" class="small mt-2"></div>
+
+      <label class="form-label mt-3 mb-1">Tamanho da logo <span id="logoEscalaLabel" class="text-muted fw-normal">100%</span></label>
+      <input type="range" class="form-range" id="logoEscalaInput" min="50" max="200" step="5" value="100" style="max-width:280px;">
+    </div>
+  </div>
+</div>
+
+<div class="pg-head">
+  <div><h4 class="fs-6 mb-0"><i class="fas fa-users-gear me-2 text-primary"></i>Logins de acesso</h4><p>Criar, trocar senha e ativar/desativar.</p></div>
+  <button class="btn-hb" onclick="abrirModalLogin()"><i class="fas fa-plus"></i> Novo login</button>
+</div>
+
+<div id="loginsWrap"><div class="skel" style="height:220px;"></div></div>
+
+<div class="card-hb card-hb-body mt-3" style="background:var(--blue-50);border-color:transparent;">
+  <div class="small" style="color:var(--ink-700);"><i class="fas fa-circle-info me-1"></i>
+    Esqueceu a senha de um login e ele ficou sem acesso? Abra <strong>Extensões → Apps Script</strong> nesta planilha,
+    escolha a função <strong>resetAdmin</strong> na barra de execução e clique em Executar — isso redefine o administrador para <strong>adm / 1234</strong>.
+  </div>
+</div>
+
+<!-- Modal: criar/editar login -->
+<div class="modal fade" id="modalLogin" tabindex="-1"><div class="modal-dialog"><div class="modal-content" style="border-radius:16px;border:none;">
+  <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold" id="modalLoginTitulo"><i class="fas fa-user-shield me-2 text-primary"></i>Novo login</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body">
+    <input type="hidden" id="lgId">
+    <div class="mb-3"><label class="form-label">Nome *</label><input class="form-control" id="lgNome"></div>
+    <div class="row g-2 mb-3">
+      <div class="col-6"><label class="form-label">Usuário (setor) *</label><input class="form-control" id="lgSetor" placeholder="ex: recepcao"></div>
+      <div class="col-6"><label class="form-label">Cargo</label><input class="form-control" id="lgCargo"></div>
+    </div>
+    <div class="row g-2 mb-3">
+      <div class="col-6"><label class="form-label">Perfil</label>
+        <select class="form-select" id="lgPerfil">
+          <option value="Admin">Admin</option>
+          <option value="Organizacao">Organização</option>
+          <option value="Recepcao">Recepção</option>
+          <option value="Consulta">Consulta</option>
+        </select>
+      </div>
+      <div class="col-6"><label class="form-label" id="lgSenhaLabel">Senha *</label><input class="form-control" id="lgSenha" type="password" placeholder="mínimo 3 caracteres"></div>
+    </div>
+  </div>
+  <div class="modal-footer" style="border-top:1px solid var(--border);"><button class="btn-hb-outline" data-bs-dismiss="modal">Cancelar</button><button class="btn-hb" id="btnSalvarLogin" onclick="salvarLogin()"><i class="fas fa-check"></i> Salvar</button></div>
+</div></div></div>
+
+<script>
+(function() {
+  var PERFIL_PILL = { Admin:'pill-blue', Organizacao:'pill-violet', Recepcao:'pill-amber', Consulta:'pill-gray' };
+  var logins = [];
+
+  // ---------- logo da instituição ----------
+  function carregarLogo() {
+    google.script.run.withSuccessHandler(function(resp) {
+      if (!resp || !resp.ok) return;
+      document.getElementById('logoPreview').src = resp.dados.url;
+      document.getElementById('btnRemoverLogo').style.display = resp.dados.personalizada ? 'inline-flex' : 'none';
+      var pct = Math.round((resp.dados.escala || 1) * 100);
+      document.getElementById('logoEscalaInput').value = pct;
+      document.getElementById('logoEscalaLabel').innerText = pct + '%';
+    }).apiLogoPublico();
+  }
+  carregarLogo();
+
+  window.removerLogo = function() {
+    if (!confirm('Voltar para a logo padrão do Hospital da Baleia?')) return;
+    google.script.run.withSuccessHandler(function(resp) {
+      if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
+      toast(resp.mensagem, 'ok'); carregarLogo();
+    }).withFailureHandler(function(err){ toast(err.message, 'err'); }).apiRemoverLogo(window.TOKEN);
+  };
+
+  var logoEscalaTimer = null;
+  document.getElementById('logoEscalaInput').addEventListener('input', function(e) {
+    var pct = Number(e.target.value);
+    document.getElementById('logoEscalaLabel').innerText = pct + '%';
+    document.getElementById('logoPreview').style.maxHeight = Math.round(70 * (pct / 100)) + 'px';
+    clearTimeout(logoEscalaTimer);
+    logoEscalaTimer = setTimeout(function() {
+      google.script.run.withSuccessHandler(function(resp) {
+        if (!resp.ok) toast(resp.mensagem, 'err');
+      }).withFailureHandler(function(err){ toast(err.message, 'err'); }).apiSalvarLogoEscala(window.TOKEN, pct / 100);
+    }, 400);
+  });
+
+  document.getElementById('logoUploadInput').addEventListener('change', function(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 4 * 1024 * 1024) { toast('Imagem muito grande (máx. 4MB).', 'err'); e.target.value = ''; return; }
+    var msg = document.getElementById('logoUploadMsg');
+    msg.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Enviando...';
+    var reader = new FileReader();
+    reader.onload = function() {
+      google.script.run.withSuccessHandler(function(resp) {
+        e.target.value = '';
+        if (!resp.ok) { msg.innerHTML = '<span class="text-danger">' + resp.mensagem + '</span>'; return; }
+        carregarLogo();
+        msg.innerHTML = '<span style="color:var(--success)"><i class="fas fa-circle-check me-1"></i>Logo atualizada para todos.</span>';
+        toast('Logo atualizada.', 'ok');
+      }).withFailureHandler(function(err) { e.target.value = ''; msg.innerHTML = '<span class="text-danger">' + err.message + '</span>'; })
+        .apiSalvarLogo(window.TOKEN, reader.result, file.name);
+    };
+    reader.readAsDataURL(file);
+  });
+
+  carregar();
+  function carregar() {
+    google.script.run.withSuccessHandler(function(resp) {
+      if (resp && resp.auth === false) { forcarLogout('Sessão expirada.'); return; }
+      if (!resp.ok) { document.getElementById('loginsWrap').innerHTML = '<div class="card-hb"><div class="empty-state"><i class="fas fa-lock"></i><p>' + resp.mensagem + '</p></div></div>'; return; }
+      logins = resp.dados; render();
+    }).withFailureHandler(function(err){ toast(err.message, 'err'); }).apiListarLogins(window.TOKEN);
+  }
+
+  function render() {
+    var wrap = document.getElementById('loginsWrap');
+    wrap.innerHTML = '<div class="card-hb"><table class="table-hb"><thead><tr><th>Nome</th><th>Usuário</th><th>Cargo</th><th>Perfil</th><th>Status</th><th></th></tr></thead><tbody>' +
+      logins.map(function(g) {
+        return '<tr><td><strong>' + g.nome + '</strong></td><td>' + g.setor + '</td><td>' + (g.cargo || '<span class="text-muted">—</span>') + '</td>' +
+          '<td><span class="pill ' + (PERFIL_PILL[g.perfil] || 'pill-gray') + '">' + g.perfil + '</span></td>' +
+          '<td><span class="pill ' + (g.ativo === 'Sim' ? 'pill-green' : 'pill-red') + '">' + (g.ativo === 'Sim' ? 'Ativo' : 'Inativo') + '</span></td>' +
+          '<td class="text-end">' +
+            '<button class="btn btn-sm btn-outline-secondary me-1" title="Editar / trocar senha" onclick="editarLoginId(\'' + g.id + '\')"><i class="fas fa-key"></i></button>' +
+            '<button class="btn btn-sm btn-outline-' + (g.ativo === 'Sim' ? 'danger' : 'success') + '" title="' + (g.ativo === 'Sim' ? 'Desativar' : 'Ativar') + '" onclick="alternarLogin(\'' + g.id + '\')"><i class="fas fa-power-off"></i></button>' +
+          '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  window.abrirModalLogin = function() {
+    document.getElementById('modalLoginTitulo').innerText = 'Novo login';
+    document.getElementById('lgId').value = '';
+    ['lgNome','lgSetor','lgCargo'].forEach(function(id){ document.getElementById(id).value = ''; });
+    document.getElementById('lgPerfil').value = 'Recepcao';
+    document.getElementById('lgSenha').value = '';
+    document.getElementById('lgSenhaLabel').innerText = 'Senha *';
+    new bootstrap.Modal(document.getElementById('modalLogin')).show();
+  };
+
+  window.editarLoginId = function(id) {
+    var g = logins.filter(function(x){ return x.id === id; })[0];
+    if (!g) return;
+    document.getElementById('modalLoginTitulo').innerText = 'Editar login';
+    document.getElementById('lgId').value = g.id;
+    document.getElementById('lgNome').value = g.nome;
+    document.getElementById('lgSetor').value = g.setor;
+    document.getElementById('lgCargo').value = g.cargo || '';
+    document.getElementById('lgPerfil').value = g.perfil;
+    document.getElementById('lgSenha').value = '';
+    document.getElementById('lgSenhaLabel').innerText = 'Nova senha (opcional)';
+    new bootstrap.Modal(document.getElementById('modalLogin')).show();
+  };
+
+  window.salvarLogin = function() {
+    var id = document.getElementById('lgId').value;
+    var nome = document.getElementById('lgNome').value.trim();
+    var setor = document.getElementById('lgSetor').value.trim();
+    var senha = document.getElementById('lgSenha').value;
+    if (!nome || !setor) { toast('Informe nome e usuário.', 'err'); return; }
+    if (!id && (!senha || senha.length < 3)) { toast('Informe uma senha com pelo menos 3 caracteres.', 'err'); return; }
+    var dados = { Nome: nome, Setor: setor, Cargo: document.getElementById('lgCargo').value, Perfil: document.getElementById('lgPerfil').value };
+    if (senha) dados.Senha = senha;
+    var btn = document.getElementById('btnSalvarLogin'); btn.disabled = true;
+    var call = id
+      ? google.script.run.withSuccessHandler(onSalvo).withFailureHandler(onErro).apiEditarLogin(window.TOKEN, id, dados)
+      : google.script.run.withSuccessHandler(onSalvo).withFailureHandler(onErro).apiCriarLogin(window.TOKEN, dados);
+    function onSalvo(resp) {
+      btn.disabled = false;
+      if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
+      bootstrap.Modal.getInstance(document.getElementById('modalLogin')).hide();
+      toast(resp.mensagem, 'ok'); carregar();
+    }
+    function onErro(err) { btn.disabled = false; toast(err.message, 'err'); }
+  };
+
+  window.alternarLogin = function(id) {
+    google.script.run.withSuccessHandler(function(resp) {
+      if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
+      toast(resp.mensagem, 'ok'); carregar();
+    }).withFailureHandler(function(err){ toast(err.message, 'err'); }).apiAlternarLogin(window.TOKEN, id);
+  };
+})();
+</script>

@@ -1,0 +1,350 @@
+<!-- EventoLista.html — Lista & Convites: núcleo do fluxo do evento -->
+<div id="listaWrap">
+  <div class="skel" style="height:120px;margin-bottom:14px;"></div>
+  <div class="skel" style="height:300px;"></div>
+</div>
+
+<!-- Modal: adicionar pessoa manualmente -->
+<div class="modal fade" id="modalPessoa" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content" style="border-radius:16px;border:none;">
+      <div class="modal-header" style="border-bottom:1px solid var(--border);">
+        <h6 class="modal-title fw-bold"><i class="fas fa-user-plus me-2 text-primary"></i>Adicionar à lista</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3"><label class="form-label">Nome completo *</label><input class="form-control" id="pNome"></div>
+        <div class="row g-2 mb-3">
+          <div class="col-6"><label class="form-label">Documento</label><input class="form-control" id="pDocumento" placeholder="CPF"></div>
+          <div class="col-6"><label class="form-label">Cargo/função</label><input class="form-control" id="pCargo"></div>
+        </div>
+        <div class="row g-2 mb-3">
+          <div class="col-7"><label class="form-label">Categoria</label><select class="form-select" id="pCategoria"></select></div>
+          <div class="col-5"><label class="form-label">Empresa</label><select class="form-select" id="pEmpresa"><option value="">—</option></select></div>
+        </div>
+        <div class="mb-1"><label class="form-label">Descrição <span class="text-muted fw-normal">(opcional)</span></label><textarea class="form-control" id="pDescricao" rows="2" placeholder="Anotação sobre este convidado — não é o gestor, é só uma nota"></textarea></div>
+      </div>
+      <div class="modal-footer" style="border-top:1px solid var(--border);justify-content:space-between;">
+        <span class="small text-muted"><i class="fas fa-user-shield me-1"></i>Convidado por <strong id="pGestorLabel">você</strong></span>
+        <div>
+          <button class="btn-hb-outline" data-bs-dismiss="modal">Cancelar</button>
+          <button class="btn-hb" id="btnSalvarPessoa" onclick="salvarPessoa()"><i class="fas fa-check"></i> Adicionar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: criar lote para empresa -->
+<div class="modal fade" id="modalLote" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content" style="border-radius:16px;border:none;">
+      <div class="modal-header" style="border-bottom:1px solid var(--border);">
+        <h6 class="modal-title fw-bold"><i class="fas fa-link me-2 text-primary"></i>Criar lote de convite</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small">Gera um link público com vagas limitadas. A empresa recebe o link, repassa a quem quiser e cada pessoa se cadastra sozinha — empresa já vem preenchida automaticamente.</p>
+        <div class="mb-3"><label class="form-label">Empresa</label><select class="form-select" id="lEmpresa"><option value="">Sem empresa (grupo avulso)</option></select></div>
+        <div class="row g-2 mb-3">
+          <div class="col-6"><label class="form-label">Vagas *</label><input type="number" min="1" class="form-control" id="lVagas" placeholder="Ex: 10"><div class="small text-muted mt-1" id="lVagasHint"></div></div>
+          <div class="col-6"><label class="form-label">Expira em</label><input type="date" class="form-control" id="lExpira"></div>
+        </div>
+        <div class="mb-1"><label class="form-label">Observações</label><input class="form-control" id="lObs" placeholder="opcional"></div>
+      </div>
+      <div class="modal-footer" style="border-top:1px solid var(--border);">
+        <button class="btn-hb-outline" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn-hb" id="btnSalvarLote" onclick="salvarLote()"><i class="fas fa-check"></i> Gerar link</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: link gerado -->
+<div class="modal fade" id="modalLinkGerado" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content" style="border-radius:16px;border:none;">
+      <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold"><i class="fas fa-circle-check me-2" style="color:var(--success)"></i><span id="linkGeradoTitulo">Lote criado</span></h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <p class="small text-muted mb-2" id="linkGeradoDesc">Copie e envie este link para a empresa:</p>
+        <div class="link-box" id="linkGeradoBox" onclick="copiarLinkGerado()"></div>
+        <button class="btn-hb-outline mt-3 w-100" onclick="copiarLinkGerado()"><i class="fas fa-copy"></i> Copiar link</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var idEvento = window.EventoAtual && window.EventoAtual.id;
+  if (!idEvento) { document.getElementById('listaWrap').innerHTML = '<div class="empty-state"><i class="fas fa-triangle-exclamation"></i><p>Nenhum evento selecionado.</p></div>'; return; }
+
+  var CATEGORIAS = ['Pessoa Física','Empresário','Deputado','Senador','Vereador','Prefeito','Secretário','Político','Médico','Corpo Clínico','Fornecedor','Parceiro','Patrocinador','Imprensa','Doador','Conselheiro','Instituição','Outro'];
+  var ORIGIN_PILL = { 'Lista original':'pill-blue', 'Lote público':'pill-violet', 'Walk-in':'pill-amber', 'Substituição':'pill-gray' };
+  var STATUS_PILL = { 'Convidado':'pill-gray', 'Confirmado':'pill-blue', 'Presente':'pill-green', 'Cancelado':'pill-red', 'Substituído':'pill-gray' };
+
+  var convidados = [];
+  var lotes = [];
+  var empresas = [];
+  var loteEmpresaMap = {};
+  var lastLinkGerado = '';
+  var vagas = { capacidade:0, ativos:0, disponiveis:null };
+
+  document.getElementById('pCategoria').innerHTML = CATEGORIAS.map(function(c){ return '<option value="'+c+'">'+c+'</option>'; }).join('');
+
+  carregarTudo();
+
+  // Uma única chamada ao servidor (apiBootstrapEvento) em vez de 4 —
+  // cada google.script.run é uma viagem de rede; juntar tudo corta o
+  // tempo de carregamento da tela em ~4x.
+  function carregarTudo() {
+    google.script.run.withSuccessHandler(function(resp) {
+      if (resp && resp.auth === false) { forcarLogout('Sessão expirada.'); return; }
+      if (!resp.ok) { erro(resp); return; }
+      convidados = resp.dados.convidados || [];
+      lotes = resp.dados.lotes || [];
+      empresas = resp.dados.empresas || [];
+      vagas = resp.dados.vagas || { capacidade:0, ativos:0, disponiveis:null };
+      loteEmpresaMap = {}; lotes.forEach(function(l){ loteEmpresaMap[l.id] = l.empresa; });
+
+      var opts = '<option value="">—</option>' + empresas.map(function(e){ return '<option value="'+e.id+'">'+e.nome+'</option>'; }).join('');
+      document.getElementById('pEmpresa').innerHTML = opts;
+      document.getElementById('lEmpresa').innerHTML = '<option value="">Sem empresa (grupo avulso)</option>' + empresas.map(function(e){ return '<option value="'+e.id+'">'+e.nome+'</option>'; }).join('');
+      render();
+    }).withFailureHandler(erro).apiBootstrapEvento(window.TOKEN, idEvento);
+  }
+
+  function erro(err) { toast(err.message, 'err'); }
+
+  function origemLabel(c) {
+    if (c.origem === 'Lote público') return 'Lote: ' + (loteEmpresaMap[c.idLote] || 'avulso');
+    return c.origem || '—';
+  }
+
+  // ---------- render ----------
+  function render() {
+    var wrap = document.getElementById('listaWrap');
+    if (!convidados.length && !lotes.length) {
+      wrap.innerHTML = '<div class="card-hb"><div class="empty-state"><i class="fas fa-list-check"></i><h6>Montar lista</h6>' +
+        '<p>Adicione convidados manualmente ou crie um lote com link público para uma empresa distribuir.</p>' +
+        '<div class="d-flex gap-2 justify-content-center flex-wrap">' +
+        '<button class="btn-hb" onclick="abrirModalPessoa()"><i class="fas fa-user-plus"></i> Adicionar manualmente</button>' +
+        '<button class="btn-hb-outline" onclick="abrirModalLote()"><i class="fas fa-link"></i> Criar lote para empresa</button>' +
+        '</div></div></div>';
+      return;
+    }
+
+    var opts = buildFilterOptions();
+    wrap.innerHTML =
+      toolbarHtml(opts) +
+      (lotes.length ? lotesStripHtml() : '') +
+      '<div class="card-hb"><div id="tabelaConvidados"></div></div>';
+
+    bindToolbar();
+    renderTabela();
+  }
+
+  function buildFilterOptions() {
+    var uniq = function(fn) { var s = {}; convidados.forEach(function(c){ var v = fn(c); if (v) s[v] = true; }); return Object.keys(s).sort(); };
+    return { empresas: uniq(function(c){return c.empresa;}), categorias: uniq(function(c){return c.categoria;}), gestores: uniq(function(c){return c.gestor;}), cidades: uniq(function(c){return c.cidade;}) };
+  }
+
+  function toolbarHtml(opts) {
+    var meuNome = (window.SESSAO && window.SESSAO.gestor) || '';
+    var vagasPill = '';
+    if (vagas.disponiveis !== null) {
+      var cor = vagas.disponiveis <= 0 ? 'pill-red' : (vagas.disponiveis <= vagas.capacidade * 0.15 ? 'pill-amber' : 'pill-green');
+      vagasPill = ' <span class="pill ' + cor + '"><i class="fas fa-gauge-high"></i> ' + vagas.disponiveis + ' vaga(s) livre(s) de ' + vagas.capacidade + '</span>';
+    }
+    return '<div class="card-hb card-hb-body mb-2">' +
+      '<div class="d-flex justify-content-between align-items-center flex-wrap gap-2">' +
+        '<div><strong style="color:var(--ink-900)">' + convidados.length + ' na lista</strong> <span class="text-muted small">· quem está, de onde é e quem convidou</span>' + vagasPill + '</div>' +
+        '<div class="d-flex gap-2 flex-wrap">' +
+          '<button class="btn-hb-outline" onclick="abrirModalLote()"><i class="fas fa-link"></i> Criar lote</button>' +
+          '<button class="btn-hb" onclick="abrirModalPessoa()"><i class="fas fa-user-plus"></i> Adicionar</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="card-hb card-hb-body mb-3" style="background:var(--bg);border-style:dashed;">' +
+      '<div class="d-flex justify-content-between align-items-center mb-2">' +
+        '<span class="small fw-bold" style="color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;font-size:.68rem;"><i class="fas fa-filter me-1"></i>Filtros</span>' +
+        (meuNome ? '<span class="pill pill-blue" style="cursor:pointer;" onclick="filtrarMeusConvidados()"><i class="fas fa-user"></i> Meus convidados</span>' : '') +
+      '</div>' +
+      '<div class="row g-2">' +
+        '<div class="col-md-3"><input class="form-control" id="fBusca" placeholder="🔍 Nome ou documento..."></div>' +
+        selectFilter('fEmpresa', 'Empresa', opts.empresas) +
+        selectFilter('fCategoria', 'Categoria', opts.categorias) +
+        selectFilter('fGestor', 'Gestor', opts.gestores) +
+        selectFilter('fCidade', 'Cidade/UF', opts.cidades) +
+      '</div>' +
+      '<div class="row g-2 mt-1">' +
+        '<div class="col-md-3">' + selectRaw('fStatus', 'Status', ['Convidado','Confirmado','Presente','Cancelado','Substituído']) + '</div>' +
+        '<div class="col-md-3">' + selectRaw('fOrigem', 'Origem', ['Lista original','Lote público','Walk-in','Substituição']) + '</div>' +
+        '<div class="col-md-3">' + selectRaw('fPresenca', 'Presença', ['Presente','Ausente']) + '</div>' +
+        '<div class="col-md-3 d-flex align-items-end"><button class="btn-hb-outline w-100" onclick="limparFiltros()"><i class="fas fa-xmark"></i> Limpar filtros</button></div>' +
+      '</div>' +
+    '</div>';
+  }
+  window.filtrarMeusConvidados = function() {
+    var el = document.getElementById('fGestor');
+    if (el) { el.value = (window.SESSAO && window.SESSAO.gestor) || ''; renderTabela(); }
+  };
+  function selectFilter(id, label, values) { return '<div class="col-md-3"><select class="form-select" id="' + id + '"><option value="">' + label + '</option>' + values.map(function(v){return '<option value="'+v+'">'+v+'</option>';}).join('') + '</select></div>'; }
+  function selectRaw(id, label, values) { return '<select class="form-select" id="' + id + '"><option value="">' + label + '</option>' + values.map(function(v){return '<option value="'+v+'">'+v+'</option>';}).join('') + '</select>'; }
+
+  function lotesStripHtml() {
+    return '<div class="d-flex gap-2 mb-3" style="overflow-x:auto;padding-bottom:4px;">' + lotes.map(function(l) {
+      var pct = l.vagasTotal ? Math.round(100 * l.vagasUsadas / l.vagasTotal) : 0;
+      var barColor = pct >= 100 ? 'var(--danger)' : (pct >= 70 ? 'var(--warning)' : 'var(--blue-600))');
+      return '<div class="card-hb" style="min-width:230px;padding:13px 15px;flex:none;">' +
+        '<div class="d-flex justify-content-between align-items-center"><strong style="font-size:.83rem;">' + (l.empresa || 'Grupo avulso') + '</strong>' +
+        '<span class="pill ' + (l.status === 'Aberto' ? 'pill-green' : (l.status === 'Expirado' ? 'pill-amber' : 'pill-gray')) + '">' + l.status + '</span></div>' +
+        '<div class="small text-muted mt-1">' + l.vagasUsadas + ' / ' + l.vagasTotal + ' vagas</div>' +
+        '<div style="height:5px;background:var(--bg);border-radius:20px;overflow:hidden;margin:6px 0 8px;"><div style="height:100%;width:' + pct + '%;background:' + barColor + ';"></div></div>' +
+        '<div class="link-box" style="font-size:.68rem;padding:6px 9px;" onclick="copiarTexto(\'' + l.link + '\')" title="Copiar link">' + l.link.replace(window.location.origin || '', '…') + '</div>' +
+      '</div>';
+    }).join('') + '</div>';
+  }
+
+  function bindToolbar() {
+    ['fBusca','fEmpresa','fCategoria','fGestor','fCidade','fStatus','fOrigem','fPresenca'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener(id === 'fBusca' ? 'input' : 'change', renderTabela);
+    });
+  }
+  window.limparFiltros = function() { render(); };
+
+  function renderTabela() {
+    var busca = (val('fBusca') || '').toLowerCase();
+    var fEmpresa = val('fEmpresa'), fCategoria = val('fCategoria'), fGestor = val('fGestor'), fCidade = val('fCidade');
+    var fStatus = val('fStatus'), fOrigem = val('fOrigem'), fPresenca = val('fPresenca');
+
+    var filtrados = convidados.filter(function(c) {
+      if (busca && (c.nome + ' ' + c.documento).toLowerCase().indexOf(busca) === -1) return false;
+      if (fEmpresa && c.empresa !== fEmpresa) return false;
+      if (fCategoria && c.categoria !== fCategoria) return false;
+      if (fGestor && c.gestor !== fGestor) return false;
+      if (fCidade && c.cidade !== fCidade) return false;
+      if (fStatus && c.status !== fStatus) return false;
+      if (fOrigem && c.origem !== fOrigem) return false;
+      if (fPresenca === 'Presente' && c.status !== 'Presente') return false;
+      if (fPresenca === 'Ausente' && c.status === 'Presente') return false;
+      return true;
+    });
+
+    var tbl = document.getElementById('tabelaConvidados');
+    if (!filtrados.length) { tbl.innerHTML = '<div class="empty-state"><i class="fas fa-filter-circle-xmark"></i><p>Nenhum convidado bate com esses filtros.</p></div>'; return; }
+
+    tbl.innerHTML = '<table class="table-hb"><thead><tr><th>Nome</th><th>Empresa</th><th>Cargo/Doc.</th><th>Categoria</th><th>Cidade/UF</th><th>Origem</th><th>Gestor</th><th>Status</th><th></th></tr></thead><tbody>' +
+      filtrados.map(function(c) {
+        return '<tr>' +
+          '<td><strong>' + c.nome + '</strong>' +
+            (c.substituidoPor ? '<div class="small text-muted">substituído por ' + c.substituidoPor + '</div>' : '') +
+            (c.descricao ? '<div class="small text-muted" title="Descrição"><i class="fas fa-note-sticky me-1"></i>' + c.descricao + '</div>' : '') +
+          '</td>' +
+          '<td>' + (c.empresa || '<span class="text-muted">—</span>') + '</td>' +
+          '<td><div>' + (c.cargo || '—') + '</div><div class="small text-muted">' + (c.documento || '') + '</div></td>' +
+          '<td>' + (c.categoria || '—') + '</td>' +
+          '<td>' + (c.cidade && c.cidade !== '/' ? c.cidade : '<span class="text-muted">—</span>') + '</td>' +
+          '<td><span class="pill ' + (ORIGIN_PILL[c.origem] || 'pill-gray') + '">' + origemLabel(c) + '</span></td>' +
+          '<td>' + (c.gestor || '<span class="text-muted">—</span>') + '</td>' +
+          '<td><span class="pill ' + (STATUS_PILL[c.status] || 'pill-gray') + '">' + c.status + '</span>' + (c.checkinHora ? '<div class="small text-muted">' + c.checkinHora + '</div>' : '') + '</td>' +
+          '<td class="text-end text-nowrap">' + linhaAcoesConvidado(c) + '</td>' +
+        '</tr>';
+      }).join('') + '</tbody></table>';
+  }
+  function val(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+
+  function linhaAcoesConvidado(c) {
+    var ativos = ['Convidado','Confirmado'];
+    var botoes = '';
+    if (ativos.indexOf(c.status) !== -1 && c.linkConfirmacao) {
+      botoes += '<button class="btn btn-sm btn-outline-secondary me-1" title="Copiar link de confirmação para o convidado" onclick="copiarTexto(\'' + c.linkConfirmacao + '\')"><i class="fas fa-link"></i></button>';
+    }
+    if (ativos.indexOf(c.status) !== -1) {
+      botoes += '<button class="btn btn-sm btn-outline-danger" title="Cancelar convite" onclick="cancelarConvite(\'' + c.idConvite + '\')"><i class="fas fa-ban"></i></button>';
+    }
+    return botoes;
+  }
+  // Link vem pronto do servidor (ScriptApp.getService().getUrl()) — não usa window.location
+
+  window.cancelarConvite = function(idConvite) {
+    if (!confirm('Cancelar este convite?')) return;
+    google.script.run.withSuccessHandler(function(resp) {
+      if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
+      toast('Convite cancelado.', 'ok'); carregarTudo();
+    }).withFailureHandler(erro).apiCancelarConvite(window.TOKEN, idConvite);
+  };
+
+  // ---------- modal: adicionar pessoa ----------
+  // O gestor é sempre quem está logado — não se digita mais.
+  window.abrirModalPessoa = function() {
+    ['pNome','pDocumento','pCargo','pDescricao'].forEach(function(id){ document.getElementById(id).value=''; });
+    document.getElementById('pEmpresa').value = '';
+    document.getElementById('pCategoria').value = 'Outro';
+    document.getElementById('pGestorLabel').innerText = (window.SESSAO && window.SESSAO.gestor) || 'você';
+    new bootstrap.Modal(document.getElementById('modalPessoa')).show();
+  };
+  window.salvarPessoa = function() {
+    var nome = document.getElementById('pNome').value.trim();
+    if (!nome) { toast('Informe o nome.', 'err'); return; }
+    var btn = document.getElementById('btnSalvarPessoa'); btn.disabled = true;
+    google.script.run.withSuccessHandler(function(resp) {
+      btn.disabled = false;
+      if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
+      bootstrap.Modal.getInstance(document.getElementById('modalPessoa')).hide();
+      toast(resp.mensagem, 'ok');
+      if (resp.dados && resp.dados.linkConfirmacao) {
+        lastLinkGerado = resp.dados.linkConfirmacao;
+        document.getElementById('linkGeradoTitulo').innerText = nome + ' adicionado(a)';
+        document.getElementById('linkGeradoDesc').innerText = 'Envie este link pessoal para ' + nome + ' confirmar presença:';
+        document.getElementById('linkGeradoBox').innerText = lastLinkGerado;
+        new bootstrap.Modal(document.getElementById('modalLinkGerado')).show();
+      }
+      carregarTudo();
+    }).withFailureHandler(function(err){ btn.disabled=false; erro(err); }).apiAdicionarNaLista(window.TOKEN, '', {
+      idEvento: idEvento,
+      dados: { Nome: nome, Documento: document.getElementById('pDocumento').value, Categoria: document.getElementById('pCategoria').value, ID_Empresa: document.getElementById('pEmpresa').value, Cargo: document.getElementById('pCargo').value },
+      descricao: document.getElementById('pDescricao').value.trim()
+    });
+  };
+
+  // ---------- modal: criar lote ----------
+  window.abrirModalLote = function() {
+    document.getElementById('lEmpresa').value = ''; document.getElementById('lVagas').value = ''; document.getElementById('lExpira').value = ''; document.getElementById('lObs').value = '';
+    var hint = document.getElementById('lVagasHint');
+    var vagasInput = document.getElementById('lVagas');
+    if (vagas.disponiveis !== null) {
+      vagasInput.max = vagas.disponiveis;
+      hint.innerText = vagas.disponiveis + ' vaga(s) livre(s) no evento (capacidade ' + vagas.capacidade + ').';
+    } else {
+      vagasInput.removeAttribute('max');
+      hint.innerText = '';
+    }
+    new bootstrap.Modal(document.getElementById('modalLote')).show();
+  };
+  window.salvarLote = function() {
+    var vagas = Number(document.getElementById('lVagas').value);
+    if (!vagas || vagas < 1) { toast('Informe o número de vagas.', 'err'); return; }
+    var btn = document.getElementById('btnSalvarLote'); btn.disabled = true;
+    google.script.run.withSuccessHandler(function(resp) {
+      btn.disabled = false;
+      if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
+      bootstrap.Modal.getInstance(document.getElementById('modalLote')).hide();
+      lastLinkGerado = resp.dados.link;
+      document.getElementById('linkGeradoTitulo').innerText = 'Lote criado';
+      document.getElementById('linkGeradoDesc').innerText = 'Copie e envie este link para a empresa:';
+      document.getElementById('linkGeradoBox').innerText = lastLinkGerado;
+      new bootstrap.Modal(document.getElementById('modalLinkGerado')).show();
+      carregarTudo();
+    }).withFailureHandler(function(err){ btn.disabled=false; erro(err); }).apiCriarLote(window.TOKEN, {
+      ID_Evento: idEvento, ID_Empresa: document.getElementById('lEmpresa').value, Vagas_Total: vagas,
+      Data_Expiracao: document.getElementById('lExpira').value, Observacoes: document.getElementById('lObs').value
+    });
+  };
+  window.copiarLinkGerado = function() { copiarTexto(lastLinkGerado); };
+  window.copiarTexto = function(txt) {
+    navigator.clipboard.writeText(txt).then(function(){ toast('Link copiado.', 'ok'); }).catch(function(){ toast('Não foi possível copiar automaticamente.', 'err'); });
+  };
+})();
+</script>

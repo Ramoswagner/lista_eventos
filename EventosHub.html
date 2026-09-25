@@ -1,0 +1,127 @@
+<!-- EventosHub.html — tela inicial: lista de eventos + criar novo -->
+<div class="pg-head">
+  <div>
+    <h4><i class="fas fa-calendar-days me-2 text-primary"></i>Eventos</h4>
+    <p>Escolha um evento para montar a lista, gerar convites e acompanhar o check-in.</p>
+  </div>
+  <button class="btn-hb" onclick="abrirModalEvento()"><i class="fas fa-plus"></i> Novo evento</button>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-5">
+    <input type="text" class="form-control" id="buscaEvento" placeholder="Buscar evento por nome ou local...">
+  </div>
+  <div class="col-md-3">
+    <select class="form-select" id="filtroStatusEvento">
+      <option value="">Todos os status</option>
+      <option value="Planejamento">Planejamento</option>
+      <option value="Ativo">Ativo</option>
+      <option value="Encerrado">Encerrado</option>
+    </select>
+  </div>
+</div>
+
+<div id="eventosListWrap"><div class="skel" style="height:64px;margin-bottom:10px;border-radius:14px;"></div><div class="skel" style="height:64px;margin-bottom:10px;border-radius:14px;"></div></div>
+
+<!-- Modal Novo/Editar Evento -->
+<div class="modal fade" id="modalEvento" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content" style="border-radius:16px;border:none;">
+      <div class="modal-header" style="border-bottom:1px solid var(--border);">
+        <h6 class="modal-title fw-bold" id="modalEventoTitulo">Novo evento</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="evId">
+        <div class="mb-3"><label class="form-label">Nome do evento *</label><input class="form-control" id="evNome" placeholder="Ex: Jantar dos Amigos do Baleia"></div>
+        <div class="row g-2">
+          <div class="col-6"><label class="form-label">Data</label><input type="date" class="form-control" id="evData"></div>
+          <div class="col-6"><label class="form-label">Capacidade</label><input type="number" min="0" class="form-control" id="evCapacidade" placeholder="opcional"></div>
+        </div>
+        <div class="mb-3 mt-2"><label class="form-label">Local</label><input class="form-control" id="evLocal" placeholder="opcional"></div>
+        <div class="mb-1"><label class="form-label">Observações</label><textarea class="form-control" id="evObs" rows="2"></textarea></div>
+      </div>
+      <div class="modal-footer" style="border-top:1px solid var(--border);">
+        <button class="btn-hb-outline" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn-hb" id="btnSalvarEvento" onclick="salvarEvento()"><i class="fas fa-check"></i> Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var STATUS_PILL = { 'Ativo':'pill-green', 'Planejamento':'pill-amber', 'Encerrado':'pill-gray' };
+
+  function render() {
+    var busca = (document.getElementById('buscaEvento').value || '').toLowerCase();
+    var statusF = document.getElementById('filtroStatusEvento').value;
+    var lista = window.EVENTOS_CACHE.filter(function(e) {
+      if (statusF && e.status !== statusF) return false;
+      if (busca && (e.nome + ' ' + (e.local||'')).toLowerCase().indexOf(busca) === -1) return false;
+      return true;
+    }).sort(function(a,b){ return (b.data||'').split('/').reverse().join('') > (a.data||'').split('/').reverse().join('') ? 1 : -1; });
+
+    var wrap = document.getElementById('eventosListWrap');
+    if (!lista.length) {
+      wrap.innerHTML = '<div class="card-hb"><div class="empty-state"><i class="fas fa-calendar-plus"></i><h6>Nenhum evento por aqui ainda</h6>' +
+        '<p>Crie o primeiro evento para começar a montar a lista de convidados.</p>' +
+        '<button class="btn-hb" onclick="abrirModalEvento()"><i class="fas fa-plus"></i> Novo evento</button></div></div>';
+      return;
+    }
+
+    wrap.innerHTML = '<div class="card-hb"><table class="table-hb"><thead><tr><th>Evento</th><th>Data</th><th>Local</th><th>Status</th><th></th></tr></thead><tbody>' +
+      lista.map(function(e) {
+        return '<tr style="cursor:pointer" onclick="abrirEvento(\'' + e.id + '\')">' +
+          '<td><strong>' + e.nome + '</strong></td>' +
+          '<td>' + (e.data || '<span class="text-muted">—</span>') + '</td>' +
+          '<td>' + (e.local || '<span class="text-muted">—</span>') + '</td>' +
+          '<td><span class="pill ' + (STATUS_PILL[e.status] || 'pill-gray') + '">' + (e.status || '—') + '</span></td>' +
+          '<td class="text-end"><i class="fas fa-chevron-right text-muted"></i></td>' +
+        '</tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  window.abrirModalEvento = function(ev) {
+    document.getElementById('modalEventoTitulo').innerText = ev ? 'Editar evento' : 'Novo evento';
+    document.getElementById('evId').value = ev ? ev.id : '';
+    document.getElementById('evNome').value = ev ? ev.nome : '';
+    document.getElementById('evLocal').value = ev ? ev.local : '';
+    document.getElementById('evCapacidade').value = ev ? (ev.capacidade || '') : '';
+    document.getElementById('evData').value = '';
+    document.getElementById('evObs').value = '';
+    new bootstrap.Modal(document.getElementById('modalEvento')).show();
+  };
+
+  window.salvarEvento = function() {
+    var nome = document.getElementById('evNome').value.trim();
+    if (!nome) { toast('Informe o nome do evento.', 'err'); return; }
+    var dados = {
+      Nome: nome,
+      Data: document.getElementById('evData').value || '',
+      Local: document.getElementById('evLocal').value || '',
+      Capacidade: document.getElementById('evCapacidade').value || '',
+      Observacoes: document.getElementById('evObs').value || ''
+    };
+    var btn = document.getElementById('btnSalvarEvento');
+    btn.disabled = true;
+    google.script.run
+      .withSuccessHandler(function(resp) {
+        btn.disabled = false;
+        if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
+        bootstrap.Modal.getInstance(document.getElementById('modalEvento')).hide();
+        toast('Evento criado.', 'ok');
+        var novoId = resp.dados && resp.dados.id;
+        recarregarEventosCache(function() {
+          if (novoId) abrirEvento(novoId, 'evento-lista'); else render();
+        });
+      })
+      .withFailureHandler(function(err) { btn.disabled = false; toast(err.message, 'err'); })
+      .apiCadastrarEvento(window.TOKEN, dados);
+  };
+
+  document.getElementById('buscaEvento').addEventListener('input', render);
+  document.getElementById('filtroStatusEvento').addEventListener('change', render);
+  render();
+})();
+</script>

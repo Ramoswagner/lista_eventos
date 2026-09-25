@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <style>
+    /* ============================================================
+       DESIGN SYSTEM — Hospital da Baleia · Eventos
+       Tokens centralizados aqui; as views injetadas em #viewContainer
+       usam estas classes em vez de reescrever CSS a cada tela.
+       ============================================================ */
+    :root {
+      --ink-900:#0A2B4E; --ink-700:#123A63; --blue-600:#0088CC; --blue-500:#28A8E8; --blue-50:#EAF6FC;
+      --bg:#F4F7FB; --surface:#FFFFFF; --border:#E4EAF2;
+      --text:#1E293B; --text-muted:#64748B; --text-faint:#94A3B8;
+      --success:#10B981; --success-bg:#EAFBF3; --warning:#F59E0B; --warning-bg:#FFF6E9;
+      --danger:#EF4444; --danger-bg:#FDECEC; --violet:#7C6FE0; --violet-bg:#F1EFFC;
+      --r-lg:16px; --r-md:12px; --r-sm:8px;
+      --shadow-sm:0 1px 2px rgba(15,32,55,.06), 0 1px 1px rgba(15,32,55,.04);
+      --shadow-md:0 10px 30px -12px rgba(10,43,78,.18);
+      --sidebar-w:236px;
+    }
+    * { box-sizing:border-box; }
+    html,body { margin:0; padding:0; }
+    html, body { overflow-x:hidden; max-width:100%; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Inter,sans-serif; background:var(--bg); color:var(--text); font-size:14.5px; -webkit-font-smoothing:antialiased; }
+    a { text-decoration:none; color:inherit; }
+    ::selection { background:var(--blue-50); }
+
+    /* ---------- layout shell ---------- */
+    .wrapper { display:flex; min-height:100vh; }
+    .sidebar {
+      width:var(--sidebar-w); background:var(--ink-900); color:#fff; position:fixed; inset:0 auto 0 0; height:100vh;
+      z-index:1050; display:flex; flex-direction:column; padding:18px 14px; overflow-y:auto; transition:transform .25s ease;
+    }
+    .main-content { margin-left:var(--sidebar-w); flex:1; min-width:0; padding:20px 28px 40px; transition:margin-left .25s ease; }
+    #sidebarBackdrop { display:none; position:fixed; inset:0; background:rgba(10,20,35,.5); z-index:1040; }
+    #sidebarBackdrop.open { display:block; }
+
+    @media (max-width:860px) {
+      .sidebar { transform:translateX(-100%); }
+      .sidebar.open { transform:translateX(0); box-shadow:0 0 40px rgba(0,0,0,.3); }
+      .main-content { margin-left:0; padding:14px 14px 32px; }
+      .hamburger { display:inline-flex !important; }
+      .evt-header { padding:14px; }
+      .evt-title { font-size:1.08rem; }
+      .card-hb-body { padding:15px; }
+      .kpi .val { font-size:1.35rem; }
+      .login-card { padding:28px 20px; max-width:100%; }
+      .login-badge img { height:64px; }
+      .evt-switch-menu { left:0; right:auto; max-width:calc(100vw - 40px); }
+      /* iOS/Android dão zoom automático ao focar campo com letra < 16px
+         e nem sempre devolvem o zoom depois — por isso a tela "prende". */
+      .form-control, .form-select { font-size:16px; }
+    }
+
+    /* ---------- brand / logo ---------- */
+    .brand { display:flex; flex-direction:column; align-items:center; text-align:center; padding:10px 8px 28px; }
+    .brand-badge { max-width:100%; }
+    .brand-badge img { max-width:100%; height:58px; display:block; margin:0 auto; }
+    .brand-text { line-height:1.15; margin-top:8px; }
+    .brand-text span { display:block; }
+    .brand-text span { display:block; font-size:.68rem; color:rgba(255,255,255,.55); font-weight:500; letter-spacing:.3px; text-transform:uppercase; }
+
+    /* ---------- nav (nível 1) ---------- */
+    .nav-group-label { font-size:.66rem; font-weight:700; letter-spacing:.6px; text-transform:uppercase; color:rgba(255,255,255,.35); padding:14px 12px 6px; }
+    .navlink {
+      display:flex; align-items:center; gap:12px; padding:9px 12px; border-radius:10px; margin-bottom:2px;
+      color:rgba(255,255,255,.68); font-weight:500; font-size:.87rem; cursor:pointer; transition:background .15s,color .15s;
+    }
+    .navlink i { width:18px; text-align:center; font-size:.92rem; }
+    .navlink:hover { background:rgba(255,255,255,.07); color:#fff; }
+    .navlink.active { background:rgba(0,136,204,.28); color:#fff; }
+    .navlink .soon { margin-left:auto; font-size:.6rem; background:rgba(255,255,255,.12); padding:2px 7px; border-radius:20px; font-weight:600; letter-spacing:.3px; }
+
+    .sidebar-foot { margin-top:auto; padding-top:14px; border-top:1px solid rgba(255,255,255,.1); }
+    .user-chip { display:flex; align-items:center; gap:10px; padding:8px 10px; }
+    .user-chip .av { width:32px; height:32px; border-radius:50%; background:var(--blue-600); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:.8rem; flex:none; }
+    .user-chip .nm { font-size:.8rem; font-weight:600; line-height:1.2; }
+    .user-chip .rl { font-size:.68rem; color:rgba(255,255,255,.5); }
+
+    /* ---------- topbar ---------- */
+    .topbar { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:18px; }
+    .hamburger { display:none; background:none; border:none; font-size:1.15rem; color:var(--ink-900); margin-right:10px; }
+    .clock { font-size:.74rem; color:var(--text-muted); background:var(--surface); border:1px solid var(--border); padding:5px 12px; border-radius:20px; }
+
+    /* ---------- event workspace header ---------- */
+    .evt-header { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:16px 20px; margin-bottom:16px; box-shadow:var(--shadow-sm); }
+    .evt-back { font-size:.78rem; color:var(--text-muted); font-weight:600; display:inline-flex; align-items:center; gap:6px; cursor:pointer; margin-bottom:8px; }
+    .evt-back:hover { color:var(--blue-600); }
+    .evt-title-row { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+    .evt-title { font-size:1.28rem; font-weight:700; color:var(--ink-900); display:flex; align-items:center; gap:10px; }
+    .evt-meta { font-size:.78rem; color:var(--text-muted); margin-top:2px; display:flex; gap:14px; flex-wrap:wrap; }
+    .evt-meta span { display:inline-flex; align-items:center; gap:5px; }
+    .evt-switch { position:relative; }
+    .evt-switch-btn { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:7px 12px; font-size:.8rem; font-weight:600; color:var(--ink-900); cursor:pointer; display:inline-flex; align-items:center; gap:8px; }
+    .evt-switch-menu { display:none; position:absolute; right:0; top:calc(100% + 6px); background:#fff; border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-md); min-width:260px; max-height:320px; overflow-y:auto; z-index:60; padding:6px; }
+    .evt-switch-menu.open { display:block; }
+    .evt-switch-item { padding:8px 10px; border-radius:8px; cursor:pointer; font-size:.82rem; }
+    .evt-switch-item:hover { background:var(--blue-50); }
+    .evt-switch-item.current { font-weight:700; color:var(--blue-600); }
+
+    /* ---------- event tabs (nível 2) ---------- */
+    .evt-tabs { display:flex; gap:4px; margin-top:14px; border-top:1px solid var(--border); padding-top:12px; flex-wrap:wrap; }
+    .evt-tab { padding:7px 14px; border-radius:9px; font-size:.82rem; font-weight:600; color:var(--text-muted); cursor:pointer; display:flex; align-items:center; gap:7px; }
+    .evt-tab:hover { background:var(--bg); color:var(--ink-900); }
+    .evt-tab.active { background:var(--ink-900); color:#fff; }
+    .evt-tab .lock { font-size:.62rem; opacity:.6; }
+
+    /* ---------- generic content primitives (usados pelas views) ---------- */
+    .pg-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:18px; }
+    .pg-head h4 { font-size:1.12rem; font-weight:700; color:var(--ink-900); margin:0; }
+    .pg-head p { font-size:.82rem; color:var(--text-muted); margin:3px 0 0; }
+
+    .btn-hb { background:var(--ink-900); color:#fff; border:none; border-radius:10px; padding:9px 16px; font-weight:600; font-size:.85rem; transition:transform .12s,background .15s; display:inline-flex; align-items:center; gap:8px; }
+    .btn-hb:hover { background:var(--blue-600); color:#fff; transform:translateY(-1px); }
+    .btn-hb-outline { background:#fff; color:var(--ink-900); border:1.5px solid var(--border); border-radius:10px; padding:8px 15px; font-weight:600; font-size:.85rem; display:inline-flex; align-items:center; gap:8px; }
+    .btn-hb-outline:hover { border-color:var(--blue-600); color:var(--blue-600); }
+
+    .card-hb { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg); box-shadow:var(--shadow-sm); max-width:100%; overflow-x:auto; }
+    .card-hb-body { padding:20px; }
+
+    .pill { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:20px; font-size:.7rem; font-weight:700; letter-spacing:.2px; }
+    .pill-blue { background:var(--blue-50); color:var(--blue-600); }
+    .pill-green { background:var(--success-bg); color:var(--success); }
+    .pill-amber { background:var(--warning-bg); color:#B4790A; }
+    .pill-red { background:var(--danger-bg); color:var(--danger); }
+    .pill-violet { background:var(--violet-bg); color:var(--violet); }
+    .pill-gray { background:var(--bg); color:var(--text-muted); }
+
+    .kpi { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:16px 18px; box-shadow:var(--shadow-sm); }
+    .kpi .lbl { font-size:.72rem; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:.3px; }
+    .kpi .val { font-size:1.7rem; font-weight:800; color:var(--ink-900); line-height:1.2; margin-top:2px; }
+    .kpi .sub { font-size:.74rem; color:var(--text-faint); }
+
+    .table-hb { width:100%; min-width:640px; border-collapse:separate; border-spacing:0; font-size:.83rem; }
+    .table-hb thead th { text-align:left; font-size:.68rem; text-transform:uppercase; letter-spacing:.4px; color:var(--text-muted); font-weight:700; padding:10px 12px; border-bottom:1.5px solid var(--border); background:var(--bg); white-space:nowrap; }
+    .table-hb thead th:first-child { border-top-left-radius:10px; }
+    .table-hb thead th:last-child { border-top-right-radius:10px; }
+    .table-hb tbody td { padding:11px 12px; border-bottom:1px solid var(--border); vertical-align:middle; }
+    .table-hb tbody tr:hover { background:var(--blue-50); }
+    .table-hb tbody tr:last-child td { border-bottom:none; }
+
+    .empty-state { text-align:center; padding:52px 24px; color:var(--text-muted); }
+    .empty-state i { font-size:2rem; color:var(--text-faint); margin-bottom:12px; display:block; }
+    .empty-state h6 { color:var(--ink-900); font-weight:700; margin-bottom:4px; }
+    .empty-state p { font-size:.83rem; max-width:340px; margin:0 auto 16px; }
+
+    .skel { background:linear-gradient(90deg,var(--bg) 25%,#eef2f7 37%,var(--bg) 63%); background-size:400% 100%; animation:skel 1.3s ease infinite; border-radius:8px; }
+    @keyframes skel { 0%{background-position:100% 50%} 100%{background-position:0 50%} }
+
+    .form-control, .form-select { border-radius:10px; border:1.5px solid var(--border); padding:9px 12px; font-size:.85rem; }
+    .form-control:focus, .form-select:focus { border-color:var(--blue-600); box-shadow:0 0 0 3px rgba(0,136,204,.13); }
+    .form-label { font-weight:600; font-size:.8rem; color:var(--ink-900); margin-bottom:5px; }
+
+    #toastBox { position:fixed; bottom:22px; right:22px; z-index:9999; display:flex; flex-direction:column; gap:8px; }
+    .toast-hb { background:var(--ink-900); color:#fff; border-radius:11px; padding:11px 16px; display:flex; align-items:center; gap:10px; box-shadow:var(--shadow-md); max-width:340px; font-size:.83rem; animation:toastIn .25s ease; }
+    .toast-hb.ok { border-left:4px solid var(--success); }
+    .toast-hb.err { border-left:4px solid var(--danger); }
+    @keyframes toastIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+    #viewContainer { animation:fadeIn .22s ease; }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+
+    .link-box { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:9px 13px; font-family:ui-monospace,Consolas,monospace; font-size:.76rem; word-break:break-all; color:var(--ink-700); cursor:pointer; }
+    .link-box:hover { background:var(--blue-50); }
+
+    /* ---------- login gate (invertido: fundo claro, card escuro/azul) ---------- */
+    #loginGate {
+      position:fixed; inset:0; z-index:2000; display:flex; align-items:center; justify-content:center; padding:20px;
+      background:var(--bg);
+    }
+    .login-card {
+      background:linear-gradient(150deg,var(--ink-900) 0%,var(--blue-600) 100%);
+      border-radius:20px; padding:38px 32px; width:100%; max-width:380px;
+      box-shadow:0 25px 60px rgba(10,43,78,.28); text-align:center;
+    }
+    .login-badge { max-width:100%; margin:0 auto 10px; }
+    .login-badge img { max-width:100%; height:84px; display:block; margin:0 auto; }
+    .login-card p.sub { color:rgba(255,255,255,.72); font-size:.8rem; font-weight:600; letter-spacing:.3px; margin-bottom:26px; }
+    .login-card .form-control { margin-bottom:10px; text-align:left; border:none; }
+    .login-card .btn-hb { background:#fff; color:var(--ink-900); }
+    .login-card .btn-hb:hover { background:var(--blue-50); color:var(--ink-900); }
+    #loginMsg { font-size:.78rem; min-height:18px; margin:6px 0 4px; color:#FCA5A5; font-weight:600; }
+    .login-forgot { font-size:.74rem; color:rgba(255,255,255,.65); cursor:pointer; margin-top:12px; display:inline-block; }
+    .login-forgot:hover { color:#fff; }
+    #ajudaSenha { background:rgba(255,255,255,.1) !important; color:rgba(255,255,255,.85) !important; }
+  </style>
+</head>
+<body>
+
+<div id="toastBox"></div>
+
+<div id="loginGate">
+  <div class="login-card">
+    <div class="login-badge"><img id="loginLogoImg" src="https://hospitaldabaleia.org.br/wp-content/uploads/2023/08/Ativo-3@2x.png" alt="Hospital da Baleia"></div>
+    <p class="sub" style="margin-top:-6px;">Gestão de Eventos</p>
+    <form id="loginForm">
+      <input class="form-control" id="loginSetor" placeholder="Usuário (setor)" autocomplete="username">
+      <input class="form-control" id="loginSenha" type="password" placeholder="Senha" autocomplete="current-password">
+      <div id="loginMsg"></div>
+      <button type="submit" class="btn-hb w-100 justify-content-center" id="btnLogin" style="padding:11px;"><i class="fas fa-arrow-right-to-bracket"></i> Entrar</button>
+    </form>
+    <span class="login-forgot" onclick="mostrarAjudaSenha()"><i class="fas fa-circle-question"></i> Esqueci a senha</span>
+    <div id="ajudaSenha" style="display:none;font-size:.72rem;color:var(--text-muted);margin-top:10px;text-align:left;background:var(--bg);border-radius:10px;padding:10px 12px;">
+      Peça para quem administra a planilha abrir <strong>Extensões → Apps Script</strong> neste projeto, escolher a função <strong>resetAdmin</strong> na barra de execução e clicar em Executar. Isso redefine o login para <strong>adm / 1234</strong>.
+    </div>
+  </div>
+</div>
+
+<div class="wrapper" id="appShell" style="display:none;">
+  <div id="sidebarBackdrop" onclick="fecharSidebarMobile()"></div>
+  <nav class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-badge"><img id="sidebarLogoImg" src="https://hospitaldabaleia.org.br/wp-content/uploads/2023/08/Ativo-3@2x.png" alt="Hospital da Baleia"></div>
+      <div class="brand-text"><span class="text-uppercase" style="font-size:.68rem;font-weight:700;letter-spacing:.5px;color:rgba(255,255,255,.6);">Gestão de Eventos</span></div>
+    </div>
+
+    <div class="nav-group-label">Geral</div>
+    <div class="navlink" data-nav="eventos"><i class="fas fa-calendar-days"></i> Eventos</div>
+    <div class="navlink" data-nav="diretorio"><i class="fas fa-address-book"></i> Diretório</div>
+    <div class="navlink" data-nav="config"><i class="fas fa-gear"></i> Configurações</div>
+
+    <div class="sidebar-foot">
+      <div class="user-chip">
+        <div class="av" id="userAvatar">A</div>
+        <div><div class="nm" id="userName">Administrador</div><div class="rl" id="userRole">Master</div></div>
+      </div>
+      <div class="navlink" id="logoutBtn" style="margin-top:6px;"><i class="fas fa-arrow-right-from-bracket"></i> Sair</div>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="topbar">
+      <div class="d-flex align-items-center">
+        <button class="hamburger" id="hamburgerBtn"><i class="fas fa-bars"></i></button>
+      </div>
+      <span class="clock" id="clockDisplay"></span>
+    </div>
+
+    <div id="eventHeaderSlot"></div>
+    <div id="viewContainer">
+      <div class="text-center text-muted py-5"><i class="fas fa-spinner fa-spin fa-2x"></i></div>
+    </div>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  // ============================================================
+  // ESTADO GLOBAL DA SPA — compartilhado com os fragmentos
+  // injetados em #viewContainer (todos rodam no mesmo documento).
+  // ============================================================
+  window.TOKEN = null;                    // definido após login (apiLogin)
+  window.SESSAO = null;                   // {gestor, setor, perfil}
+  window.URL_BASE = window.location.href.split('?')[0]; // para montar links públicos (convite/confirmar)
+  window.EVENTOS_CACHE = [];              // cache de apiListarEventosTodos
+  window.EventoAtual = null;              // {id, nome, data, local, status, capacidade}
+  var currentTopNav = 'eventos';
+  var currentEventTab = 'evento-lista';
+
+  // Logo é pública (aparece até antes do login) — busca a configurada
+  // pelo admin em Configurações; se nunca trocaram, cai na padrão.
+  // A escala (ajustável em Configurações) multiplica a altura-base de
+  // cada lugar onde a logo aparece.
+  google.script.run.withSuccessHandler(function(resp) {
+    if (!resp || !resp.ok) return;
+    var escala = resp.dados.escala || 1;
+    var login = document.getElementById('loginLogoImg');
+    var sidebar = document.getElementById('sidebarLogoImg');
+    login.src = resp.dados.url; login.style.height = Math.round(84 * escala) + 'px';
+    sidebar.src = resp.dados.url; sidebar.style.height = Math.round(58 * escala) + 'px';
+  }).apiLogoPublico();
+
+  var EVENT_TABS = [
+    { key: 'evento-visao',      label: 'Visão Geral',     icon: 'fa-chart-pie' },
+    { key: 'evento-lista',      label: 'Lista & Convites', icon: 'fa-users' },
+    { key: 'evento-checkin',    label: 'Check-in',        icon: 'fa-qrcode' },
+    { key: 'evento-mesas',      label: 'Mesas',           icon: 'fa-table-cells', soon: true },
+    { key: 'evento-relatorios', label: 'Relatórios',      icon: 'fa-file-lines', soon: true }
+  ];
+
+  // ------------------------------------------------------------
+  // TOAST helper — usado pelas views via window.toast(...)
+  // ------------------------------------------------------------
+  window.toast = function(msg, kind) {
+    var box = document.getElementById('toastBox');
+    var el = document.createElement('div');
+    el.className = 'toast-hb ' + (kind === 'err' ? 'err' : 'ok');
+    el.innerHTML = '<i class="fas ' + (kind === 'err' ? 'fa-circle-exclamation' : 'fa-circle-check') + '"></i><span>' + msg + '</span>';
+    box.appendChild(el);
+    setTimeout(function() { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(function(){ el.remove(); }, 300); }, 3600);
+  };
+
+  // ------------------------------------------------------------
+  // NAVEGAÇÃO NÍVEL 1
+  // ------------------------------------------------------------
+  function goTo(view) {
+    currentTopNav = view;
+    window.EventoAtual = null;
+    document.querySelectorAll('.navlink[data-nav]').forEach(function(el) {
+      el.classList.toggle('active', el.dataset.nav === view);
+    });
+    document.getElementById('eventHeaderSlot').innerHTML = '';
+    fecharSidebarMobile();
+
+    loadFragment(view);
+  }
+
+  // ------------------------------------------------------------
+  // NAVEGAÇÃO NÍVEL 2 (dentro de um evento)
+  // ------------------------------------------------------------
+  function abrirEvento(idEvento, tab) {
+    var ev = window.EVENTOS_CACHE.filter(function(e) { return e.id === idEvento; })[0];
+    if (!ev) { toast('Evento não encontrado.', 'err'); return; }
+    window.EventoAtual = ev;
+    document.querySelectorAll('.navlink[data-nav]').forEach(function(el) { el.classList.remove('active'); });
+    fecharSidebarMobile();
+    goToEventTab(tab || 'evento-lista');
+  }
+
+  function goToEventTab(tabKey) {
+    currentEventTab = tabKey;
+    renderEventHeader();
+    var tab = EVENT_TABS.filter(function(t){ return t.key === tabKey; })[0];
+    if (tab && tab.soon) { renderComingSoon(tab.label, 'Essa aba entra na fase 2, depois que a lista e o check-in estiverem redondos.'); return; }
+    loadFragment(tabKey);
+  }
+
+  function renderEventHeader() {
+    var ev = window.EventoAtual;
+    var slot = document.getElementById('eventHeaderSlot');
+    if (!ev) { slot.innerHTML = ''; return; }
+    var statusPill = ev.status === 'Ativo' ? 'pill-green' : (ev.status === 'Encerrado' ? 'pill-gray' : 'pill-amber');
+    var tabsHtml = EVENT_TABS.map(function(t) {
+      return '<div class="evt-tab ' + (t.key === currentEventTab ? 'active' : '') + '" onclick="goToEventTab(\'' + t.key + '\')">' +
+             '<i class="fas ' + t.icon + '"></i> ' + t.label + (t.soon ? ' <span class="lock"><i class="fas fa-lock"></i></span>' : '') + '</div>';
+    }).join('');
+    var otherEvents = window.EVENTOS_CACHE.filter(function(e){ return e.id !== ev.id; });
+    var switchItems = otherEvents.map(function(e) {
+      return '<div class="evt-switch-item" onclick="fecharSwitch(); abrirEvento(\'' + e.id + '\', currentEventTab)">' + e.nome + '<div style="font-size:.7rem;color:var(--text-muted)">' + (e.data || 'sem data') + '</div></div>';
+    }).join('') || '<div class="evt-switch-item" style="color:var(--text-muted)">Nenhum outro evento.</div>';
+
+    slot.innerHTML =
+      '<div class="evt-header">' +
+        '<div class="evt-back" onclick="goTo(\'eventos\')"><i class="fas fa-arrow-left"></i> Todos os eventos</div>' +
+        '<div class="evt-title-row">' +
+          '<div>' +
+            '<div class="evt-title">' + ev.nome + ' <span class="pill ' + statusPill + '">' + (ev.status || '—') + '</span></div>' +
+            '<div class="evt-meta"><span><i class="fas fa-calendar"></i> ' + (ev.data || 'sem data') + '</span>' +
+            (ev.local ? '<span><i class="fas fa-location-dot"></i> ' + ev.local + '</span>' : '') +
+            (ev.capacidade ? '<span><i class="fas fa-user-group"></i> capacidade ' + ev.capacidade + '</span>' : '') + '</div>' +
+          '</div>' +
+          '<div class="evt-switch">' +
+            '<button class="evt-switch-btn" onclick="toggleSwitch()"><i class="fas fa-shuffle"></i> Trocar evento <i class="fas fa-chevron-down"></i></button>' +
+            '<div class="evt-switch-menu" id="evtSwitchMenu">' + switchItems + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="evt-tabs">' + tabsHtml + '</div>' +
+      '</div>';
+  }
+
+  function toggleSwitch() { document.getElementById('evtSwitchMenu').classList.toggle('open'); }
+  function fecharSwitch() { var m = document.getElementById('evtSwitchMenu'); if (m) m.classList.remove('open'); }
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.evt-switch')) fecharSwitch();
+  });
+
+  // ------------------------------------------------------------
+  // CARREGAMENTO DE FRAGMENTOS (mesmo padrão original, via getViewContent)
+  // ------------------------------------------------------------
+  // O HTML/JS de cada tela é estático (mesmo arquivo sempre); só os dados
+  // mudam. Cacheamos o markup no cliente para não buscar a mesma tela no
+  // servidor de novo a cada troca de aba — o script de dentro roda de
+  // novo (via executarScripts) e busca dados frescos normalmente.
+  var FRAGMENT_CACHE = {};
+
+  function loadFragment(viewName) {
+    var container = document.getElementById('viewContainer');
+    if (FRAGMENT_CACHE[viewName]) {
+      container.innerHTML = FRAGMENT_CACHE[viewName];
+      executarScripts(container);
+      return;
+    }
+    container.innerHTML = '<div class="text-center text-muted py-5"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
+    google.script.run
+      .withSuccessHandler(function(html) {
+        FRAGMENT_CACHE[viewName] = html;
+        container.innerHTML = html;
+        executarScripts(container);
+      })
+      .withFailureHandler(function(err) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-triangle-exclamation"></i><h6>Erro ao carregar</h6><p>' + err.message + '</p></div>';
+      })
+      .getViewContent(viewName);
+  }
+
+  // innerHTML nunca executa <script> injetado — é assim que o DOM funciona
+  // em todo navegador. Recriamos cada <script> do fragmento para forçar a
+  // execução (é isso que faz os onclick="..." das views existirem de fato).
+  function executarScripts(container) {
+    var scripts = container.querySelectorAll('script');
+    scripts.forEach(function(old) {
+      var novo = document.createElement('script');
+      for (var i = 0; i < old.attributes.length; i++) { novo.setAttribute(old.attributes[i].name, old.attributes[i].value); }
+      novo.textContent = old.textContent;
+      old.parentNode.replaceChild(novo, old);
+    });
+  }
+
+  function renderComingSoon(titulo, desc) {
+    document.getElementById('viewContainer').innerHTML =
+      '<div class="card-hb"><div class="empty-state"><i class="fas fa-hourglass-half"></i><h6>' + titulo + ' — em breve</h6><p>' + desc + '</p></div></div>';
+  }
+
+  // ------------------------------------------------------------
+  // AUTENTICAÇÃO — gate próprio, sem recarregar a página.
+  // Token fica em sessionStorage (some ao fechar a aba).
+  // ------------------------------------------------------------
+  var SESSION_KEY = 'hb_eventos_sessao';
+
+  function mostrarGate(msg) {
+    document.getElementById('appShell').style.display = 'none';
+    document.getElementById('loginGate').style.display = 'flex';
+    document.getElementById('loginMsg').innerText = msg || '';
+    document.getElementById('loginSenha').value = '';
+    setTimeout(function(){ document.getElementById('loginSetor').focus(); }, 50);
+  }
+
+  function entrarNoApp(sessao) {
+    window.TOKEN = sessao.token;
+    window.SESSAO = sessao;
+    document.getElementById('userName').innerText = sessao.gestor || 'Usuário';
+    document.getElementById('userRole').innerText = sessao.perfil || '';
+    document.getElementById('userAvatar').innerText = (sessao.gestor || 'U').charAt(0).toUpperCase();
+    document.getElementById('loginGate').style.display = 'none';
+    document.getElementById('appShell').style.display = 'flex';
+    carregarEventosCache(function() { goTo('eventos'); });
+  }
+
+  window.forcarLogout = function(msg) {
+    sessionStorage.removeItem(SESSION_KEY);
+    window.TOKEN = null; window.SESSAO = null;
+    mostrarGate(msg || '');
+  };
+
+  window.mostrarAjudaSenha = function() {
+    var el = document.getElementById('ajudaSenha');
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+  };
+
+  document.getElementById('loginForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var setor = document.getElementById('loginSetor').value.trim();
+    var senha = document.getElementById('loginSenha').value;
+    var btn = document.getElementById('btnLogin');
+    btn.disabled = true;
+    google.script.run
+      .withSuccessHandler(function(resp) {
+        btn.disabled = false;
+        if (!resp.ok) { document.getElementById('loginMsg').innerText = resp.mensagem; return; }
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify(resp.dados));
+        entrarNoApp(resp.dados);
+      })
+      .withFailureHandler(function(err) { btn.disabled = false; document.getElementById('loginMsg').innerText = err.message; })
+      .apiLogin(setor, senha);
+  });
+
+  // ------------------------------------------------------------
+  // BOOTSTRAP INICIAL
+  // ------------------------------------------------------------
+  function carregarEventosCache(depois) {
+    google.script.run
+      .withSuccessHandler(function(resp) {
+        if (resp && resp.auth === false) { forcarLogout('Sessão expirada. Entre novamente.'); return; }
+        window.EVENTOS_CACHE = (resp && resp.ok) ? resp.dados : [];
+        if (depois) depois();
+      })
+      .withFailureHandler(function() { window.EVENTOS_CACHE = []; if (depois) depois(); })
+      .apiListarEventosTodos(window.TOKEN);
+  }
+  window.recarregarEventosCache = carregarEventosCache;
+
+  // Menu lateral no celular (com fundo escuro atrás, clicável pra fechar)
+  window.fecharSidebarMobile = function() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebarBackdrop').classList.remove('open');
+  };
+  window.toggleSidebarMobile = function() {
+    document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('sidebarBackdrop').classList.toggle('open');
+  };
+
+  document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.navlink[data-nav]').forEach(function(link) {
+      link.addEventListener('click', function() { goTo(this.dataset.nav); });
+    });
+    document.getElementById('hamburgerBtn').addEventListener('click', toggleSidebarMobile);
+    document.getElementById('logoutBtn').addEventListener('click', function() {
+      if (!confirm('Deseja realmente sair?')) return;
+      var tok = window.TOKEN;
+      sessionStorage.removeItem(SESSION_KEY);
+      window.TOKEN = null; window.SESSAO = null;
+      mostrarGate('');
+      if (tok) google.script.run.apiSair(tok);
+    });
+    function tickClock() { document.getElementById('clockDisplay').innerText = new Date().toLocaleString('pt-BR'); }
+    setInterval(tickClock, 1000); tickClock();
+
+    var salvo = null;
+    try { salvo = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null'); } catch (e) { salvo = null; }
+    if (salvo && salvo.token) entrarNoApp(salvo); else mostrarGate('');
+  });
+</script>
+</body>
+</html>

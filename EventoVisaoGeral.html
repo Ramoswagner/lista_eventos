@@ -1,0 +1,147 @@
+<!-- EventoVisaoGeral.html — dashboard do evento (apiDashboardEvento) -->
+<div id="visaoWrap">
+  <div class="row g-3">
+    <div class="col-6 col-lg-3"><div class="skel" style="height:86px;"></div></div>
+    <div class="col-6 col-lg-3"><div class="skel" style="height:86px;"></div></div>
+    <div class="col-6 col-lg-3"><div class="skel" style="height:86px;"></div></div>
+    <div class="col-6 col-lg-3"><div class="skel" style="height:86px;"></div></div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var idEvento = window.EventoAtual && window.EventoAtual.id;
+  if (!idEvento) { document.getElementById('visaoWrap').innerHTML = '<div class="empty-state"><i class="fas fa-triangle-exclamation"></i><p>Nenhum evento selecionado.</p></div>'; return; }
+
+  var CAT_COLORS = ['#0088CC','#10B981','#F59E0B','#EF4444','#7C6FE0','#EC4899','#14B8A6','#F97316','#64748B'];
+  var ORIGEM_ICON = { 'Lista original':'fa-list', 'Lote público':'fa-link', 'Walk-in':'fa-door-open', 'Substituição':'fa-right-left' };
+
+  google.script.run
+    .withSuccessHandler(function(resp) {
+      if (resp && resp.auth === false) { forcarLogout('Sessão expirada.'); return; }
+      if (!resp.ok) { document.getElementById('visaoWrap').innerHTML = '<div class="empty-state"><i class="fas fa-triangle-exclamation"></i><p>' + resp.mensagem + '</p></div>'; return; }
+      render(resp.dados);
+    })
+    .withFailureHandler(function(err) {
+      document.getElementById('visaoWrap').innerHTML = '<div class="empty-state"><i class="fas fa-triangle-exclamation"></i><p>' + err.message + '</p></div>';
+    })
+    .apiDashboardEvento(window.TOKEN, idEvento);
+
+  function render(d) {
+    var r = d.resumo || {};
+    var porStatus = r.porStatus || {};
+    var presentes = porStatus['Presente'] || 0;
+    var confirmados = porStatus['Confirmado'] || 0;
+    var cancelados = porStatus['Cancelado'] || 0;
+    var capacidade = Number(d.evento.capacidade) || 0;
+
+    if (!r.totalConvites) {
+      document.getElementById('visaoWrap').innerHTML =
+        '<div class="card-hb"><div class="empty-state"><i class="fas fa-list-check"></i><h6>Ainda não há convidados neste evento</h6>' +
+        '<p>Vá para a aba <strong>Lista &amp; Convites</strong> para montar a lista ou gerar um lote de convite.</p>' +
+        '<button class="btn-hb" onclick="goToEventTab(\'evento-lista\')"><i class="fas fa-arrow-right"></i> Montar lista</button></div></div>';
+      return;
+    }
+
+    var html =
+      '<div class="row g-3">' +
+        kpi('Total na lista', r.totalConvites, r.ativos + ' ativos') +
+        kpi('Confirmados', confirmados, '') +
+        kpi('Presentes', presentes, 'check-in feito') +
+        kpi('Taxa de presença', r.taxaPresenca, cancelados ? cancelados + ' cancelado(s)' : '') +
+      '</div>';
+
+    if (capacidade > 0) {
+      var ocupPct = Math.min(100, Math.round(100 * r.ativos / capacidade));
+      var ocupCor = ocupPct >= 100 ? 'var(--danger)' : (ocupPct >= 85 ? 'var(--warning)' : 'var(--success)');
+      html += '<div class="card-hb card-hb-body mt-3">' +
+        '<div class="d-flex justify-content-between align-items-center mb-2">' +
+          '<span class="small fw-bold" style="color:var(--ink-900);"><i class="fas fa-gauge-high me-1 text-primary"></i>Ocupação da capacidade</span>' +
+          '<span class="small text-muted">' + r.ativos + ' de ' + capacidade + '</span>' +
+        '</div>' +
+        '<div style="height:9px;background:var(--bg);border-radius:20px;overflow:hidden;"><div style="height:100%;width:' + ocupPct + '%;background:' + ocupCor + ';border-radius:20px;transition:width .4s;"></div></div>' +
+      '</div>';
+    }
+
+    html += '<div class="row g-3 mt-1">' +
+        '<div class="col-lg-7"><div class="card-hb card-hb-body">' +
+          '<h6 class="fw-bold mb-3" style="color:var(--ink-900)"><i class="fas fa-clock me-2 text-primary"></i>Check-ins ao longo do dia</h6>' +
+          '<canvas id="chartCheckins" height="170"></canvas>' +
+        '</div></div>' +
+        '<div class="col-lg-5"><div class="card-hb card-hb-body">' +
+          '<h6 class="fw-bold mb-3" style="color:var(--ink-900)"><i class="fas fa-chart-pie me-2 text-primary"></i>Por categoria</h6>' +
+          '<canvas id="chartCategoria" height="170"></canvas>' +
+        '</div></div>' +
+      '</div>' +
+      '<div class="row g-3 mt-1">' +
+        '<div class="col-lg-6"><div class="card-hb card-hb-body">' +
+          '<h6 class="fw-bold mb-3" style="color:var(--ink-900)"><i class="fas fa-trophy me-2 text-primary"></i>Top gestores</h6>' +
+          '<div id="rankGestores">' + rankHtml(d.topGestores, 'gestor', 'total') + '</div>' +
+        '</div></div>' +
+        '<div class="col-lg-6"><div class="card-hb card-hb-body">' +
+          '<h6 class="fw-bold mb-3" style="color:var(--ink-900)"><i class="fas fa-route me-2 text-primary"></i>De onde vieram os convidados</h6>' +
+          '<div id="rankOrigem">' + origemHtml(r.porOrigem) + '</div>' +
+        '</div></div>' +
+      '</div>';
+
+    document.getElementById('visaoWrap').innerHTML = html;
+    renderChartCategoria(d.porCategoria);
+    renderChartCheckins(d.checkinsPorHora);
+  }
+
+  function kpi(lbl, val, sub) {
+    return '<div class="col-6 col-lg-3"><div class="kpi"><div class="lbl">' + lbl + '</div><div class="val">' + val + '</div>' +
+      (sub ? '<div class="sub">' + sub + '</div>' : '') + '</div></div>';
+  }
+
+  function rankHtml(list, chaveNome, chaveVal) {
+    if (!list || !list.length) return '<p class="text-muted small mb-0">Nenhum gestor com convites ainda.</p>';
+    var max = Math.max.apply(null, list.map(function(g){return g[chaveVal];}));
+    return list.map(function(g) {
+      var pct = Math.round(100 * g[chaveVal] / max);
+      return '<div class="mb-2">' +
+        '<div class="d-flex justify-content-between" style="font-size:.82rem;"><span>' + g[chaveNome] + '</span><strong>' + g[chaveVal] + '</strong></div>' +
+        '<div style="height:6px;background:var(--bg);border-radius:20px;overflow:hidden;"><div style="height:100%;width:' + pct + '%;background:var(--blue-600);border-radius:20px;"></div></div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function origemHtml(porOrigem) {
+    var labels = Object.keys(porOrigem || {});
+    if (!labels.length) return '<p class="text-muted small mb-0">Sem dados de origem ainda.</p>';
+    var total = labels.reduce(function(s,l){ return s + porOrigem[l]; }, 0);
+    return labels.sort(function(a,b){ return porOrigem[b]-porOrigem[a]; }).map(function(l) {
+      var pct = Math.round(100 * porOrigem[l] / total);
+      return '<div class="d-flex justify-content-between align-items-center mb-2">' +
+        '<span style="font-size:.82rem;"><i class="fas ' + (ORIGEM_ICON[l] || 'fa-circle') + ' me-2 text-muted" style="width:14px;"></i>' + l + '</span>' +
+        '<span><strong>' + porOrigem[l] + '</strong> <span class="text-muted small">(' + pct + '%)</span></span>' +
+      '</div>';
+    }).join('');
+  }
+
+  function renderChartCategoria(porCategoria) {
+    var ctx = document.getElementById('chartCategoria');
+    if (!ctx) return;
+    var labels = Object.keys(porCategoria || {});
+    if (!labels.length) { ctx.parentNode.innerHTML = '<p class="text-muted small mb-0">Sem dados de categoria ainda.</p>'; return; }
+    new Chart(ctx, {
+      type: 'doughnut',
+      data: { labels: labels, datasets: [{ data: labels.map(function(l){return porCategoria[l];}), backgroundColor: CAT_COLORS, borderWidth: 0 }] },
+      options: { responsive:true, plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, font:{size:10.5} } } } }
+    });
+  }
+
+  function renderChartCheckins(checkinsPorHora) {
+    var ctx = document.getElementById('chartCheckins');
+    if (!ctx) return;
+    var horas = Object.keys(checkinsPorHora || {});
+    if (!horas.length) { ctx.parentNode.innerHTML = '<div class="empty-state py-4"><i class="fas fa-door-closed"></i><p class="mb-0">Nenhum check-in registrado ainda.</p></div>'; return; }
+    horas.sort(function(a,b){ return parseInt(a) - parseInt(b); });
+    new Chart(ctx, {
+      type: 'bar',
+      data: { labels: horas, datasets: [{ label: 'Check-ins', data: horas.map(function(h){return checkinsPorHora[h];}), backgroundColor: '#0088CC', borderRadius: 6, maxBarThickness: 34 }] },
+      options: { responsive:true, plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true, ticks:{ precision:0 } } } }
+    });
+  }
+})();
+</script>
