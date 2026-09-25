@@ -274,11 +274,23 @@ function apiExcluirEvento(token, idEvento) {
 // ------------------------------------------------------------
 // PESSOAS
 // ------------------------------------------------------------
+// Participação de cada pessoa: { ID_Pessoa: { listas, presencas } }
+function _participacaoPessoas_() {
+  const r = {};
+  dbListar_(DB.CONVITES).forEach(c => {
+    const x = r[c.ID_Pessoa] = r[c.ID_Pessoa] || { listas: 0, presencas: 0 };
+    if (_conviteAtivo_(c)) x.listas++;
+    if (c.Status === 'Presente') x.presencas++;
+  });
+  return r;
+}
+
 function apiListarPessoas(token) {
   const s = validarSessao_(token);
   if (!s) return NEGADO;
   const empresas = {};
   dbListar_(DB.EMPRESAS).forEach(e => empresas[e.ID_Empresa] = e.Nome);
+  const part = _participacaoPessoas_();
   return { ok: true, dados: dbListar_(DB.PESSOAS).map(p => ({
     id:         p.ID_Pessoa,
     nome:       _s_(p.Nome),
@@ -290,8 +302,73 @@ function apiListarPessoas(token) {
     empresa:    _s_(empresas[p.ID_Empresa]),
     idEmpresa:  _s_(p.ID_Empresa),
     cidade:     _s_(p.Cidade) + (p.UF ? '/' + _s_(p.UF) : ''),
+    cidadeNome: _s_(p.Cidade),
+    uf:         _s_(p.UF),
+    obs:        _s_(p.Observacoes),
+    gestor:     _s_(p.Gestor_Responsavel),
+    listas:     (part[p.ID_Pessoa] || {}).listas || 0,
+    presencas:  (part[p.ID_Pessoa] || {}).presencas || 0,
     ativo:      _s_(p.Ativo) || 'Sim'
   })) };
+}
+
+// Edição completa do cadastro (não mexe nos convites: o nome novo já
+// aparece em todas as listas, porque o convite aponta para a pessoa).
+function apiEditarPessoa(token, idPessoa, dados) {
+  const s = validarSessao_(token);
+  if (!s) return NEGADO;
+  try {
+    _exigirPermissao_(s, 'pessoas', 'editar');
+    if (!dados || !_s_(dados.Nome)) throw new Error('Nome é obrigatório.');
+    return _comLock_(function() {
+      const p = dbBuscarPorId_(DB.PESSOAS, idPessoa);
+      if (!p) throw new Error('Pessoa não encontrada.');
+      const outro = _pessoaPorDocumento_(dados.Documento);
+      if (outro && outro.ID_Pessoa !== idPessoa) throw new Error('Este documento já pertence a ' + outro.Nome + '.');
+      const email = _s_(dados.Email).toLowerCase();
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new Error('E-mail inválido.');
+      if (dados.ID_Empresa && !dbBuscarPorId_(DB.EMPRESAS, dados.ID_Empresa)) throw new Error('Empresa não encontrada.');
+      const novos = {
+        Nome: _s_(dados.Nome), Documento: _s_(dados.Documento), Telefone: _s_(dados.Telefone), Email: email,
+        ID_Empresa: _s_(dados.ID_Empresa), Cargo: _s_(dados.Cargo), Cidade: _s_(dados.Cidade),
+        UF: _s_(dados.UF).toUpperCase().slice(0, 2), Categoria: _categoriaValida_(_s_(dados.Categoria)),
+        Observacoes: _s_(dados.Observacoes).slice(0, 300)
+      };
+      // Gestor responsável só muda se o perfil pode escolher (Admin / organizador sem vínculo).
+      if (dados.Gestor !== undefined && (s.perfil === 'Admin' || s.perfil === 'Organizador')) novos.Gestor_Responsavel = _gestorResponsavel_(s, dados.Gestor);
+      dbAtualizar_(DB.PESSOAS, idPessoa, novos);
+      logAudit_('UPDATE', 'Pessoas', idPessoa, 'Cadastro editado por ' + rotuloSessao_(s));
+      return { ok: true, mensagem: 'Cadastro de ' + novos.Nome + ' atualizado.' };
+    });
+  } catch (e) { return { ok: false, mensagem: e.message }; }
+}
+
+// Exclui cadastro feito por engano. Nunca apaga histórico: quem já
+// participou de um evento ou está em alguma lista não é excluído.
+function apiExcluirPessoa(token, idPessoa) {
+  const s = validarSessao_(token);
+  if (!s) return NEGADO;
+  try {
+    _exigirPermissao_(s, 'pessoas', 'excluir');
+    return _comLock_(function() {
+      const p = dbBuscarPorId_(DB.PESSOAS, idPessoa);
+      if (!p) throw new Error('Pessoa não encontrada.');
+      const convites = dbListar_(DB.CONVITES, c => c.ID_Pessoa === idPessoa);
+      const nomeEvento = id => _s_((dbBuscarPorId_(DB.EVENTOS, id) || {}).Nome) || id;
+      const participou = convites.filter(c => c.Status === 'Presente');
+      if (participou.length) {
+        throw new Error(_s_(p.Nome) + ' já participou de ' + nomeEvento(participou[0].ID_Evento) + (participou.length > 1 ? ' e de outros ' + (participou.length - 1) + ' evento(s)' : '') + '. O cadastro fica no histórico e não pode ser excluído.');
+      }
+      if (convites.length) {
+        const eventos = {};
+        convites.forEach(c => eventos[nomeEvento(c.ID_Evento)] = true);
+        throw new Error(_s_(p.Nome) + ' ainda está na lista de: ' + Object.keys(eventos).join(', ') + '. Exclua o convite nessa(s) lista(s) antes de excluir o cadastro.');
+      }
+      dbExcluir_(DB.PESSOAS, idPessoa);
+      logAudit_('DELETE', 'Pessoas', idPessoa, 'Cadastro "' + _s_(p.Nome) + '" excluído por ' + rotuloSessao_(s));
+      return { ok: true, mensagem: 'Cadastro de ' + _s_(p.Nome) + ' excluído.' };
+    });
+  } catch (e) { return { ok: false, mensagem: e.message }; }
 }
 
 // Procura pessoa já cadastrada com o mesmo documento (só dígitos).
@@ -316,7 +393,8 @@ function apiCadastrarPessoa(token, dados) {
       if (existente) throw new Error('Já existe uma pessoa com este documento: ' + existente.Nome + '.');
       const p = dbInserir_(DB.PESSOAS, {
         Nome: _s_(dados.Nome), Documento: _s_(dados.Documento),
-        Telefone: _s_(dados.Telefone), Email: _s_(dados.Email),
+        Gestor_Responsavel: _gestorResponsavel_(s, dados.Gestor),
+        Telefone: _s_(dados.Telefone), Email: _s_(dados.Email).toLowerCase(),
         ID_Empresa: _s_(dados.ID_Empresa), Cargo: _s_(dados.Cargo),
         Cidade: _s_(dados.Cidade), UF: _s_(dados.UF).toUpperCase(),
         Categoria: _categoriaValida_(_s_(dados.Categoria)),
@@ -333,13 +411,58 @@ function apiCadastrarPessoa(token, dados) {
 function apiListarEmpresas(token) {
   const s = validarSessao_(token);
   if (!s) return NEGADO;
+  const pessoasPorEmpresa = {};
+  dbListar_(DB.PESSOAS).forEach(p => { if (p.ID_Empresa) pessoasPorEmpresa[p.ID_Empresa] = (pessoasPorEmpresa[p.ID_Empresa] || 0) + 1; });
   return { ok: true, dados: dbListar_(DB.EMPRESAS).map(e => ({
-    id:       e.ID_Empresa,
-    nome:     _s_(e.Nome),
-    segmento: _s_(e.Segmento),
-    cidade:   _s_(e.Cidade) + (e.UF ? '/' + _s_(e.UF) : ''),
-    contato:  _s_(e.Contato)
+    id:         e.ID_Empresa,
+    nome:       _s_(e.Nome),
+    cnpj:       _s_(e.CNPJ),
+    segmento:   _s_(e.Segmento),
+    cidade:     _s_(e.Cidade) + (e.UF ? '/' + _s_(e.UF) : ''),
+    cidadeNome: _s_(e.Cidade),
+    uf:         _s_(e.UF),
+    contato:    _s_(e.Contato),
+    telefone:   _s_(e.Telefone),
+    email:      _s_(e.Email),
+    website:    _s_(e.Website),
+    obs:        _s_(e.Observacoes),
+    pessoas:    pessoasPorEmpresa[e.ID_Empresa] || 0
   })) };
+}
+
+// CNPJ: 14 dígitos com os dois dígitos verificadores corretos.
+function _cnpjValido_(cnpj) {
+  const d = _soDigitos_(cnpj);
+  if (d.length !== 14 || /^(\d)\1+$/.test(d)) return false;
+  const calc = n => {
+    const pesos = n === 12 ? [5,4,3,2,9,8,7,6,5,4,3,2] : [6,5,4,3,2,9,8,7,6,5,4,3,2];
+    const soma = pesos.reduce((t, p, i) => t + p * Number(d[i]), 0);
+    const r = soma % 11;
+    return r < 2 ? 0 : 11 - r;
+  };
+  return calc(12) === Number(d[12]) && calc(13) === Number(d[13]);
+}
+
+function _formatarCnpj_(cnpj) {
+  const d = _soDigitos_(cnpj);
+  return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+}
+
+function _dadosEmpresa_(dados, idAtual) {
+  if (!dados || !_s_(dados.Nome)) throw new Error('Nome da empresa é obrigatório.');
+  const cnpj = _s_(dados.CNPJ);
+  if (cnpj) {
+    if (!_cnpjValido_(cnpj)) throw new Error('CNPJ inválido. Confira os 14 números.');
+    const igual = dbListar_(DB.EMPRESAS, e => _soDigitos_(e.CNPJ) === _soDigitos_(cnpj) && e.ID_Empresa !== idAtual)[0];
+    if (igual) throw new Error('Este CNPJ já está cadastrado para ' + igual.Nome + '.');
+  }
+  const email = _s_(dados.Email).toLowerCase();
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new Error('E-mail inválido.');
+  return {
+    Nome: _s_(dados.Nome), CNPJ: cnpj ? _formatarCnpj_(cnpj) : '', Segmento: _s_(dados.Segmento), Contato: _s_(dados.Contato),
+    Cidade: _s_(dados.Cidade), UF: _s_(dados.UF).toUpperCase().slice(0, 2),
+    Telefone: _s_(dados.Telefone), Email: email, Website: _s_(dados.Website), Observacoes: _s_(dados.Observacoes).slice(0, 300)
+  };
 }
 
 function apiCadastrarEmpresa(token, dados) {
@@ -347,14 +470,56 @@ function apiCadastrarEmpresa(token, dados) {
   if (!s) return NEGADO;
   try {
     _exigirPermissao_(s, 'empresas', 'criar');
-    if (!dados || !_s_(dados.Nome)) throw new Error('Nome da empresa é obrigatório.');
-    const e = dbInserir_(DB.EMPRESAS, {
-      Nome: _s_(dados.Nome), Segmento: _s_(dados.Segmento), Contato: _s_(dados.Contato),
-      Cidade: _s_(dados.Cidade), UF: _s_(dados.UF).toUpperCase(),
-      Telefone: _s_(dados.Telefone), Website: _s_(dados.Website),
-      Criado_Em: new Date()
+    return _comLock_(function() {
+      const novos = _dadosEmpresa_(dados, null);
+      const mesmoNome = dbListar_(DB.EMPRESAS, e => _s_(e.Nome).toLowerCase() === novos.Nome.toLowerCase())[0];
+      if (mesmoNome && !novos.CNPJ) throw new Error('Já existe a empresa "' + mesmoNome.Nome + '". Use a existente ou informe o CNPJ para diferenciar.');
+      novos.Criado_Em = new Date();
+      const e = dbInserir_(DB.EMPRESAS, novos);
+      return { ok: true, mensagem: 'Empresa cadastrada.', dados: { id: e.ID_Empresa } };
     });
-    return { ok: true, mensagem: 'Empresa cadastrada.', dados: { id: e.ID_Empresa } };
+  } catch (e) { return { ok: false, mensagem: e.message }; }
+}
+
+function apiEditarEmpresa(token, idEmpresa, dados) {
+  const s = validarSessao_(token);
+  if (!s) return NEGADO;
+  try {
+    _exigirPermissao_(s, 'empresas', 'editar');
+    return _comLock_(function() {
+      if (!dbBuscarPorId_(DB.EMPRESAS, idEmpresa)) throw new Error('Empresa não encontrada.');
+      const novos = _dadosEmpresa_(dados, idEmpresa);
+      dbAtualizar_(DB.EMPRESAS, idEmpresa, novos);
+      logAudit_('UPDATE', 'Empresas', idEmpresa, 'Empresa editada por ' + rotuloSessao_(s));
+      return { ok: true, mensagem: 'Empresa ' + novos.Nome + ' atualizada.' };
+    });
+  } catch (e) { return { ok: false, mensagem: e.message }; }
+}
+
+// Exclui empresa criada por engano. Bloqueia se tiver lote ou se alguém
+// dela já participou de evento; pessoas vinculadas (que nunca
+// participaram) continuam no cadastro, só ficam sem empresa.
+function apiExcluirEmpresa(token, idEmpresa) {
+  const s = validarSessao_(token);
+  if (!s) return NEGADO;
+  try {
+    _exigirPermissao_(s, 'empresas', 'excluir');
+    return _comLock_(function() {
+      const e = dbBuscarPorId_(DB.EMPRESAS, idEmpresa);
+      if (!e) throw new Error('Empresa não encontrada.');
+      const lotes = dbListar_(DB.LOTES, l => l.ID_Empresa === idEmpresa);
+      if (lotes.length) throw new Error(_s_(e.Nome) + ' tem ' + lotes.length + ' lote(s) de convite. A empresa fica no histórico e não pode ser excluída.');
+      const pessoas = dbListar_(DB.PESSOAS, p => p.ID_Empresa === idEmpresa);
+      const part = _participacaoPessoas_();
+      const participaram = pessoas.filter(p => (part[p.ID_Pessoa] || {}).presencas);
+      if (participaram.length) throw new Error('Pessoas de ' + _s_(e.Nome) + ' já participaram de eventos (ex.: ' + _s_(participaram[0].Nome) + '). A empresa fica no histórico e não pode ser excluída.');
+      const soltar = {};
+      pessoas.forEach(p => { soltar[p.ID_Pessoa] = { ID_Empresa: '' }; });
+      dbAtualizarVarios_(DB.PESSOAS, soltar);
+      dbExcluir_(DB.EMPRESAS, idEmpresa);
+      logAudit_('DELETE', 'Empresas', idEmpresa, 'Empresa "' + _s_(e.Nome) + '" excluída por ' + rotuloSessao_(s));
+      return { ok: true, mensagem: 'Empresa excluída.' + (pessoas.length ? ' ' + pessoas.length + ' pessoa(s) ficaram sem empresa.' : '') };
+    });
   } catch (e) { return { ok: false, mensagem: e.message }; }
 }
 
@@ -409,9 +574,9 @@ function apiAdicionarNaLista(token, gestor, pessoa) {
     _exigirPermissao_(s, 'convites', 'criar');
     const idEvento = pessoa && pessoa.idEvento;
     if (!idEvento) throw new Error('Evento não informado.');
-    // O gestor responsável é sempre quem está logado.
-    const gestorFinal = _s_(s.gestor) || _s_(gestor);
-    if (!gestorFinal) throw new Error('Informe o gestor responsável.');
+    // Gestor responsável: o próprio gestor, o gestor vinculado ao
+    // organizador ou o escolhido na lista (ver _gestorResponsavel_).
+    const gestorFinal = _gestorResponsavel_(s, gestor);
 
     return _comLock_(function() {
       const vg = _vagasEvento_(idEvento);
@@ -419,8 +584,9 @@ function apiAdicionarNaLista(token, gestor, pessoa) {
         throw new Error('Capacidade do evento atingida (' + vg.ativos + ' de ' + vg.capacidade + '). Aumente a capacidade do evento para continuar.');
       }
 
-      let idPessoa = pessoa.idPessoa;
+      let idPessoa = _s_(pessoa.idPessoa);
       let reaproveitada = null;
+      if (idPessoa && !dbBuscarPorId_(DB.PESSOAS, idPessoa)) throw new Error('Pessoa não encontrada no diretório.');
 
       if (!idPessoa) {
         if (!pessoa.dados || !_s_(pessoa.dados.Nome)) throw new Error('Informe o nome.');
@@ -430,7 +596,8 @@ function apiAdicionarNaLista(token, gestor, pessoa) {
           const nova = dbInserir_(DB.PESSOAS, {
             Nome: _s_(pessoa.dados.Nome), Documento: _s_(pessoa.dados.Documento),
             Categoria: _categoriaValida_(_s_(pessoa.dados.Categoria)), ID_Empresa: _s_(pessoa.dados.ID_Empresa),
-            Cargo: _s_(pessoa.dados.Cargo), Data_Cadastro: new Date(), Ativo: 'Sim'
+            Cargo: _s_(pessoa.dados.Cargo), Telefone: _s_(pessoa.dados.Telefone), Email: _s_(pessoa.dados.Email).toLowerCase(),
+            Data_Cadastro: new Date(), Ativo: 'Sim', Gestor_Responsavel: gestorFinal
           });
           idPessoa = nova.ID_Pessoa;
         }
@@ -449,6 +616,113 @@ function apiAdicionarNaLista(token, gestor, pessoa) {
       }};
     });
   } catch (e) { return { ok: false, mensagem: e.message }; }
+}
+
+// Antes do dia do evento (Admin pode corrigir depois).
+function _antesDoEvento_(idEvento, sessao, acao) {
+  const ev = dbBuscarPorId_(DB.EVENTOS, idEvento);
+  if (!ev) throw new Error('Evento não encontrado.');
+  if (!ev.Data || sessao.perfil === 'Admin') return ev;
+  const hoje = Number(_fmtData_(new Date(), 'yyyyMMdd'));
+  if (hoje >= Number(_fmtData_(ev.Data, 'yyyyMMdd'))) {
+    throw new Error('Não é possível ' + acao + ' a partir do dia do evento (' + _fmtData_(ev.Data) + '). Use "Cancelar" ou fale com o administrador.');
+  }
+  return ev;
+}
+
+// Exclui o convite da lista (lista mais limpa). Só antes do dia do evento
+// e nunca apaga histórico: check-in feito ou troca registrada ficam.
+function apiExcluirConvite(token, idConvite) {
+  const s = validarSessao_(token);
+  if (!s) return NEGADO;
+  try {
+    _exigirPermissao_(s, 'convites', 'excluir');
+    return _comLock_(function() {
+      const c = dbBuscarPorId_(DB.CONVITES, idConvite);
+      if (!c) throw new Error('Convite não encontrado.');
+      _antesDoEvento_(c.ID_Evento, s, 'excluir convidados da lista');
+      if (c.Status === 'Presente') throw new Error('Este convidado já fez check-in; o registro não pode ser excluído.');
+      if (c.Status === 'Substituído') throw new Error('Este convite faz parte de uma troca registrada. Exclua o substituto, se for o caso.');
+      if (c.Origem === 'Substituição' && c.ID_Convite_Original) {
+        // Excluir o substituto devolve o lugar ao convidado original.
+        const orig = dbBuscarPorId_(DB.CONVITES, c.ID_Convite_Original);
+        if (orig && orig.Status === 'Substituído') {
+          dbAtualizar_(DB.CONVITES, orig.ID_Convite, { Status: 'Convidado', QR_Valido: 'Sim', Motivo_Substituicao: '', Autorizado_Por: '' });
+        }
+      }
+      const p = dbBuscarPorId_(DB.PESSOAS, c.ID_Pessoa) || {};
+      dbExcluir_(DB.CONVITES, idConvite);
+      logAudit_('DELETE', 'Convites', idConvite, '"' + _s_(p.Nome) + '" excluído da lista por ' + rotuloSessao_(s));
+      return { ok: true, mensagem: _s_(p.Nome) + ' foi excluído(a) da lista.' };
+    });
+  } catch (e) { return { ok: false, mensagem: e.message }; }
+}
+
+// Troca antes do evento: a pessoa avisou que outra irá no lugar dela.
+// O original fica como "Substituído" (histórico) e o novo convite nasce
+// com link próprio, a mesma mesa e o mesmo gestor.
+// novo: { idPessoa } (do diretório) ou { dados: { Nome, Documento, ... } }
+function apiTrocarConvidado(token, idConvite, novo, motivo) {
+  const s = validarSessao_(token);
+  if (!s) return NEGADO;
+  try {
+    _exigirPermissao_(s, 'convites', 'criar');
+    novo = novo || {};
+    return _comLock_(function() {
+      const c = dbBuscarPorId_(DB.CONVITES, idConvite);
+      if (!c) throw new Error('Convite não encontrado.');
+      _antesDoEvento_(c.ID_Evento, s, 'trocar convidados (na porta, use a substituição do check-in)');
+      if (['Convidado', 'Confirmado', 'Recusado'].indexOf(c.Status) === -1) throw new Error('Só é possível trocar convites ativos (convidado, confirmado ou recusado).');
+
+      let idPessoa = _s_(novo.idPessoa);
+      if (idPessoa) {
+        if (!dbBuscarPorId_(DB.PESSOAS, idPessoa)) throw new Error('Pessoa não encontrada no diretório.');
+      } else {
+        const d = novo.dados || {};
+        if (!_s_(d.Nome)) throw new Error('Informe o nome de quem vai no lugar.');
+        const existente = _pessoaPorDocumento_(d.Documento);
+        if (existente) idPessoa = existente.ID_Pessoa;
+        else {
+          idPessoa = dbInserir_(DB.PESSOAS, {
+            Nome: _s_(d.Nome), Documento: _s_(d.Documento), Cargo: _s_(d.Cargo),
+            Telefone: _s_(d.Telefone), Email: _s_(d.Email).toLowerCase(),
+            Categoria: _categoriaValida_(_s_(d.Categoria)), ID_Empresa: _s_(d.ID_Empresa),
+            Data_Cadastro: new Date(), Ativo: 'Sim', Gestor_Responsavel: _s_(c.Gestor)
+          }).ID_Pessoa;
+        }
+      }
+      const statusNovo = c.Status === 'Confirmado' ? 'Confirmado' : 'Convidado';
+      const antes = dbBuscarPorId_(DB.PESSOAS, c.ID_Pessoa) || {};
+      const nc = substituirConvidado_(idConvite, idPessoa, _s_(motivo) || 'Troca avisada antes do evento', rotuloSessao_(s), statusNovo);
+      dbAtualizar_(DB.CONVITES, nc.ID_Convite, { Cadastrado_Por: rotuloSessao_(s), Observacoes: _s_(c.Observacoes) });
+      const depois = dbBuscarPorId_(DB.PESSOAS, idPessoa) || {};
+      logAudit_('UPDATE', 'Convites', idConvite, 'Troca: "' + _s_(antes.Nome) + '" → "' + _s_(depois.Nome) + '" por ' + rotuloSessao_(s));
+      return { ok: true, mensagem: _s_(antes.Nome) + ' foi trocado(a) por ' + _s_(depois.Nome) + '.', dados: {
+        nome: _s_(depois.Nome), linkConfirmacao: _linkConfirmacao_(nc.QR_Token)
+      } };
+    });
+  } catch (e) { return { ok: false, mensagem: e.message }; }
+}
+
+// Busca no diretório (para adicionar/trocar escolhendo alguém já cadastrado).
+function apiBuscarPessoas(token, termo, idEvento) {
+  const s = validarSessao_(token);
+  if (!s) return NEGADO;
+  const q = _s_(termo).toLowerCase(), qd = _soDigitos_(termo);
+  if (q.length < 2) return { ok: true, dados: [] };
+  const naLista = {};
+  if (idEvento) dbListar_(DB.CONVITES, c => c.ID_Evento === idEvento && _conviteAtivo_(c)).forEach(c => naLista[c.ID_Pessoa] = true);
+  const empresas = {};
+  dbListar_(DB.EMPRESAS).forEach(e => empresas[e.ID_Empresa] = _s_(e.Nome));
+  const achados = dbListar_(DB.PESSOAS, p =>
+    _s_(p.Nome).toLowerCase().indexOf(q) !== -1 || (qd.length >= 4 && _soDigitos_(p.Documento).indexOf(qd) !== -1)
+  ).slice(0, 12);
+  return { ok: true, dados: achados.map(p => ({
+    id: p.ID_Pessoa, nome: _s_(p.Nome), empresa: _s_(empresas[p.ID_Empresa]), cargo: _s_(p.Cargo),
+    // documento parcialmente oculto: só para diferenciar homônimos
+    doc: _soDigitos_(p.Documento) ? '•••' + _soDigitos_(p.Documento).slice(-4) : '',
+    naLista: !!naLista[p.ID_Pessoa]
+  })) };
 }
 
 function apiCancelarConvite(token, idConvite) {

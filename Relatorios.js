@@ -683,6 +683,114 @@ function _relPanorama_(op, sessao) {
 }
 
 // ------------------------------------------------------------
+// 5) BASE DE CONTATOS POR GESTOR (pessoas no banco)
+// Uma pessoa pertence ao gestor que a cadastrou (Gestor_Responsavel)
+// e a todo gestor que já a convidou — por isso pode aparecer em mais de
+// uma tabela. opcoes: { gestor, documento, contato }
+// ------------------------------------------------------------
+function _baseContatos_() {
+  const empresas = {}, eventos = {};
+  dbListar_(DB.EMPRESAS).forEach(e => empresas[e.ID_Empresa] = _s_(e.Nome));
+  dbListar_(DB.EVENTOS).forEach(e => eventos[e.ID_Evento] = e);
+  const info = {};
+  dbListar_(DB.CONVITES).forEach(c => {
+    const x = info[c.ID_Pessoa] = info[c.ID_Pessoa] || { gestores: {}, listas: 0, presencas: 0, ultimo: null };
+    if (c.Gestor) x.gestores[_s_(c.Gestor)] = true;
+    if (_conviteAtivo_(c) || c.Status === 'Presente') x.listas++;
+    if (c.Status === 'Presente') x.presencas++;
+    const ev = eventos[c.ID_Evento];
+    if (ev && (!x.ultimo || new Date(ev.Data || 0) > new Date(x.ultimo.Data || 0))) x.ultimo = ev;
+  });
+  const pessoas = dbListar_(DB.PESSOAS).map(p => {
+    const x = info[p.ID_Pessoa] || { gestores: {}, listas: 0, presencas: 0, ultimo: null };
+    const gestores = Object.assign({}, x.gestores);
+    if (_s_(p.Gestor_Responsavel)) gestores[_s_(p.Gestor_Responsavel)] = true;
+    return {
+      p: p, nome: _s_(p.Nome) || '(sem nome)', cargo: _s_(p.Cargo), categoria: _s_(p.Categoria) || 'Outro',
+      empresa: _s_(empresas[p.ID_Empresa]), documento: _s_(p.Documento),
+      contato: [_s_(p.Telefone), _s_(p.Email)].filter(Boolean).join(' · '),
+      gestores: Object.keys(gestores), listas: x.listas, presencas: x.presencas,
+      ultimo: x.ultimo ? _s_(x.ultimo.Nome) + (x.ultimo.Data ? ' (' + _fmtData_(x.ultimo.Data) + ')' : '') : ''
+    };
+  });
+  return { pessoas: pessoas, totalEmpresas: Object.keys(empresas).length };
+}
+
+function _relBase_(op, sessao) {
+  const base = _baseContatos_();
+  const todos = base.pessoas;
+  const filtro = _s_(op.gestor);
+  const grupos = {};
+  todos.forEach(x => {
+    const gs = x.gestores.length ? x.gestores : [''];
+    gs.forEach(g => { if (!filtro || g === filtro) (grupos[g] = grupos[g] || []).push(x); });
+  });
+  const nomesG = Object.keys(grupos).sort((a, b) => (a ? 0 : 1) - (b ? 0 : 1) || a.localeCompare(b, 'pt-BR'));
+  const universo = filtro ? (grupos[filtro] || []) : todos;
+  const convidadas = universo.filter(x => x.listas).length;
+  const participaram = universo.filter(x => x.presencas).length;
+
+  const cols = [{ t: 'Nº', cls: 'num' }, { t: 'Pessoa' }, { t: 'Empresa' }, { t: 'Categoria' }];
+  if (op.documento) cols.push({ t: 'Documento' });
+  if (op.contato) cols.push({ t: 'Contato' });
+  cols.push({ t: 'Listas', cls: 'n' }, { t: 'Presenças', cls: 'n' }, { t: 'Último evento' });
+
+  const tabelas = nomesG.map(g => {
+    const itens = grupos[g].slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    const linhas = itens.map((x, i) => '<tr><td class="num">' + (i + 1) + '</td>' +
+      '<td><b>' + _h_(x.nome) + '</b>' + (x.cargo ? '<span class="sub">' + _h_(x.cargo) + '</span>' : '') + '</td>' +
+      '<td>' + (_h_(x.empresa) || '<span style="color:#CBD5E1">—</span>') + '</td><td>' + _h_(x.categoria) + '</td>' +
+      (op.documento ? '<td style="white-space:nowrap">' + (_h_(x.documento) || '—') + '</td>' : '') +
+      (op.contato ? '<td>' + (_h_(x.contato) || '—') + '</td>' : '') +
+      '<td class="n">' + x.listas + '</td><td class="n">' + (x.presencas ? '<b style="color:#16A34A">' + x.presencas + '</b>' : '0') + '</td>' +
+      '<td><span class="sub" style="font-size:7.4pt">' + (_h_(x.ultimo) || 'nunca convidada') + '</span></td></tr>');
+    const part = itens.filter(x => x.presencas).length;
+    return '<div class="grupo"><div class="grupo-tit"><div><span class="g">Gestor</span><span class="nome">' + _h_(g || 'Sem gestor definido') + '</span></div>' +
+      '<div class="cont">' + itens.length + ' pessoa(s) · ' + part + ' já participaram</div></div>' + _tabela_(cols, linhas) + '</div>';
+  });
+
+  // Resumo por gestor + categorias
+  const resumoG = nomesG.map(g => {
+    const it = grupos[g];
+    return '<tr><td><b>' + _h_(g || 'Sem gestor definido') + '</b></td><td class="n">' + it.length + '</td><td class="n">' + it.filter(x => x.listas).length + '</td>' +
+      '<td class="n">' + it.filter(x => x.presencas).length + '</td><td class="n">' + _miniBarra_(_pct_(it.filter(x => x.presencas).length, it.length)) + _fmtPct_(_pct_(it.filter(x => x.presencas).length, it.length)) + '</td></tr>';
+  });
+  const porCat = {};
+  universo.forEach(x => porCat[x.categoria] = (porCat[x.categoria] || 0) + 1);
+  const cats = Object.keys(porCat).sort((a, b) => porCat[b] - porCat[a]);
+
+  return _documento_({
+    kicker: 'Relatório da Base de Contatos',
+    titulo: filtro ? 'Contatos de ' + filtro : 'Pessoas cadastradas no sistema',
+    subtitulo: 'Cadastros organizados por gestor responsável',
+    direita: [{ r: 'Pessoas', v: String(universo.length) }, { r: 'Gestores', v: String(nomesG.filter(Boolean).length) }],
+    codigo: _codigoDoc_('BAS', filtro ? 'G' : 'GERAL'), sessao: sessao, arquivo: 'Base de contatos' + (filtro ? ' - ' + filtro : ''),
+    secoes: [
+      _secao_('01', 'Visão geral da base', filtro ? 'Filtro: ' + filtro : 'Base completa', _kpis_([
+        { r: 'Pessoas', v: universo.length, s: filtro ? 'deste gestor' : 'no banco' },
+        { r: 'Empresas', v: filtro ? Object.keys(universo.reduce((o, x) => { if (x.empresa) o[x.empresa] = 1; return o; }, {})).length : base.totalEmpresas, s: 'representadas' },
+        { r: 'Já convidadas', v: convidadas, s: _fmtPct_(_pct_(convidadas, universo.length)) + ' da base', cor: '#1E3A8A' },
+        { r: 'Já participaram', v: participaram, s: _fmtPct_(_pct_(participaram, universo.length)) + ' da base', cor: '#16A34A' },
+        { r: 'Nunca convidadas', v: universo.length - convidadas, s: 'potencial para próximos eventos' }
+      ]) + '<div class="grade2" style="margin-top:16px"><div>' +
+        _tabela_([{ t: 'Gestor' }, { t: 'Pessoas', cls: 'n' }, { t: 'Convidadas', cls: 'n' }, { t: 'Participaram', cls: 'n' }, { t: 'Participação', cls: 'n' }], resumoG) +
+        '</div><div class="col-borda" style="flex:0 0 36%"><div class="kicker" style="margin-bottom:8px">Categorias</div>' +
+        cats.slice(0, 10).map(c => _barra_(c, porCat[c], universo.length, '#1E3A8A')).join('') + '</div></div>' +
+        (filtro ? '' : '<p class="texto" style="margin-top:10px;font-size:7.6pt;color:#64748B">Uma pessoa aparece na tabela de cada gestor que a cadastrou ou já a convidou; por isso a soma das tabelas pode ser maior que o total da base.</p>')),
+      _secao_('02', 'Pessoas por gestor', universo.length + ' pessoa(s)', tabelas.length ? tabelas.join('') : '<div class="vazio">Nenhuma pessoa para este filtro.</div>')
+    ]
+  });
+}
+
+function apiGestoresDaBase(token) {
+  const s = validarSessao_(token);
+  if (!s) return NEGADO;
+  const nomes = {};
+  _baseContatos_().pessoas.forEach(x => x.gestores.forEach(g => nomes[g] = true));
+  return { ok: true, dados: Object.keys(nomes).sort((a, b) => a.localeCompare(b, 'pt-BR')) };
+}
+
+// ------------------------------------------------------------
 // API
 // ------------------------------------------------------------
 const TIPOS_RELATORIO = { lista: _relLista_, presenca: _relPresenca_, mesas: _relMesas_ };
@@ -695,6 +803,7 @@ function apiGerarRelatorio(token, tipo, opcoes) {
     opcoes = opcoes || {};
     let html;
     if (tipo === 'panorama') html = _relPanorama_(opcoes, s);
+    else if (tipo === 'base') html = _relBase_(opcoes, s);
     else if (TIPOS_RELATORIO[tipo]) {
       if (!opcoes.idEvento) throw new Error('Evento não informado.');
       html = TIPOS_RELATORIO[tipo](opcoes.idEvento, opcoes, s);
@@ -712,7 +821,14 @@ function apiCsvRelatorio(token, tipo, opcoes) {
     _exigirPermissao_(s, 'relatorios', 'exportar');
     opcoes = opcoes || {};
     let cab, linhas, nome;
-    if (tipo === 'panorama') {
+    if (tipo === 'base') {
+      const filtro = _s_(opcoes.gestor);
+      cab = ['Gestor(es)', 'Nome', 'Cargo', 'Empresa', 'Categoria', 'Documento', 'Telefone', 'E-mail', 'Listas', 'Presenças', 'Último evento'];
+      linhas = _baseContatos_().pessoas.filter(x => !filtro || x.gestores.indexOf(filtro) !== -1)
+        .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+        .map(x => [x.gestores.join(', '), x.nome, x.cargo, x.empresa, x.categoria, x.documento, _s_(x.p.Telefone), _s_(x.p.Email), x.listas, x.presencas, x.ultimo]);
+      nome = 'base-contatos' + (filtro ? '-' + filtro.toLowerCase().replace(/[^a-z0-9]+/gi, '-').slice(0, 30) : '');
+    } else if (tipo === 'panorama') {
       const ids = (opcoes.eventos || []).map(_s_);
       const evs = dbListar_(DB.EVENTOS, e => !ids.length || ids.indexOf(_s_(e.ID_Evento)) !== -1);
       const conv = dbListar_(DB.CONVITES, c => _conviteAtivo_(c));

@@ -241,7 +241,9 @@ function apiAtualizarMeusDados(qrToken, dados) {
 // O original ganha status Substituído; nasce um convite novo.
 // Regra de ouro: nunca editar o convite original para "virar" outra pessoa.
 // ------------------------------------------------------------
-function substituirConvidado_(idConviteOriginal, idNovaPessoa, motivo, autorizadoPor) {
+// statusNovo: 'Confirmado' na porta (entra na hora); na troca antecipada
+// segue o status do original (quem já tinha confirmado continua confirmado).
+function substituirConvidado_(idConviteOriginal, idNovaPessoa, motivo, autorizadoPor, statusNovo) {
   return _comLock_(function() {
     const original = dbBuscarPorId_(DB.CONVITES, idConviteOriginal);
     if (!original) throw new Error('Convite original não encontrado.');
@@ -249,6 +251,9 @@ function substituirConvidado_(idConviteOriginal, idNovaPessoa, motivo, autorizad
     if (original.Status === 'Cancelado')   throw new Error('Este convite está cancelado e não pode ser substituído.');
     if (original.Status === 'Presente')    throw new Error('O convidado original já entrou; não é possível substituí-lo.');
     if (!dbBuscarPorId_(DB.PESSOAS, idNovaPessoa)) throw new Error('Nova pessoa não encontrada.');
+    if (idNovaPessoa === original.ID_Pessoa) throw new Error('Escolha uma pessoa diferente da atual.');
+    const jaNaLista = dbListar_(DB.CONVITES, c => c.ID_Evento === original.ID_Evento && c.ID_Pessoa === idNovaPessoa && _conviteAtivo_(c));
+    if (jaNaLista.length) throw new Error('Esta pessoa já está na lista deste evento.');
 
     dbAtualizar_(DB.CONVITES, idConviteOriginal, {
       Status: 'Substituído',
@@ -262,7 +267,7 @@ function substituirConvidado_(idConviteOriginal, idNovaPessoa, motivo, autorizad
       ID_Pessoa:           idNovaPessoa,
       ID_Lote:             original.ID_Lote || '',
       Gestor:              original.Gestor,
-      Status:              'Confirmado',
+      Status:              statusNovo || 'Confirmado',
       Origem:              'Substituição',
       ID_Convite_Original: idConviteOriginal,
       Motivo_Substituicao: motivo || '',

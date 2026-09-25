@@ -408,6 +408,65 @@
   };
 
   // ------------------------------------------------------------
+  // GESTOR RESPONSÁVEL — Gestor: fixo (ele mesmo). Organizador vinculado:
+  // fixo (o gestor dele). Organizador sem vínculo: escolhe (obrigatório).
+  // Admin: escolhe (padrão: ele mesmo). O servidor aplica a mesma regra.
+  // ------------------------------------------------------------
+  window.OPCOES_GESTOR = null;
+  window.carregarOpcoesGestor = function(depois) {
+    google.script.run.withSuccessHandler(function(resp) {
+      if (resp && resp.ok) window.OPCOES_GESTOR = resp.dados;
+      if (depois) depois(window.OPCOES_GESTOR);
+    }).withFailureHandler(function(){ if (depois) depois(window.OPCOES_GESTOR); }).apiOpcoesGestor(window.TOKEN);
+  };
+  window.htmlSeletorGestor = function(id, rotulo) {
+    var o = window.OPCOES_GESTOR || { fixo: (window.SESSAO && window.SESSAO.gestor) || '', opcoes: [] };
+    rotulo = rotulo || 'Convidado por (gestor responsável)';
+    if (o.fixo) {
+      return '<div class="mb-3"><label class="form-label">' + rotulo + '</label>' +
+        '<div class="form-control d-flex align-items-center gap-2" style="background:var(--bg);"><i class="fas fa-user-tie text-primary"></i><strong>' + esc(o.fixo) + '</strong>' +
+        (o.vinculado ? '<span class="pill pill-blue ms-auto">vinculado</span>' : '') + '</div>' +
+        '<input type="hidden" id="' + id + '" value="' + esc(o.fixo) + '"></div>';
+    }
+    return '<div class="mb-3"><label class="form-label">' + rotulo + (o.obrigatorio ? ' *' : '') + '</label>' +
+      '<select class="form-select" id="' + id + '">' + (o.obrigatorio ? '<option value="">Escolha o gestor…</option>' : '') +
+      (o.opcoes || []).map(function(n) { return '<option value="' + esc(n) + '"' + (n === o.padrao ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('') +
+      '</select>' + (o.obrigatorio ? '<div class="small text-muted mt-1">O cadastro conta como do gestor escolhido.</div>' : '') + '</div>';
+  };
+  window.valorSeletorGestor = function(id) { var el = document.getElementById(id); return el ? el.value : ''; };
+
+  // ------------------------------------------------------------
+  // BUSCA NO DIRETÓRIO — escolher alguém já cadastrado (evita duplicar).
+  // aoEscolher(pessoa) recebe {id, nome, empresa, cargo, doc, naLista}.
+  // ------------------------------------------------------------
+  window.ligarBuscaDiretorio = function(inputId, resultadosId, idEvento, aoEscolher) {
+    var input = document.getElementById(inputId), box = document.getElementById(resultadosId), timer = null, ultimo = '';
+    if (!input || !box) return;
+    input.addEventListener('input', function() {
+      clearTimeout(timer);
+      var q = input.value.trim();
+      if (q.length < 2) { box.innerHTML = ''; return; }
+      timer = setTimeout(function() {
+        ultimo = q;
+        box.innerHTML = '<div class="small text-muted py-1"><i class="fas fa-spinner fa-spin me-1"></i>Buscando…</div>';
+        google.script.run.withSuccessHandler(function(resp) {
+          if (q !== ultimo) return;
+          if (!resp || !resp.ok) { box.innerHTML = ''; return; }
+          if (!resp.dados.length) { box.innerHTML = '<div class="small text-muted py-1">Ninguém encontrado — preencha os dados abaixo para cadastrar.</div>'; return; }
+          box.innerHTML = '<div class="list-group" style="max-height:210px;overflow-y:auto;">' + resp.dados.map(function(p, i) {
+            return '<button type="button" class="list-group-item list-group-item-action py-2" data-i="' + i + '"' + (p.naLista ? ' disabled' : '') + '>' +
+              '<div class="fw-semibold" style="font-size:.85rem;">' + esc(p.nome) + (p.naLista ? ' <span class="pill pill-gray ms-1">já na lista</span>' : '') + '</div>' +
+              '<div class="small text-muted">' + esc([p.empresa, p.cargo, p.doc ? 'doc ' + p.doc : ''].filter(Boolean).join(' · ') || 'sem empresa') + '</div></button>';
+          }).join('') + '</div>';
+          box.querySelectorAll('button[data-i]').forEach(function(b) {
+            b.addEventListener('click', function() { aoEscolher(resp.dados[Number(b.getAttribute('data-i'))]); });
+          });
+        }).apiBuscarPessoas(window.TOKEN, q, idEvento || '');
+      }, 300);
+    });
+  };
+
+  // ------------------------------------------------------------
   // COPIAR LINK — dentro do Apps Script o navegador às vezes bloqueia
   // navigator.clipboard (a página roda num iframe). Tenta a API moderna,
   // depois o método antigo (execCommand) e, se tudo falhar, mostra o

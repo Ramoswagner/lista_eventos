@@ -35,6 +35,10 @@
     { k:'mesas',    ic:'fa-table-cells',    t:'Mapa de mesas',        d:'Planta do salão e quem senta em cada mesa (para a recepção).' },
     { k:'panorama', ic:'fa-chart-column',   t:'Panorama do evento',   d:'Indicadores, perfil do público, gestores e empresas.' }
   ];
+  var TIPOS_GERAL = [
+    { k:'panorama', ic:'fa-chart-column', t:'Panorama / comparativo', d:'Um ou vários eventos lado a lado: convites, confirmação, presença, gestores.' },
+    { k:'base',     ic:'fa-address-book', t:'Base de contatos',       d:'Quantidade e pessoas no banco, em tabelas por gestor. Filtre por gestor.' }
+  ];
   var tipo = window.RELATORIO_INICIAL || (modoEvento ? 'lista' : 'panorama');
   window.RELATORIO_INICIAL = null;
   var ultimoHtml = '', ultimasOpcoes = null, ultimoTipo = '';
@@ -51,18 +55,19 @@
   function render() {
     var gestores = {};
     wrap.innerHTML =
-      (modoEvento ? '' : '<div class="pg-head"><div><h4><i class="fas fa-chart-column me-2 text-primary"></i>Relatórios</h4><p>Panorama de um evento ou comparativo entre vários. Para lista de convidados, presença e mesas, abra o evento e use a aba Relatórios.</p></div></div>') +
+      (modoEvento ? '' : '<div class="pg-head"><div><h4><i class="fas fa-chart-column me-2 text-primary"></i>Relatórios</h4><p>Panorama/comparativo de eventos e base de contatos por gestor. Para lista de convidados, presença e mesas, abra o evento e use a aba Relatórios.</p></div></div>') +
       '<div class="card-hb card-hb-body mb-3">' +
-        (modoEvento ? '<div class="rl-tipos mb-3">' + TIPOS.map(function(t) {
+        '<div class="rl-tipos mb-3">' + (modoEvento ? TIPOS : TIPOS_GERAL).map(function(t) {
           return '<button type="button" class="rl-tipo' + (t.k === tipo ? ' on' : '') + '" onclick="escolherRelatorio(\'' + t.k + '\')"><span class="ic"><i class="fas ' + t.ic + '"></i></span><h6>' + t.t + '</h6><p>' + t.d + '</p></button>';
-        }).join('') + '</div>' : eventosHtml()) +
+        }).join('') + '</div>' +
+        (!modoEvento && tipo === 'panorama' ? eventosHtml() : '') +
         '<div id="rlOpcoes" class="mb-3"></div>' +
         '<div class="rl-acoes"><button class="btn-hb" id="btnGerarRel" onclick="gerarRelatorio()"><i class="fas fa-file-lines"></i> Visualizar relatório</button>' +
         '<button class="btn-hb-outline" onclick="baixarCsv()"><i class="fas fa-file-excel"></i> Planilha (Excel)</button></div>' +
       '</div>' +
       '<div id="rlPrevia"></div>';
     renderOpcoes();
-    if (!modoEvento) ligarEventos();
+    if (!modoEvento && tipo === 'panorama') ligarEventos();
   }
 
   function renderOpcoes() {
@@ -80,6 +85,20 @@
       box.innerHTML = '<p class="small text-muted mb-0"><i class="fas fa-circle-info me-1"></i>Imprima para a recepção: a planta mostra onde fica cada mesa e a lista diz quem senta em cada uma.</p>';
     } else if (tipo === 'presenca') {
       box.innerHTML = '<p class="small text-muted mb-0"><i class="fas fa-circle-info me-1"></i>Ideal depois do evento: mostra quem veio, horários de chegada, quem confirmou e faltou, walk-ins e substituições.</p>';
+    } else if (tipo === 'base') {
+      box.innerHTML = '<div class="small fw-bold text-uppercase mb-2" style="color:var(--text-muted);font-size:.68rem;letter-spacing:.4px;">Opções</div><div class="rl-opcoes">' +
+        '<select class="form-select form-select-sm" id="opBaseGestor" style="width:auto;max-width:240px;"><option value="">Todos os gestores (geral)</option></select>' +
+        '<div class="form-check"><input class="form-check-input" type="checkbox" id="opBaseDoc"><label class="form-check-label" for="opBaseDoc">Documento</label></div>' +
+        '<div class="form-check"><input class="form-check-input" type="checkbox" id="opBaseContato"><label class="form-check-label" for="opBaseContato">Telefone / e-mail</label></div>' +
+      '</div><p class="small text-muted mt-2 mb-0"><i class="fas fa-circle-info me-1"></i>A pessoa entra na tabela de cada gestor que a cadastrou ou já a convidou.</p>';
+      google.script.run.withSuccessHandler(function(resp) {
+        var sel = document.getElementById('opBaseGestor');
+        if (!sel || !resp || !resp.ok) return;
+        var meu = window.SESSAO && window.SESSAO.gestor;
+        sel.innerHTML = '<option value="">Todos os gestores (geral)</option>' + resp.dados.map(function(g) {
+          return '<option value="' + esc(g) + '">' + esc(g) + (g === meu ? ' (meus contatos)' : '') + '</option>';
+        }).join('');
+      }).apiGestoresDaBase(window.TOKEN);
     } else {
       box.innerHTML = modoEvento ? '<p class="small text-muted mb-0"><i class="fas fa-circle-info me-1"></i>Indicadores deste evento. Para comparar vários eventos, use Relatórios no menu lateral.</p>' : '';
     }
@@ -122,6 +141,9 @@
   window.escolherRelatorio = function(k) { tipo = k; render(); };
 
   function opcoesAtuais() {
+    if (!modoEvento && tipo === 'base') return {
+      gestor: document.getElementById('opBaseGestor').value,
+      documento: document.getElementById('opBaseDoc').checked, contato: document.getElementById('opBaseContato').checked };
     if (!modoEvento) return { eventos: Object.keys(eventosSel) };
     if (tipo === 'panorama') return { eventos: [ev.id] };
     var op = { idEvento: ev.id };
@@ -138,7 +160,7 @@
   // ---------------------------------------------------------- gerar / prévia
   window.gerarRelatorio = function() {
     var op = opcoesAtuais();
-    if (!modoEvento && !op.eventos.length) { toast('Marque pelo menos um evento.', 'err'); return; }
+    if (!modoEvento && tipo === 'panorama' && !op.eventos.length) { toast('Marque pelo menos um evento.', 'err'); return; }
     var btn = document.getElementById('btnGerarRel'); btn.disabled = true;
     var previa = document.getElementById('rlPrevia');
     previa.innerHTML = '<div class="card-hb card-hb-body text-center text-muted py-5"><i class="fas fa-spinner fa-spin fa-2x mb-2"></i><div class="small">Montando o relatório…</div></div>';
@@ -192,7 +214,7 @@
   // ---------------------------------------------------------- planilha
   window.baixarCsv = function() {
     var op = opcoesAtuais();
-    if (!modoEvento && !op.eventos.length) { toast('Marque pelo menos um evento.', 'err'); return; }
+    if (!modoEvento && tipo === 'panorama' && !op.eventos.length) { toast('Marque pelo menos um evento.', 'err'); return; }
     google.script.run.withSuccessHandler(function(resp) {
       if (resp && resp.auth === false) { forcarLogout('Sessão expirada.'); return; }
       if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
@@ -206,7 +228,7 @@
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(function(){ URL.revokeObjectURL(a.href); }, 30000);
       toast('Planilha gerada.', 'ok');
-    }).withFailureHandler(erro).apiCsvRelatorio(window.TOKEN, modoEvento && tipo === 'panorama' ? 'panorama' : (modoEvento ? tipo : 'panorama'), op);
+    }).withFailureHandler(erro).apiCsvRelatorio(window.TOKEN, modoEvento ? tipo : tipo, op);
   };
 
   render();

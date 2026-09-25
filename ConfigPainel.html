@@ -111,6 +111,11 @@
       </div>
       <div class="col-6" id="lgSenhaCol"><label class="form-label">Senha *</label><input class="form-control" id="lgSenha" type="password" placeholder="mínimo 4 caracteres"></div>
     </div>
+    <div id="lgVinculoBox" class="mt-2" style="display:none;">
+      <label class="form-label">Vinculado ao gestor</label>
+      <select class="form-select" id="lgVinculo"><option value="">Sem vínculo — escolhe o gestor a cada cadastro</option></select>
+      <div class="small text-muted mt-1">Com vínculo, tudo o que este organizador cadastrar conta como do gestor escolhido.</div>
+    </div>
     <p class="small text-muted mb-0 mt-2" id="lgPerfilDica"></p>
   </div>
   <div class="modal-footer" style="border-top:1px solid var(--border);"><button class="btn-hb-outline" data-bs-dismiss="modal">Cancelar</button><button class="btn-hb" id="btnSalvarLogin" onclick="salvarLogin()"><i class="fas fa-check"></i> Salvar</button></div>
@@ -135,11 +140,12 @@
   var PERFIL_DICA = {
     Admin: 'Pode tudo, inclusive logins e permissões.',
     Gestor: 'Cria e edita eventos, listas, lotes e faz check-in (ajustável em Permissões).',
-    Organizador: 'Cadastra pessoas e adiciona pessoas às listas (ajustável em Permissões).',
+    Organizador: 'Cadastra pessoas e adiciona às listas em nome de um gestor (vinculado ou escolhido a cada cadastro).',
     Recepcao: 'Faz o check-in na entrada do evento (ajustável em Permissões).',
     Consulta: 'Só visualiza.'
   };
   var logins = [];
+  var gestoresDisp = [];
   var perm = null;
 
   function erroResp(resp) {
@@ -365,7 +371,7 @@
     google.script.run.withSuccessHandler(function(resp) {
       if (resp && resp.auth === false) { forcarLogout('Sessão expirada.'); return; }
       if (!resp.ok) { document.getElementById('loginsWrap').innerHTML = '<div class="card-hb"><div class="empty-state"><i class="fas fa-lock"></i><p>' + esc(resp.mensagem) + '</p></div></div>'; return; }
-      logins = resp.dados; render();
+      logins = resp.dados; gestoresDisp = resp.gestores || []; render();
     }).withFailureHandler(falha).apiListarLogins(window.TOKEN);
   }
 
@@ -375,7 +381,8 @@
       logins.map(function(g) {
         var id = esc(g.id);
         return '<tr><td class="td-titulo"><strong>' + esc(g.nome) + '</strong></td><td data-label="Usuário">' + esc(g.setor) + '</td><td data-label="Cargo">' + (g.cargo ? esc(g.cargo) : '<span class="text-muted">—</span>') + '</td>' +
-          '<td data-label="Perfil"><span class="pill ' + (PERFIL_PILL[g.perfil] || 'pill-gray') + '">' + esc(PERFIL_NOME[g.perfil] || g.perfil) + '</span></td>' +
+          '<td data-label="Perfil"><span class="pill ' + (PERFIL_PILL[g.perfil] || 'pill-gray') + '">' + esc(PERFIL_NOME[g.perfil] || g.perfil) + '</span>' +
+            (g.perfil === 'Organizador' ? '<div class="small text-muted mt-1"><i class="fas fa-link me-1"></i>' + (g.vinculoNome ? 'de ' + esc(g.vinculoNome) : 'sem vínculo') + '</div>' : '') + '</td>' +
           '<td data-label="Status"><span class="pill ' + (g.ativo === 'Sim' ? 'pill-green' : 'pill-red') + '">' + (g.ativo === 'Sim' ? 'Ativo' : 'Inativo') + '</span></td>' +
           '<td class="text-end text-nowrap td-acoes">' +
             '<button class="btn btn-sm btn-outline-secondary me-1" title="Editar" onclick="editarLoginId(\'' + id + '\')"><i class="fas fa-pen"></i></button>' +
@@ -386,7 +393,15 @@
   }
 
   function atualizarDica() {
-    document.getElementById('lgPerfilDica').innerText = PERFIL_DICA[document.getElementById('lgPerfil').value] || '';
+    var perfil = document.getElementById('lgPerfil').value;
+    document.getElementById('lgPerfilDica').innerText = PERFIL_DICA[perfil] || '';
+    document.getElementById('lgVinculoBox').style.display = perfil === 'Organizador' ? '' : 'none';
+  }
+  function preencherVinculos(atual, idProprio) {
+    document.getElementById('lgVinculo').innerHTML = '<option value="">Sem vínculo — escolhe o gestor a cada cadastro</option>' +
+      gestoresDisp.filter(function(g){ return g.id !== idProprio; }).map(function(g) {
+        return '<option value="' + esc(g.id) + '"' + (g.id === atual ? ' selected' : '') + '>' + esc(g.nome) + (g.perfil === 'Admin' ? ' (admin)' : '') + '</option>';
+      }).join('');
   }
   document.getElementById('lgPerfil').addEventListener('change', atualizarDica);
 
@@ -396,6 +411,7 @@
     ['lgNome','lgSetor','lgCargo','lgSenha'].forEach(function(id){ document.getElementById(id).value = ''; });
     document.getElementById('lgPerfil').value = 'Organizador';
     document.getElementById('lgSenhaCol').style.display = '';
+    preencherVinculos('', '');
     atualizarDica();
     new bootstrap.Modal(document.getElementById('modalLogin')).show();
   };
@@ -411,6 +427,7 @@
     document.getElementById('lgPerfil').value = g.perfil === 'Organizacao' ? 'Gestor' : g.perfil;
     document.getElementById('lgSenha').value = '';
     document.getElementById('lgSenhaCol').style.display = 'none';   // senha: botão próprio
+    preencherVinculos(g.vinculo || '', g.id);
     atualizarDica();
     new bootstrap.Modal(document.getElementById('modalLogin')).show();
   };
@@ -422,7 +439,8 @@
     var senha = document.getElementById('lgSenha').value;
     if (!nome || !setor) { toast('Informe nome e usuário.', 'err'); return; }
     if (!id && (!senha || senha.length < 4)) { toast('Informe uma senha com pelo menos 4 caracteres.', 'err'); return; }
-    var dados = { Nome: nome, Setor: setor, Cargo: document.getElementById('lgCargo').value, Perfil: document.getElementById('lgPerfil').value };
+    var dados = { Nome: nome, Setor: setor, Cargo: document.getElementById('lgCargo').value, Perfil: document.getElementById('lgPerfil').value,
+                  GestorVinculado: document.getElementById('lgPerfil').value === 'Organizador' ? document.getElementById('lgVinculo').value : '' };
     if (!id) dados.Senha = senha;
     var btn = document.getElementById('btnSalvarLogin'); btn.disabled = true;
     var runner = google.script.run.withSuccessHandler(function(resp) {

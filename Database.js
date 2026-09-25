@@ -32,7 +32,8 @@ const DB = {
       'ID_Pessoa', 'Nome', 'Documento', 'Telefone', 'Email',
       'ID_Empresa', 'Cargo', 'Cidade', 'UF', 'Pais',
       'Categoria', 'Foto_URL', 'Observacoes',
-      'Data_Cadastro', 'Ativo'
+      'Data_Cadastro', 'Ativo',
+      'Gestor_Responsavel'          // gestor a quem o cadastro pertence
     ],
     validacoes: {
       Ativo: ['Sim', 'Não'],
@@ -51,7 +52,8 @@ const DB = {
     prefixoId: 'E',
     colunas: [
       'ID_Empresa', 'Nome', 'Segmento', 'Cidade', 'UF',
-      'Contato', 'Telefone', 'Website', 'Observacoes', 'Criado_Em'
+      'Contato', 'Telefone', 'Website', 'Observacoes', 'Criado_Em',
+      'CNPJ', 'Email'
     ],
     validacoes: {}
   },
@@ -61,7 +63,8 @@ const DB = {
     prefixoId: 'G',
     colunas: [
       'ID_Gestor', 'Nome', 'Setor', 'Perfil', 'Senha_Hash',
-      'Cargo', 'Ativo', 'Criado_Em'
+      'Cargo', 'Ativo', 'Criado_Em',
+      'Gestor_Vinculado'            // Organizador: ID do gestor para quem ele cadastra
     ],
     validacoes: {
       Ativo: ['Sim', 'Não'],

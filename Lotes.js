@@ -64,7 +64,7 @@ function apiCriarLote(token, dados) {
       const lote = dbInserir_(DB.LOTES, {
         ID_Evento:       dados.ID_Evento,
         ID_Empresa:      _s_(dados.ID_Empresa),
-        Gestor:          s.gestor,
+        Gestor:          _gestorResponsavel_(s, dados.Gestor),
         Token:           loteToken,
         Vagas_Total:     vagasTotal,
         Status:          'Aberto',
@@ -263,6 +263,7 @@ function apiInscreverNoLote(loteToken, dadosPessoa) {
           ID_Empresa:    _s_(lote.ID_Empresa),
           Categoria:     'Outro',
           Observacoes:   'Cadastro via lote público',
+          Gestor_Responsavel: _s_(lote.Gestor),
           Data_Cadastro: new Date(),
           Ativo:         'Sim'
         });

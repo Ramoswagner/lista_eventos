@@ -31,7 +31,11 @@ const ACOES_PERMISSAO = [
   { modulo: 'eventos',  acao: 'editar',  rotulo: 'Editar eventos' },
   { modulo: 'eventos',  acao: 'excluir', rotulo: 'Excluir eventos' },
   { modulo: 'pessoas',  acao: 'criar',   rotulo: 'Cadastrar pessoas no diretório' },
+  { modulo: 'pessoas',  acao: 'editar',  rotulo: 'Editar cadastro de pessoas' },
+  { modulo: 'pessoas',  acao: 'excluir', rotulo: 'Excluir cadastro de pessoas (feito por engano)' },
   { modulo: 'empresas', acao: 'criar',   rotulo: 'Cadastrar empresas' },
+  { modulo: 'empresas', acao: 'editar',  rotulo: 'Editar empresas' },
+  { modulo: 'empresas', acao: 'excluir', rotulo: 'Excluir empresas (feitas por engano)' },
   { modulo: 'convites', acao: 'criar',   rotulo: 'Adicionar pessoas à lista de um evento' },
   { modulo: 'convites', acao: 'excluir', rotulo: 'Cancelar convites' },
   { modulo: 'lotes',    acao: 'criar',   rotulo: 'Criar lotes (link para empresas)' },
@@ -42,11 +46,11 @@ const ACOES_PERMISSAO = [
 ];
 
 // Ações criadas depois da 1ª versão do painel de permissões.
-const ACOES_NOVAS_V2 = ['mesas.editar', 'relatorios.exportar'];
+const ACOES_NOVAS_V2 = ['mesas.editar', 'relatorios.exportar', 'pessoas.editar', 'pessoas.excluir', 'empresas.editar', 'empresas.excluir'];
 
 const PERMISSOES_PADRAO = {
-  Gestor:      ['eventos.criar','eventos.editar','eventos.excluir','pessoas.criar','empresas.criar','convites.criar','convites.excluir','lotes.criar','lotes.editar','checkin.criar','mesas.editar','relatorios.exportar'],
-  Organizador: ['pessoas.criar','convites.criar','relatorios.exportar'],
+  Gestor:      ['eventos.criar','eventos.editar','eventos.excluir','pessoas.criar','pessoas.editar','pessoas.excluir','empresas.criar','empresas.editar','empresas.excluir','convites.criar','convites.excluir','lotes.criar','lotes.editar','checkin.criar','mesas.editar','relatorios.exportar'],
+  Organizador: ['pessoas.criar','pessoas.editar','empresas.criar','empresas.editar','convites.criar','relatorios.exportar'],
   Recepcao:    ['checkin.criar'],
   Consulta:    ['relatorios.exportar']
 };
@@ -328,7 +332,8 @@ function apiCriarLogin(token, dados) {
     dbInserir_(DB.GESTORES, {
       Nome: _s_(dados.Nome), Setor: _s_(dados.Setor),
       Perfil: dados.Perfil || 'Recepcao', Senha_Hash: hashSenha_(dados.Senha),
-      Cargo: _s_(dados.Cargo), Ativo: 'Sim', Criado_Em: new Date()
+      Cargo: _s_(dados.Cargo), Ativo: 'Sim', Criado_Em: new Date(),
+      Gestor_Vinculado: _vinculoValido_(dados.Perfil, dados.GestorVinculado)
     });
     return { ok: true, mensagem: 'Login criado para ' + dados.Nome + '.' };
   } catch (e) { return { ok: false, mensagem: e.message }; }
@@ -338,10 +343,13 @@ function apiListarLogins(token) {
   const s = validarSessao_(token);
   if (!s) return NEGADO;
   if (s.perfil !== 'Admin') return { ok: false, mensagem: 'Acesso restrito.' };
+  const nomes = {};
+  dbListar_(DB.GESTORES).forEach(g => nomes[g.ID_Gestor] = _s_(g.Nome));
   return { ok: true, dados: dbListar_(DB.GESTORES).map(g => ({
     id: g.ID_Gestor, nome: _s_(g.Nome), setor: _s_(g.Setor),
-    cargo: _s_(g.Cargo), perfil: _s_(g.Perfil) || 'Recepcao', ativo: _s_(g.Ativo) || 'Sim'
-  })) };
+    cargo: _s_(g.Cargo), perfil: _s_(g.Perfil) || 'Recepcao', ativo: _s_(g.Ativo) || 'Sim',
+    vinculo: _s_(g.Gestor_Vinculado), vinculoNome: _s_(nomes[g.Gestor_Vinculado])
+  })), gestores: _gestoresDisponiveis_() };
 }
 
 function apiEditarLogin(token, idGestor, dados) {
@@ -354,7 +362,15 @@ function apiEditarLogin(token, idGestor, dados) {
     if (!dados || !_s_(dados.Nome) || !_s_(dados.Setor)) throw new Error('Nome e setor são obrigatórios.');
     _validarPerfil_(dados.Perfil);
     if (g.Perfil === 'Admin' && dados.Perfil && dados.Perfil !== 'Admin') _protegerUltimoAdmin_(idGestor);
-    const novos = { Nome: _s_(dados.Nome), Setor: _s_(dados.Setor), Cargo: _s_(dados.Cargo), Perfil: dados.Perfil || g.Perfil };
+    const perfilNovo = dados.Perfil || g.Perfil;
+    const novos = { Nome: _s_(dados.Nome), Setor: _s_(dados.Setor), Cargo: _s_(dados.Cargo), Perfil: perfilNovo,
+                    Gestor_Vinculado: _vinculoValido_(perfilNovo, dados.GestorVinculado) };
+    if (g.Perfil !== perfilNovo && (g.Perfil === 'Gestor' || g.Perfil === 'Organizacao' || g.Perfil === 'Admin') && perfilNovo !== 'Gestor' && perfilNovo !== 'Admin') {
+      // Deixou de ser gestor: organizadores vinculados a ele ficam sem vínculo (passam a escolher na lista).
+      const soltar = {};
+      dbListar_(DB.GESTORES, x => x.Gestor_Vinculado === idGestor).forEach(x => { soltar[x.ID_Gestor] = { Gestor_Vinculado: '' }; });
+      dbAtualizarVarios_(DB.GESTORES, soltar);
+    }
     if (dados.Senha) { if (String(dados.Senha).length < 4) throw new Error('Senha muito curta (mínimo 4 caracteres).'); novos.Senha_Hash = hashSenha_(dados.Senha); }
     dbAtualizar_(DB.GESTORES, idGestor, novos);
     return { ok: true, mensagem: 'Login de ' + novos.Nome + ' atualizado.' };
@@ -373,6 +389,72 @@ function apiAlternarLogin(token, idGestor) {
     dbAtualizar_(DB.GESTORES, idGestor, { Ativo: novo });
     return { ok: true, mensagem: g.Nome + ' agora está ' + (novo === 'Sim' ? 'ativo' : 'inativo') + '.' };
   } catch (e) { return { ok: false, mensagem: e.message }; }
+}
+
+// ------------------------------------------------------------
+// GESTOR RESPONSÁVEL
+// Todo convite, lote e cadastro de pessoa pertence a um gestor.
+//  • Gestor: é sempre ele mesmo.
+//  • Organizador vinculado a um gestor: o cadastro vale como do gestor.
+//  • Organizador sem vínculo: escolhe na lista (obrigatório).
+//  • Admin: escolhe na lista; se não escolher, é ele mesmo.
+//  • Recepção/Consulta: ele mesmo (walk-in etc.).
+// O convite guarda também quem digitou (Cadastrado_Por), para auditoria.
+// ------------------------------------------------------------
+function _ehGestor_(g) {
+  const p = _perfilNormalizado_(g.Perfil);
+  return g.Ativo !== 'Não' && (p === 'Gestor' || p === 'Admin');
+}
+
+// Gestores (e admins) ativos que podem ser escolhidos como responsáveis.
+function _gestoresDisponiveis_() {
+  return dbListar_(DB.GESTORES, _ehGestor_)
+    .map(g => ({ id: g.ID_Gestor, nome: _s_(g.Nome), perfil: _perfilNormalizado_(g.Perfil) }))
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+}
+
+function _vinculoValido_(perfil, idVinculo) {
+  const id = _s_(idVinculo);
+  if (!id || perfil !== 'Organizador') return '';
+  const g = dbBuscarPorId_(DB.GESTORES, id);
+  if (!g || !_ehGestor_(g)) throw new Error('O gestor vinculado precisa ser um login ativo de Gestor ou Administrador.');
+  return id;
+}
+
+// Regra de quem fica como responsável; "escolhido" é o nome vindo da tela.
+function _gestorResponsavel_(sessao, escolhido) {
+  const eu = dbBuscarPorId_(DB.GESTORES, sessao.id_gestor) || {};
+  const perfil = sessao.perfil;
+  if (perfil === 'Gestor') return _s_(eu.Nome) || sessao.gestor;
+  const nomeEscolhido = _s_(escolhido);
+  const valido = nome => _gestoresDisponiveis_().some(g => g.nome === nome);
+  if (perfil === 'Organizador') {
+    const vinc = eu.Gestor_Vinculado ? dbBuscarPorId_(DB.GESTORES, eu.Gestor_Vinculado) : null;
+    if (vinc && _ehGestor_(vinc)) return _s_(vinc.Nome);
+    if (!nomeEscolhido) throw new Error('Escolha o gestor responsável por este convidado.');
+    if (!valido(nomeEscolhido)) throw new Error('Gestor inválido. Atualize a página e escolha na lista.');
+    return nomeEscolhido;
+  }
+  if (perfil === 'Admin' && nomeEscolhido) {
+    if (!valido(nomeEscolhido)) throw new Error('Gestor inválido. Atualize a página e escolha na lista.');
+    return nomeEscolhido;
+  }
+  return _s_(eu.Nome) || sessao.gestor;
+}
+
+// Para a tela: o gestor já vem definido (fixo) ou precisa ser escolhido?
+function apiOpcoesGestor(token) {
+  const s = validarSessao_(token);
+  if (!s) return NEGADO;
+  const eu = dbBuscarPorId_(DB.GESTORES, s.id_gestor) || {};
+  const lista = _gestoresDisponiveis_().map(g => g.nome);
+  if (s.perfil === 'Organizador') {
+    const vinc = eu.Gestor_Vinculado ? dbBuscarPorId_(DB.GESTORES, eu.Gestor_Vinculado) : null;
+    if (vinc && _ehGestor_(vinc)) return { ok: true, dados: { fixo: _s_(vinc.Nome), opcoes: [], obrigatorio: false, vinculado: true } };
+    return { ok: true, dados: { fixo: '', opcoes: lista, obrigatorio: true, padrao: '' } };
+  }
+  if (s.perfil === 'Admin') return { ok: true, dados: { fixo: '', opcoes: lista, obrigatorio: false, padrao: _s_(eu.Nome) } };
+  return { ok: true, dados: { fixo: _s_(eu.Nome) || s.gestor, opcoes: [], obrigatorio: false } };
 }
 
 function _validarPerfil_(perfil) {

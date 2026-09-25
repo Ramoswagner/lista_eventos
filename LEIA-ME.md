@@ -33,7 +33,7 @@ Essas funções só rodam pelo editor (bloqueadas para visitantes do site).
 |---|---|
 | Administrador | Tudo, inclusive logins, permissões, logo e endereço dos links |
 | Gestor | Eventos, listas, lotes, check-in, mesas e relatórios |
-| Organizador | Cadastrar pessoas, adicioná-las às listas e gerar relatórios |
+| Organizador | Cadastrar/editar pessoas e empresas, adicionar às listas e gerar relatórios — sempre em nome de um gestor |
 | Recepção | Check-in na entrada |
 | Consulta | Visualiza e gera relatórios |
 
@@ -69,3 +69,22 @@ Em **Configurações → Marca dos relatórios** o Admin envia a logo do cabeça
 ## Página pessoal do convidado
 
 Além de confirmar/recusar e mostrar o QR Code, tem **Atualizar meus dados (opcional)**: o convidado informa só o que mudou (nome, e-mail, documento, telefone, cargo, "quem é você"). Os dados atuais nunca aparecem na página.
+
+## Organizadores e gestores
+
+Todo convidado, lote e cadastro pertence a um **gestor**. O Gestor registra sempre em nome dele. O **Organizador** pode ser **vinculado a um gestor** (Configurações → Logins → editar → "Vinculado ao gestor"): tudo o que ele cadastrar conta como do gestor. Sem vínculo, ele escolhe o gestor numa lista a cada cadastro. O Admin pode escolher qualquer gestor. Quem digitou fica registrado para auditoria.
+
+## Diretório
+
+Pessoas e empresas podem ser **editadas** (botão do lápis). Empresa tem **CNPJ** (validado). A **exclusão** é para cadastros feitos por engano: não exclui quem já participou de evento nem quem está em alguma lista; empresa com lote ou com gente que já participou também fica. Ao excluir uma empresa sem histórico, as pessoas vinculadas continuam, só sem empresa.
+
+## Lista de convidados
+
+- **Adicionar**: busque alguém que já está no diretório (evita duplicar) ou cadastre uma pessoa nova.
+- **Cancelar** (ícone proibido): mantém o registro, com status Cancelado.
+- **Excluir** (lixeira): tira o convite da lista, para a lista ficar limpa. Só até a véspera do evento (o Admin pode corrigir depois). Quem já fez check-in ou faz parte de uma troca não é excluído.
+- **Trocar** (setas): quando a pessoa avisa que outra irá no lugar. O original fica como Substituído; quem entra recebe link próprio, a mesma mesa e o mesmo gestor. Excluir o substituto devolve o lugar ao original.
+
+## Relatório da base de contatos
+
+Menu **Relatórios → Base de contatos**: quantidade e pessoas no banco em tabelas por gestor, com listas, presenças e último evento de cada pessoa. Filtre por um gestor ("meus contatos") ou veja a base geral. Também em planilha.
