@@ -212,8 +212,8 @@ function criarDadosExemplo() {
   });
 
   // Eventos
-  const jantar = dbInserir_(DB.EVENTOS, { Nome: 'Jantar Beneficente (EXEMPLO)', Data: hojeMeiaNoite, Local: 'Salão Nobre — Hospital da Baleia', Capacidade: 40, Status: 'Ativo', Observacoes: TAG, Criado_Em: new Date() });
-  const congresso = dbInserir_(DB.EVENTOS, { Nome: 'Congresso de Saúde (EXEMPLO)', Data: daqui30, Local: 'Auditório Principal', Capacidade: 120, Status: 'Planejamento', Observacoes: TAG, Criado_Em: new Date() });
+  const jantar = dbInserir_(DB.EVENTOS, { Nome: 'Jantar Beneficente (EXEMPLO)', Data: hojeMeiaNoite, Local: 'Salão Nobre — Hospital da Baleia', Capacidade: 40, Status: 'Ativo', Observacoes: 'Jantar anual de relacionamento com parceiros, doadores e autoridades, com apresentação dos resultados do ano e dos projetos de expansão do hospital. (Evento de EXEMPLO para testes.)', Criado_Em: new Date() });
+  const congresso = dbInserir_(DB.EVENTOS, { Nome: 'Congresso de Saúde (EXEMPLO)', Data: daqui30, Local: 'Auditório Principal', Capacidade: 120, Status: 'Planejamento', Observacoes: 'Encontro com o corpo clínico e convidados externos sobre inovação em saúde. (Evento de EXEMPLO para testes.)', Criado_Em: new Date() });
 
   // Empresas
   const emp1 = dbInserir_(DB.EMPRESAS, { Nome: 'Construtora Horizonte (EXEMPLO)', Segmento: 'Construção civil', Cidade: 'Belo Horizonte', UF: 'MG', Contato: 'Paula Mendes', Observacoes: TAG, Criado_Em: new Date() });
@@ -277,6 +277,7 @@ function removerDadosExemplo() {
   const eventos = dbListar_(DB.EVENTOS, e => ehEx(e.Nome)).map(e => e.ID_Evento);
   const nConv = dbExcluirVarios_(DB.CONVITES, c => eventos.indexOf(_s_(c.ID_Evento)) !== -1);
   dbExcluirVarios_(DB.LOTES, l => eventos.indexOf(_s_(l.ID_Evento)) !== -1);
+  dbExcluirVarios_(DB.MESAS, m => eventos.indexOf(_s_(m.ID_Evento)) !== -1);
   dbExcluirVarios_(DB.EVENTOS, e => ehEx(e.Nome));
   dbExcluirVarios_(DB.PESSOAS, p => ehEx(p.Nome));
   dbExcluirVarios_(DB.EMPRESAS, e => ehEx(e.Nome));

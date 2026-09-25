@@ -81,7 +81,8 @@ const DB = {
       'QR_Token', 'QR_Valido',
       'Data_Convite', 'Data_Resposta',
       'Checkin_DataHora', 'Checkin_Por',
-      'Observacoes', 'Cadastrado_Por'
+      'Observacoes', 'Cadastrado_Por',
+      'ID_Mesa'                     // mesa onde o convidado vai sentar (vazio = sem mesa)
     ],
     validacoes: {
       Status: [
@@ -110,9 +111,10 @@ const DB = {
     nome: 'Mesas',
     prefixoId: 'M',
     colunas: [
-      'ID_Mesa', 'ID_Evento', 'Numero', 'Capacidade', 'VIP', 'Pos_X', 'Pos_Y'
+      'ID_Mesa', 'ID_Evento', 'Numero', 'Capacidade', 'VIP', 'Pos_X', 'Pos_Y',
+      'Nome', 'Formato', 'Observacoes'
     ],
-    validacoes: { VIP: ['Sim', 'Não'] }
+    validacoes: { VIP: ['Sim', 'Não'], Formato: ['Redonda', 'Retangular'] }
   },
 
   CATEGORIAS: {
@@ -224,16 +226,18 @@ function setupDatabase() {
 
 // Versão das listas de validação (ex.: perfis aceitos). Quando muda,
 // as abas que já existiam recebem as listas novas uma única vez.
-const VALIDACOES_VERSAO = '2';
+const VALIDACOES_VERSAO = '3';
 
 function _garantirAba_(ss, schema) {
   let aba = ss.getSheetByName(schema.nome);
   if (aba) {
+    _garantirCabecalho_(aba, schema);
     _atualizarValidacoesSePreciso_(aba, schema);
     return aba;
   }
 
   aba = ss.insertSheet(schema.nome);
+  PropertiesService.getScriptProperties().setProperty('COLS_' + schema.nome, String(schema.colunas.length));
   const header = aba.getRange(1, 1, 1, schema.colunas.length);
   header.setValues([schema.colunas]);
   header.setFontWeight('bold').setBackground('#041D56').setFontColor('#FFFFFF');
@@ -243,6 +247,23 @@ function _garantirAba_(ss, schema) {
 
   aba.autoResizeColumns(1, schema.colunas.length);
   return aba;
+}
+
+// Colunas novas no schema (ex.: ID_Mesa) entram no fim da aba que já
+// existia: só o cabeçalho é escrito, os dados antigos ficam intactos.
+// Guardado em Script Properties para não reler o cabeçalho a toda chamada.
+function _garantirCabecalho_(aba, schema) {
+  const chave = 'COLS_' + schema.nome;
+  if (Number(_versaoProp_(chave) || 0) === schema.colunas.length) return;
+  const atual = aba.getRange(1, 1, 1, Math.max(aba.getLastColumn(), 1)).getValues()[0];
+  schema.colunas.forEach((col, i) => {
+    if (atual[i] !== col) {
+      if (atual[i] && atual[i] !== col) throw new Error('A aba "' + schema.nome + '" tem a coluna ' + (i + 1) + ' como "' + atual[i] + '", mas o sistema espera "' + col + '". Corrija o cabeçalho da planilha.');
+      aba.getRange(1, i + 1).setValue(col).setFontWeight('bold').setBackground('#041D56').setFontColor('#FFFFFF');
+    }
+  });
+  PropertiesService.getScriptProperties().setProperty(chave, String(schema.colunas.length));
+  if (_versoesMemo_) _versoesMemo_[chave] = String(schema.colunas.length);
 }
 
 function _aplicarValidacoes_(aba, schema) {
@@ -520,6 +541,34 @@ function dbExcluir_(schema, id) {
       }
     }
     return false;
+  });
+}
+
+// Atualiza várias linhas numa passada só: { id: { campo: valor } }.
+// Uma leitura + uma gravação da aba inteira (em vez de 1 por linha) —
+// essencial para mover dezenas de convidados de mesa de uma vez.
+function dbAtualizarVarios_(schema, mudancas) {
+  const ids = Object.keys(mudancas || {});
+  if (!ids.length) return 0;
+  return _comLock_(function() {
+    const aba = _getAba_(schema);
+    const ultimaLinha = aba.getLastRow();
+    if (ultimaLinha < 2) return 0;
+    const range = aba.getRange(2, 1, ultimaLinha - 1, schema.colunas.length);
+    const dados = range.getValues();
+    let total = 0;
+    const saida = dados.map(linha => {
+      const id = _s_(linha[0]);
+      const novos = mudancas[id];
+      const registro = _linhaParaObjeto_(schema, linha);
+      if (novos) {
+        Object.keys(novos).forEach(campo => { if (schema.colunas.indexOf(campo) !== -1) registro[campo] = novos[campo]; });
+        total++;
+      }
+      return _objetoParaLinha_(schema, registro);
+    });
+    if (total) { range.setValues(saida); _bumpVersao_(schema); }
+    return total;
   });
 }
 

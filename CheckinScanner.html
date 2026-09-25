@@ -103,7 +103,7 @@
         '<div class="evt-tab active" id="tabBusca" onclick="mudarModo(\'busca\')" style="background:var(--ink-900);color:#fff;"><i class="fas fa-magnifying-glass"></i> Buscar</div>' +
         (info.podeCheckin ? '<div class="evt-tab" id="tabScan" onclick="mudarModo(\'scan\')"><i class="fas fa-qrcode"></i> Ler QR Code</div>' : '') +
       '</div>' +
-      '<div id="modoBusca"><input class="form-control mb-3" id="buscaCheckin" placeholder="🔍 Nome ou documento..."><div id="resultadosBusca"></div></div>' +
+      '<div id="modoBusca"><input class="form-control mb-3" id="buscaCheckin" placeholder="Buscar por nome ou documento..."><div id="resultadosBusca"></div></div>' +
       '<div id="modoScan" style="display:none;">' +
         '<div class="card-hb card-hb-body text-center">' +
           '<video id="video" playsinline muted style="width:100%;max-width:380px;border-radius:14px;background:#000;margin:0 auto;display:block;"></video>' +
@@ -141,7 +141,8 @@
     }).slice(0, 25);
     if (!achados.length) { wrap.innerHTML = '<p class="text-muted small">Nenhum convidado encontrado com "' + esc(q) + '".</p>'; return; }
     wrap.innerHTML = '<div class="card-hb"><table class="table-hb checkin-lista" style="min-width:0;"><tbody>' + achados.map(function(c) {
-      return '<tr><td><strong>' + esc(c.nome) + '</strong><div class="small text-muted">' + esc(c.empresa) + (c.documento ? ' · ' + esc(c.documento) : '') + (c.status === 'Recusado' ? ' · <span class="text-warning">tinha recusado</span>' : '') + '</div></td>' +
+      return '<tr><td><strong>' + esc(c.nome) + '</strong><div class="small text-muted">' + esc(c.empresa) + (c.documento ? ' · ' + esc(c.documento) : '') + (c.status === 'Recusado' ? ' · <span class="text-warning">tinha recusado</span>' : '') + '</div>' +
+        (c.mesa ? '<div class="small mt-1"><span class="pill pill-violet"><i class="fas fa-chair"></i> ' + esc(c.mesa) + '</span></div>' : '') + '</td>' +
         '<td class="text-end text-nowrap">' + linhaAcoes(c) + '</td></tr>';
     }).join('') + '</tbody></table></div>';
   }

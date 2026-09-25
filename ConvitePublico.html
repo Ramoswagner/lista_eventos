@@ -131,6 +131,18 @@
     @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
     #telaConfirmacao, #telaErro { display: none; }
+
+    /* Ícones no mesmo padrão do app (Font Awesome, sem emojis) */
+    .meta-evento { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+    .chip { display:inline-flex; align-items:center; gap:7px; padding:5px 12px; border-radius:50px; font-size:.8rem; font-weight:600; line-height:1.2; }
+    .chip i { font-size:.78rem; opacity:.85; }
+    .chip-claro { background:rgba(255,255,255,.12); color:#fff; border:1px solid rgba(255,255,255,.18); }
+    .icone-status { width:68px; height:68px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:1.8rem; margin-bottom:6px; }
+    .icone-status.ok { background:#EAFBF3; color:#10B981; box-shadow:0 0 0 8px #F4FDF8; }
+    .icone-status.aviso { background:#FFF6E9; color:#B4790A; box-shadow:0 0 0 8px #FFFBF3; }
+    .icone-status.erro { background:#FDECEC; color:#EF4444; box-shadow:0 0 0 8px #FEF6F6; }
+    .titulo-secao { display:flex; align-items:center; gap:10px; font-weight:700; font-size:.95rem; color:#0A2B4E; margin-bottom:14px; }
+    .titulo-secao .ic { width:30px; height:30px; border-radius:9px; background:#EAF6FC; color:#0088CC; display:inline-flex; align-items:center; justify-content:center; font-size:.85rem; flex:none; }
   </style>
 </head>
 <body>
@@ -148,8 +160,8 @@
 <!-- ERRO FATAL -->
 <div id="telaErro" class="card-main">
   <div class="card-body-custom text-center py-5">
-    <i class="fas fa-exclamation-circle fa-3x text-danger mb-3"></i>
-    <h5 id="erroMensagem" class="text-danger">Link inválido.</h5>
+    <div class="icone-status erro"><i class="fas fa-link-slash"></i></div>
+    <h5 id="erroMensagem" class="fw-bold mt-3" style="color:#0A2B4E;">Link inválido.</h5>
     <p class="text-muted">Verifique o link e tente novamente.</p>
   </div>
 </div>
@@ -161,15 +173,15 @@
       <img id="logoInstituicao" src="https://hospitaldabaleia.org.br/wp-content/uploads/2023/08/Ativo-3@2x.png" alt="Hospital da Baleia" style="max-width:160px;height:56px;flex:none;">
       <div style="min-width:0;word-break:break-word;">
         <h4 id="nomeEvento">Carregando...</h4>
-        <p id="infoEvento"></p>
+        <div class="meta-evento" id="infoEvento"></div>
       </div>
     </div>
-    <div class="d-flex align-items-center gap-3 flex-wrap mt-3">
+    <div class="d-flex align-items-center gap-2 flex-wrap mt-3">
       <span id="vagasBadge" class="vaga-badge">
-        <i class="fas fa-ticket-alt"></i>
+        <i class="fas fa-ticket"></i>
         <span id="vagasTexto">— vagas</span>
       </span>
-      <span id="empresaBadge" class="badge bg-light text-dark border" style="display:none;"></span>
+      <span id="empresaBadge" class="chip chip-claro" style="display:none;"><i class="fas fa-building"></i><span id="empresaTexto"></span></span>
     </div>
   </div>
 
@@ -177,16 +189,14 @@
 
     <!-- Inscritos existentes -->
     <div id="secaoInscritos" style="display:none;" class="mb-4">
-      <h6 class="fw-bold text-muted mb-3">
-        <i class="fas fa-users me-2"></i>Já inscritos neste lote
-      </h6>
+      <div class="titulo-secao"><span class="ic"><i class="fas fa-users"></i></span>Já inscritos neste lote</div>
       <div id="listaInscritos" class="inscritos-lista"></div>
       <hr>
     </div>
 
     <!-- Formulário de inscrição -->
     <div id="secaoFormulario">
-      <h6 class="fw-bold mb-3"><i class="fas fa-user-plus me-2 text-primary"></i>Fazer minha inscrição</h6>
+      <div class="titulo-secao"><span class="ic"><i class="fas fa-user-plus"></i></span>Fazer minha inscrição</div>
 
 
       <form id="formInscrição" novalidate>
@@ -224,8 +234,8 @@
 
     <!-- Confirmação de inscrição feita -->
     <div id="secaoSucesso" style="display:none;" class="text-center py-3">
-      <div style="font-size: 3rem;">🎉</div>
-      <h5 class="fw-bold text-success mt-2">Inscrição realizada!</h5>
+      <div class="icone-status ok"><i class="fas fa-check"></i></div>
+      <h5 class="fw-bold text-success mt-3">Inscrição realizada!</h5>
       <p class="text-muted mb-3">Você está na lista. Guarde o seu <strong>link pessoal</strong>: nele você confirma presença e encontra o <strong>QR Code da entrada</strong>.</p>
       <div class="link-pessoal mb-2" id="linkPessoalTexto"></div>
       <div class="d-flex gap-2 justify-content-center flex-wrap resp-col">
@@ -241,12 +251,12 @@
     <!-- Área de confirmação pré-evento (para quem já está inscrito) -->
     <div id="secaoConfirmacao" style="display:none;" class="mt-4">
       <hr>
-      <h6 class="fw-bold mb-3"><i class="fas fa-calendar-check me-2 text-primary"></i>Confirmar ou cancelar presença</h6>
+      <div class="titulo-secao"><span class="ic"><i class="fas fa-calendar-check"></i></span>Confirmar ou cancelar presença</div>
       <p class="text-muted small">Se você já está inscrito neste lote, informe seu e-mail ou CPF para gerenciar sua presença.</p>
       <div class="input-group mb-3">
         <input type="text" id="inputBusca" class="form-control" placeholder="Seu CPF ou e-mail">
         <button class="btn btn-outline-primary" id="btnBuscar" type="button">
-          <i class="fas fa-search"></i> Buscar
+          <i class="fas fa-magnifying-glass"></i> Buscar
         </button>
       </div>
       <div id="resultadoBusca"></div>
@@ -258,8 +268,8 @@
 <!-- CONFIRMAÇÃO FINAL -->
 <div id="telaConfirmacao" class="card-main">
   <div class="card-body-custom text-center py-5">
-    <div style="font-size: 3rem;">✅</div>
-    <h5 class="fw-bold text-success mt-2" id="msgConfirmacao">Presença confirmada!</h5>
+    <div class="icone-status ok" id="iconeConfirmacao"><i class="fas fa-check"></i></div>
+    <h5 class="fw-bold mt-3" id="msgConfirmacao" style="color:#0A2B4E;">Presença confirmada!</h5>
     <p class="text-muted" id="subMsgConfirmacao">Até breve no evento.</p>
   </div>
 </div>
@@ -340,9 +350,9 @@
 
   function renderizarLote(dados) {
     document.getElementById('nomeEvento').textContent = dados.evento;
-    document.getElementById('infoEvento').textContent =
-      (dados.dataEvento ? '📅 ' + dados.dataEvento : '') +
-      (dados.local ? '  📍 ' + dados.local : '');
+    document.getElementById('infoEvento').innerHTML =
+      '<span class="chip chip-claro"><i class="fas fa-calendar-days"></i>' + esc(dados.dataEvento || 'Data a definir') + '</span>' +
+      (dados.local ? '<span class="chip chip-claro"><i class="fas fa-location-dot"></i>' + esc(dados.local) + '</span>' : '');
 
     const badge = document.getElementById('vagasBadge');
     const texto = document.getElementById('vagasTexto');
@@ -361,7 +371,7 @@
 
     if (dados.empresa) {
       const empBadge = document.getElementById('empresaBadge');
-      empBadge.textContent = '🏢 ' + dados.empresa;
+      document.getElementById('empresaTexto').textContent = dados.empresa;
       empBadge.style.display = '';
     }
 
@@ -461,6 +471,9 @@
       .withSuccessHandler(function(res) {
         if (res.ok) {
           document.getElementById('msgConfirmacao').textContent = res.mensagem;
+          const ic = document.getElementById('iconeConfirmacao');
+          ic.className = 'icone-status ' + (resposta === 'Confirmado' ? 'ok' : 'aviso');
+          ic.innerHTML = resposta === 'Confirmado' ? '<i class="fas fa-check"></i>' : '<i class="fas fa-calendar-xmark"></i>';
           document.getElementById('subMsgConfirmacao').textContent =
             resposta === 'Confirmado' ? 'Sua presença está confirmada. Até breve!' : 'Sua inscrição foi cancelada com sucesso.';
           mostrarTela('telaConfirmacao');

@@ -138,7 +138,8 @@ function apiInfoConvitePublico(qrToken) {
       evento:     _s_(evento.Nome),
       dataEvento: _fmtData_(evento.Data),
       local:      _s_(evento.Local),
-      status:     _s_(convite.Status)
+      status:     _s_(convite.Status),
+      categorias: DB.PESSOAS.validacoes.Categoria
     } };
   } catch (e) { return { ok: false, mensagem: e.message }; }
 }
@@ -155,6 +156,82 @@ function apiResponderConvitePublico(qrToken, resposta) {
       return { ok: true, mensagem: resposta === 'Confirmado'
         ? 'Presença confirmada! Te esperamos no evento.'
         : 'Resposta registrada. Obrigado por avisar.' };
+    });
+  } catch (e) { return { ok: false, mensagem: e.message }; }
+}
+
+// ------------------------------------------------------------
+// ATUALIZAÇÃO DE DADOS PELO PRÓPRIO CONVIDADO (link pessoal)
+// Opcional: o convidado preenche só o que quer atualizar (ex.: trocou
+// de telefone). Os dados atuais NUNCA são enviados para a página — ele
+// vê apenas o próprio nome. Campo vazio = não mexe no que já existe.
+// ------------------------------------------------------------
+const CAMPOS_ATUALIZAVEIS = ['Nome', 'Email', 'Documento', 'Telefone', 'Cargo', 'Categoria'];
+
+function apiAtualizarMeusDados(qrToken, dados) {
+  try {
+    if (!dados || typeof dados !== 'object') return { ok: false, mensagem: 'Nada para atualizar.' };
+    const t = _s_(qrToken);
+    if (!t) return { ok: false, mensagem: 'Link inválido.' };
+
+    // Limite: 10 atualizações por hora por link (evita abuso do link público).
+    const cache = CacheService.getScriptCache();
+    const chaveLimite = 'atualiza_' + t;
+    const usos = Number(cache.get(chaveLimite) || 0);
+    if (usos >= 10) return { ok: false, mensagem: 'Muitas alterações seguidas. Tente de novo mais tarde.' };
+
+    const novos = {};
+    const nome = _s_(dados.Nome).replace(/\s+/g, ' ');
+    if (nome) {
+      if (nome.length < 3 || nome.length > 120) throw new Error('Informe o nome completo (3 a 120 letras).');
+      novos.Nome = nome;
+    }
+    const email = _s_(dados.Email).toLowerCase();
+    if (email) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 120) throw new Error('E-mail inválido.');
+      novos.Email = email;
+    }
+    const doc = _s_(dados.Documento);
+    if (doc) {
+      const digitos = _soDigitos_(doc);
+      if (digitos.length < 5 || digitos.length > 20) throw new Error('Documento inválido.');
+      novos.Documento = doc.slice(0, 30);
+    }
+    const tel = _s_(dados.Telefone);
+    if (tel) {
+      const digitos = _soDigitos_(tel);
+      if (digitos.length < 8 || digitos.length > 15) throw new Error('Telefone inválido (inclua o DDD).');
+      novos.Telefone = tel.slice(0, 25);
+    }
+    const cargo = _s_(dados.Cargo);
+    if (cargo) novos.Cargo = cargo.slice(0, 80);
+    const cat = _s_(dados.Categoria);
+    if (cat) {
+      if (DB.PESSOAS.validacoes.Categoria.indexOf(cat) === -1) throw new Error('Opção inválida em "Quem é você".');
+      novos.Categoria = cat;
+    }
+    if (!Object.keys(novos).length) return { ok: false, mensagem: 'Preencha pelo menos um campo para atualizar.' };
+
+    return _comLock_(function() {
+      const convite = _convitePorQR_(t);
+      if (!convite || convite.QR_Valido === 'Não' || !_conviteAtivo_(convite)) {
+        return { ok: false, mensagem: 'Este convite não está mais ativo.' };
+      }
+      const pessoa = dbBuscarPorId_(DB.PESSOAS, convite.ID_Pessoa);
+      if (!pessoa) return { ok: false, mensagem: 'Cadastro não encontrado. Fale com a organização.' };
+
+      if (novos.Documento) {
+        const outro = _pessoaPorDocumento_(novos.Documento);
+        if (outro && outro.ID_Pessoa !== pessoa.ID_Pessoa) {
+          return { ok: false, mensagem: 'Este documento já está em outro cadastro. Fale com a organização do evento.' };
+        }
+      }
+
+      dbAtualizar_(DB.PESSOAS, pessoa.ID_Pessoa, novos);
+      cache.put(chaveLimite, String(usos + 1), 3600);
+      // Registra QUAIS campos mudaram (não os valores).
+      logAudit_('UPDATE', 'Pessoas', pessoa.ID_Pessoa, 'Dados atualizados pelo próprio convidado: ' + Object.keys(novos).join(', '));
+      return { ok: true, mensagem: 'Dados atualizados. Obrigado!', dados: { nome: novos.Nome || _s_(pessoa.Nome) } };
     });
   } catch (e) { return { ok: false, mensagem: e.message }; }
 }
@@ -192,7 +269,8 @@ function substituirConvidado_(idConviteOriginal, idNovaPessoa, motivo, autorizad
       Autorizado_Por:      autorizadoPor || '',
       QR_Token:            Utilities.getUuid(),
       QR_Valido:           'Sim',
-      Data_Convite:        new Date()
+      Data_Convite:        new Date(),
+      ID_Mesa:             original.ID_Mesa || ''   // o substituto senta no lugar do original
     });
   });
 }

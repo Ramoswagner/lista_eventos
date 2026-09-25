@@ -36,14 +36,19 @@ const ACOES_PERMISSAO = [
   { modulo: 'convites', acao: 'excluir', rotulo: 'Cancelar convites' },
   { modulo: 'lotes',    acao: 'criar',   rotulo: 'Criar lotes (link para empresas)' },
   { modulo: 'lotes',    acao: 'editar',  rotulo: 'Encerrar / reabrir lotes' },
-  { modulo: 'checkin',  acao: 'criar',   rotulo: 'Registrar entradas (check-in, walk-in, substituição)' }
+  { modulo: 'checkin',  acao: 'criar',   rotulo: 'Registrar entradas (check-in, walk-in, substituição)' },
+  { modulo: 'mesas',    acao: 'editar',  rotulo: 'Organizar mesas (criar, mover, sentar convidados)' },
+  { modulo: 'relatorios', acao: 'exportar', rotulo: 'Gerar relatórios e exportar (PDF / planilha)' }
 ];
 
+// Ações criadas depois da 1ª versão do painel de permissões.
+const ACOES_NOVAS_V2 = ['mesas.editar', 'relatorios.exportar'];
+
 const PERMISSOES_PADRAO = {
-  Gestor:      ['eventos.criar','eventos.editar','eventos.excluir','pessoas.criar','empresas.criar','convites.criar','convites.excluir','lotes.criar','lotes.editar','checkin.criar'],
-  Organizador: ['pessoas.criar','convites.criar'],
+  Gestor:      ['eventos.criar','eventos.editar','eventos.excluir','pessoas.criar','empresas.criar','convites.criar','convites.excluir','lotes.criar','lotes.editar','checkin.criar','mesas.editar','relatorios.exportar'],
+  Organizador: ['pessoas.criar','convites.criar','relatorios.exportar'],
   Recepcao:    ['checkin.criar'],
-  Consulta:    []
+  Consulta:    ['relatorios.exportar']
 };
 
 // Perfil "Organizacao" das versões antigas tinha os poderes do Gestor.
@@ -59,8 +64,17 @@ function _matrizPermissoes_() {
   let salvas = null;
   try { salvas = JSON.parse(_configObter_('PERMISSOES', '') || 'null'); } catch (e) { salvas = null; }
   const m = {};
+  // Ações que existiam quando o admin salvou pela última vez (as que
+  // surgiram depois recebem o padrão, em vez de ficarem desligadas).
+  const conhecidas = (salvas && Array.isArray(salvas._acoes)) ? salvas._acoes : null;
   Object.keys(PERMISSOES_PADRAO).forEach(p => {
-    m[p] = ((salvas && Array.isArray(salvas[p])) ? salvas[p] : PERMISSOES_PADRAO[p]).slice();
+    if (!(salvas && Array.isArray(salvas[p]))) { m[p] = PERMISSOES_PADRAO[p].slice(); return; }
+    const lista = salvas[p].slice();
+    PERMISSOES_PADRAO[p].forEach(acao => {
+      const nova = conhecidas ? conhecidas.indexOf(acao) === -1 : ACOES_NOVAS_V2.indexOf(acao) !== -1;
+      if (nova && lista.indexOf(acao) === -1) lista.push(acao);
+    });
+    m[p] = lista;
   });
   _permissoesCache_ = m;
   return m;
@@ -269,6 +283,7 @@ function apiSalvarPermissoes(token, matriz) {
       const lista = (matriz && Array.isArray(matriz[p])) ? matriz[p] : [];
       limpa[p] = lista.filter(x => validas.indexOf(x) !== -1);
     });
+    limpa._acoes = validas;
     _configSalvar_('PERMISSOES', JSON.stringify(limpa));
     _permissoesCache_ = null;
     return { ok: true, mensagem: 'Permissões salvas. Valem na próxima ação de cada usuário.' };

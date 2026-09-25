@@ -152,6 +152,8 @@
     @keyframes skel { 0%{background-position:100% 50%} 100%{background-position:0 50%} }
 
     .form-control, .form-select { border-radius:10px; border:1.5px solid var(--border); padding:9px 12px; font-size:.85rem; }
+    .form-select { padding-right:2.3rem; background-position:right .7rem center; }   /* texto não passa por baixo da seta */
+    .form-select-sm { padding-top:6px; padding-bottom:6px; padding-right:2.1rem; }
     .form-control:focus, .form-select:focus { border-color:var(--blue-600); box-shadow:0 0 0 3px rgba(0,136,204,.13); }
     .form-label { font-weight:600; font-size:.8rem; color:var(--ink-900); margin-bottom:5px; }
 
@@ -277,6 +279,7 @@
     <div class="nav-group-label">Geral</div>
     <div class="navlink" data-nav="eventos"><i class="fas fa-calendar-days"></i> Eventos</div>
     <div class="navlink" data-nav="diretorio"><i class="fas fa-address-book"></i> Diretório</div>
+    <div class="navlink" data-nav="relatorios"><i class="fas fa-chart-column"></i> Relatórios</div>
     <div class="navlink" data-nav="config" id="navConfig"><i class="fas fa-gear"></i> Configurações</div>
 
     <div class="sidebar-foot">
@@ -346,8 +349,8 @@
     { key: 'evento-visao',      label: 'Visão Geral',     icon: 'fa-chart-pie' },
     { key: 'evento-lista',      label: 'Lista & Convites', icon: 'fa-users' },
     { key: 'evento-checkin',    label: 'Check-in',        icon: 'fa-qrcode' },
-    { key: 'evento-mesas',      label: 'Mesas',           icon: 'fa-table-cells', soon: true },
-    { key: 'evento-relatorios', label: 'Relatórios',      icon: 'fa-file-lines', soon: true }
+    { key: 'evento-mesas',      label: 'Mesas',           icon: 'fa-table-cells' },
+    { key: 'evento-relatorios', label: 'Relatórios',      icon: 'fa-file-lines' }
   ];
 
   // ------------------------------------------------------------

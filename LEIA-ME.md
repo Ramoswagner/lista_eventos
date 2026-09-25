@@ -32,10 +32,10 @@ Essas funções só rodam pelo editor (bloqueadas para visitantes do site).
 | Perfil | Padrão |
 |---|---|
 | Administrador | Tudo, inclusive logins, permissões, logo e endereço dos links |
-| Gestor | Eventos, listas, lotes e check-in |
-| Organizador | Cadastrar pessoas e adicioná-las às listas |
+| Gestor | Eventos, listas, lotes, check-in, mesas e relatórios |
+| Organizador | Cadastrar pessoas, adicioná-las às listas e gerar relatórios |
 | Recepção | Check-in na entrada |
-| Consulta | Só visualiza |
+| Consulta | Visualiza e gera relatórios |
 
 O administrador ajusta isso em **Configurações → Permissões por perfil**.
 Cada usuário troca a própria senha no menu (**Trocar minha senha**); o administrador redefine a senha de quem esqueceu em **Configurações → Logins** (botão da chave).
@@ -45,3 +45,27 @@ Cada usuário troca a própria senha no menu (**Trocar minha senha**); o adminis
 Os links (lote para empresas e link pessoal de confirmação com QR Code) são montados na hora a partir do endereço do app.
 Se o endereço mudar (nova implantação), ajuste em **Configurações → Endereço dos links públicos** e todos os links voltam a valer.
 Links abertos pelo endereço de teste (`/dev`) são corrigidos automaticamente para `/exec`.
+
+## Mesas
+
+Aba **Mesas** dentro do evento. Os gestores montam o salão:
+
+- **+ Mesas**: cria várias de uma vez (ex.: 10 redondas de 8 lugares), numeradas em sequência. Mesa pode ter nome ("Diretoria") e ser VIP.
+- **Planta**: arraste as mesas para reproduzir o salão; toque numa mesa para ver quem está nela, editar ou excluir.
+- **Sentar convidados**: marque pessoas em "Sem mesa" e toque na mesa (borda verde = cabe). A capacidade é respeitada.
+- **Ver por gestor / Destacar gestor**: cada cadeira na cor do gestor que convidou — para analisar a distribuição.
+- **Distribuir**: senta automaticamente quem está sem mesa, mantendo juntos empresa, gestor ou categoria; autoridades e apoiadores vão para as mesas VIP.
+- O check-in mostra a mesa da pessoa; substituto herda a mesa do original; cancelado/recusado libera a cadeira.
+
+## Relatórios (PDF)
+
+Aba **Relatórios** do evento: *Lista de convidados* (por gestor), *Presença e check-in*, *Mapa de mesas* e *Panorama*.
+Menu **Relatórios**: panorama/comparativo de um ou vários eventos.
+
+"Visualizar relatório" mostra a prévia; **Gerar PDF** abre a impressão do navegador — escolha **Salvar como PDF** (no celular: compartilhar → imprimir → salvar). **Planilha (Excel)** baixa os dados em CSV.
+
+Em **Configurações → Marca dos relatórios** o Admin envia a logo do cabeçalho, a marca d'água e a logo do rodapé, ajusta a intensidade da marca d'água e o texto do rodapé. Sem envio, vale a identidade padrão embutida.
+
+## Página pessoal do convidado
+
+Além de confirmar/recusar e mostrar o QR Code, tem **Atualizar meus dados (opcional)**: o convidado informa só o que mudou (nome, e-mail, documento, telefone, cargo, "quem é você"). Os dados atuais nunca aparecem na página.

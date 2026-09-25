@@ -1,0 +1,215 @@
+<!-- Relatorios.html — relatórios em PDF (evento) e panorama/comparativo (vários eventos) -->
+<style>
+  .rl-tipos { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:10px; }
+  .rl-tipo { border:1.5px solid var(--border); border-radius:var(--r-md); padding:13px 14px; background:#fff; cursor:pointer; text-align:left; transition:border-color .15s, box-shadow .15s; }
+  .rl-tipo:hover { border-color:var(--blue-500); }
+  .rl-tipo.on { border-color:var(--ink-900); box-shadow:0 0 0 3px rgba(10,43,78,.08); }
+  .rl-tipo .ic { width:34px; height:34px; border-radius:10px; background:var(--blue-50); color:var(--blue-600); display:inline-flex; align-items:center; justify-content:center; margin-bottom:8px; }
+  .rl-tipo.on .ic { background:var(--ink-900); color:#fff; }
+  .rl-tipo h6 { font-size:.86rem; font-weight:700; color:var(--ink-900); margin:0 0 2px; }
+  .rl-tipo p { font-size:.74rem; color:var(--text-muted); margin:0; line-height:1.35; }
+  .rl-opcoes { display:flex; flex-wrap:wrap; gap:8px 18px; align-items:center; font-size:.82rem; }
+  .rl-opcoes .form-check { margin:0; }
+  .rl-acoes { display:flex; gap:8px; flex-wrap:wrap; }
+  .rl-previa { border:1px solid var(--border); border-radius:var(--r-lg); overflow:hidden; background:#E9EEF4; }
+  .rl-previa iframe { display:block; width:100%; height:78vh; min-height:520px; border:0; background:#E9EEF4; }
+  .rl-previa-barra { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 14px; background:#fff; border-bottom:1px solid var(--border); }
+  .rl-eventos { max-height:260px; overflow-y:auto; border:1px solid var(--border); border-radius:10px; padding:4px; }
+  .rl-ev { display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:8px; cursor:pointer; font-size:.83rem; }
+  .rl-ev:hover { background:var(--blue-50); }
+  .rl-ev input { flex:none; width:17px; height:17px; }
+  .rl-ev .sub { font-size:.72rem; color:var(--text-muted); }
+  @media (max-width:640px) { .rl-previa iframe { height:70vh; } .rl-acoes > button { flex:1; } }
+</style>
+
+<div id="relWrap"><div class="skel" style="height:160px;"></div></div>
+
+<script>
+(function() {
+  var wrap = document.getElementById('relWrap');
+  var ev = window.EventoAtual;
+  var modoEvento = !!ev;
+  var TIPOS = [
+    { k:'lista',    ic:'fa-list-ul',        t:'Lista de convidados', d:'Descrição do evento e convidados em tabelas por gestor, com consolidado.' },
+    { k:'presenca', ic:'fa-door-open',      t:'Presença e check-in',  d:'Pós-evento: chegadas por hora, presentes, ausências e ocorrências.' },
+    { k:'mesas',    ic:'fa-table-cells',    t:'Mapa de mesas',        d:'Planta do salão e quem senta em cada mesa (para a recepção).' },
+    { k:'panorama', ic:'fa-chart-column',   t:'Panorama do evento',   d:'Indicadores, perfil do público, gestores e empresas.' }
+  ];
+  var tipo = window.RELATORIO_INICIAL || (modoEvento ? 'lista' : 'panorama');
+  window.RELATORIO_INICIAL = null;
+  var ultimoHtml = '', ultimasOpcoes = null, ultimoTipo = '';
+  var eventosSel = {};
+
+  if (!pode('relatorios.exportar')) {
+    wrap.innerHTML = '<div class="card-hb"><div class="empty-state"><i class="fas fa-lock"></i><h6>Relatórios indisponíveis</h6><p>Seu perfil não tem permissão para gerar relatórios. Fale com o administrador.</p></div></div>';
+    return;
+  }
+
+  function erro(err) { toast((err && (err.message || err.mensagem)) || 'Erro inesperado.', 'err'); }
+
+  // ---------------------------------------------------------- tela
+  function render() {
+    var gestores = {};
+    wrap.innerHTML =
+      (modoEvento ? '' : '<div class="pg-head"><div><h4><i class="fas fa-chart-column me-2 text-primary"></i>Relatórios</h4><p>Panorama de um evento ou comparativo entre vários. Para lista de convidados, presença e mesas, abra o evento e use a aba Relatórios.</p></div></div>') +
+      '<div class="card-hb card-hb-body mb-3">' +
+        (modoEvento ? '<div class="rl-tipos mb-3">' + TIPOS.map(function(t) {
+          return '<button type="button" class="rl-tipo' + (t.k === tipo ? ' on' : '') + '" onclick="escolherRelatorio(\'' + t.k + '\')"><span class="ic"><i class="fas ' + t.ic + '"></i></span><h6>' + t.t + '</h6><p>' + t.d + '</p></button>';
+        }).join('') + '</div>' : eventosHtml()) +
+        '<div id="rlOpcoes" class="mb-3"></div>' +
+        '<div class="rl-acoes"><button class="btn-hb" id="btnGerarRel" onclick="gerarRelatorio()"><i class="fas fa-file-lines"></i> Visualizar relatório</button>' +
+        '<button class="btn-hb-outline" onclick="baixarCsv()"><i class="fas fa-file-excel"></i> Planilha (Excel)</button></div>' +
+      '</div>' +
+      '<div id="rlPrevia"></div>';
+    renderOpcoes();
+    if (!modoEvento) ligarEventos();
+  }
+
+  function renderOpcoes() {
+    var box = document.getElementById('rlOpcoes');
+    if (tipo === 'lista') {
+      box.innerHTML = '<div class="small fw-bold text-uppercase mb-2" style="color:var(--text-muted);font-size:.68rem;letter-spacing:.4px;">Opções</div><div class="rl-opcoes">' +
+        '<select class="form-select form-select-sm" id="opSomente" style="width:auto;"><option value="todos">Todos da lista</option><option value="confirmados">Só confirmados</option><option value="presentes">Só presentes</option></select>' +
+        '<select class="form-select form-select-sm" id="opGestor" style="width:auto;max-width:220px;"><option value="">Todos os gestores</option></select>' +
+        '<div class="form-check"><input class="form-check-input" type="checkbox" id="opDoc"><label class="form-check-label" for="opDoc">Documento</label></div>' +
+        '<div class="form-check"><input class="form-check-input" type="checkbox" id="opContato"><label class="form-check-label" for="opContato">Telefone / e-mail</label></div>' +
+        '<div class="form-check"><input class="form-check-input" type="checkbox" id="opInativos"><label class="form-check-label" for="opInativos">Incluir cancelados e substituídos</label></div>' +
+      '</div>';
+      carregarGestores();
+    } else if (tipo === 'mesas') {
+      box.innerHTML = '<p class="small text-muted mb-0"><i class="fas fa-circle-info me-1"></i>Imprima para a recepção: a planta mostra onde fica cada mesa e a lista diz quem senta em cada uma.</p>';
+    } else if (tipo === 'presenca') {
+      box.innerHTML = '<p class="small text-muted mb-0"><i class="fas fa-circle-info me-1"></i>Ideal depois do evento: mostra quem veio, horários de chegada, quem confirmou e faltou, walk-ins e substituições.</p>';
+    } else {
+      box.innerHTML = modoEvento ? '<p class="small text-muted mb-0"><i class="fas fa-circle-info me-1"></i>Indicadores deste evento. Para comparar vários eventos, use Relatórios no menu lateral.</p>' : '';
+    }
+  }
+
+  function carregarGestores() {
+    google.script.run.withSuccessHandler(function(resp) {
+      var sel = document.getElementById('opGestor');
+      if (!sel || !resp || !resp.ok) return;
+      var nomes = {};
+      resp.dados.forEach(function(c){ if (c.gestor) nomes[c.gestor] = true; });
+      sel.innerHTML = '<option value="">Todos os gestores</option>' + Object.keys(nomes).sort().map(function(g) {
+        return '<option value="' + esc(g) + '">' + esc(g) + (window.SESSAO && window.SESSAO.gestor === g ? ' (meus convidados)' : '') + '</option>';
+      }).join('');
+    }).apiListaConvidados(window.TOKEN, ev.id);
+  }
+
+  // Seleção de eventos (modo panorama geral)
+  function eventosHtml() {
+    var lista = (window.EVENTOS_CACHE || []).slice().sort(function(a, b){ return (b.dataISO || '').localeCompare(a.dataISO || ''); });
+    if (!Object.keys(eventosSel).length) lista.slice(0, 6).forEach(function(e){ eventosSel[e.id] = true; });
+    return '<div class="d-flex justify-content-between align-items-center mb-2"><strong style="color:var(--ink-900);font-size:.88rem;">Eventos no relatório</strong>' +
+      '<span class="small"><a href="#" onclick="marcarEventos(true);return false;">todos</a> · <a href="#" onclick="marcarEventos(false);return false;">nenhum</a></span></div>' +
+      (lista.length ? '<div class="rl-eventos mb-3">' + lista.map(function(e) {
+        return '<label class="rl-ev"><input type="checkbox" class="form-check-input m-0 rl-ev-chk" value="' + esc(e.id) + '"' + (eventosSel[e.id] ? ' checked' : '') + '>' +
+          '<span style="min-width:0;"><span class="d-block text-truncate fw-semibold">' + esc(e.nome) + '</span><span class="sub">' + esc([e.data || 'sem data', e.local, e.status].filter(Boolean).join(' · ')) + '</span></span></label>';
+      }).join('') + '</div>' : '<div class="small text-muted mb-3">Nenhum evento cadastrado.</div>');
+  }
+  function ligarEventos() {
+    wrap.querySelectorAll('.rl-ev-chk').forEach(function(ch) {
+      ch.addEventListener('change', function(){ if (ch.checked) eventosSel[ch.value] = true; else delete eventosSel[ch.value]; });
+    });
+  }
+  window.marcarEventos = function(todos) {
+    eventosSel = {};
+    if (todos) (window.EVENTOS_CACHE || []).forEach(function(e){ eventosSel[e.id] = true; });
+    wrap.querySelectorAll('.rl-ev-chk').forEach(function(ch){ ch.checked = !!eventosSel[ch.value]; });
+  };
+
+  window.escolherRelatorio = function(k) { tipo = k; render(); };
+
+  function opcoesAtuais() {
+    if (!modoEvento) return { eventos: Object.keys(eventosSel) };
+    if (tipo === 'panorama') return { eventos: [ev.id] };
+    var op = { idEvento: ev.id };
+    if (tipo === 'lista') {
+      op.somente = document.getElementById('opSomente').value;
+      op.gestor = document.getElementById('opGestor').value;
+      op.documento = document.getElementById('opDoc').checked;
+      op.contato = document.getElementById('opContato').checked;
+      op.incluirInativos = document.getElementById('opInativos').checked;
+    }
+    return op;
+  }
+
+  // ---------------------------------------------------------- gerar / prévia
+  window.gerarRelatorio = function() {
+    var op = opcoesAtuais();
+    if (!modoEvento && !op.eventos.length) { toast('Marque pelo menos um evento.', 'err'); return; }
+    var btn = document.getElementById('btnGerarRel'); btn.disabled = true;
+    var previa = document.getElementById('rlPrevia');
+    previa.innerHTML = '<div class="card-hb card-hb-body text-center text-muted py-5"><i class="fas fa-spinner fa-spin fa-2x mb-2"></i><div class="small">Montando o relatório…</div></div>';
+    google.script.run.withSuccessHandler(function(resp) {
+      btn.disabled = false;
+      if (resp && resp.auth === false) { forcarLogout('Sessão expirada.'); return; }
+      if (!resp.ok) { previa.innerHTML = ''; toast(resp.mensagem, 'err'); return; }
+      ultimoHtml = resp.dados.html; ultimasOpcoes = op; ultimoTipo = tipo;
+      mostrarPrevia();
+    }).withFailureHandler(function(e){ btn.disabled = false; previa.innerHTML = ''; erro(e); })
+      .apiGerarRelatorio(window.TOKEN, tipo, op);
+  };
+
+  function mostrarPrevia() {
+    var previa = document.getElementById('rlPrevia');
+    previa.innerHTML = '<div class="rl-previa"><div class="rl-previa-barra">' +
+        '<span class="small text-muted"><i class="fas fa-eye me-1"></i>Prévia — o PDF sai exatamente assim</span>' +
+        '<div class="rl-acoes">' +
+          '<button class="btn-hb" onclick="imprimirRelatorio()"><i class="fas fa-file-pdf"></i> Gerar PDF</button>' +
+          '<button class="btn-hb-outline" onclick="abrirRelatorioAba()"><i class="fas fa-arrow-up-right-from-square"></i> Nova aba</button>' +
+        '</div></div>' +
+      '<iframe id="rlFrame" title="Prévia do relatório"></iframe></div>' +
+      '<p class="small text-muted mt-2 mb-0"><i class="fas fa-circle-info me-1"></i>Em "Gerar PDF", escolha <strong>Salvar como PDF</strong> como destino. No celular: compartilhar → imprimir → salvar.</p>';
+    document.getElementById('rlFrame').srcdoc = ultimoHtml;
+    previa.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // PDF pelo navegador: vetorial, idêntico à prévia, com numeração de páginas.
+  window.imprimirRelatorio = function() {
+    var f = document.getElementById('rlFrame');
+    try {
+      f.contentWindow.focus();
+      f.contentWindow.print();
+    } catch (e) {
+      abrirRelatorioAba(true);
+    }
+  };
+
+  // Plano B (navegador que bloqueia imprimir dentro da página): abre sozinho numa aba.
+  window.abrirRelatorioAba = function(imprimir) {
+    try {
+      var html = ultimoHtml;
+      if (imprimir) html = html.replace('</body>', '<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body>');
+      var url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+      var w = window.open(url, '_blank');
+      if (!w) toast('O navegador bloqueou a nova aba. Libere pop-ups para este site.', 'err');
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
+    } catch (e) { erro(e); }
+  };
+
+  // ---------------------------------------------------------- planilha
+  window.baixarCsv = function() {
+    var op = opcoesAtuais();
+    if (!modoEvento && !op.eventos.length) { toast('Marque pelo menos um evento.', 'err'); return; }
+    google.script.run.withSuccessHandler(function(resp) {
+      if (resp && resp.auth === false) { forcarLogout('Sessão expirada.'); return; }
+      if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
+      var d = resp.dados;
+      var celula = function(v) { v = v === null || v === undefined ? '' : String(v); return /[";\n\r]/.test(v) || /^[=+\-@]/.test(v) ? '"' + v.replace(/^([=+\-@])/, "'$1").replace(/"/g, '""') + '"' : v; };
+      // ";" + BOM: o Excel em português abre com acentos e colunas certas.
+      var csv = '﻿' + [d.cabecalho].concat(d.linhas).map(function(l){ return l.map(celula).join(';'); }).join('\r\n');
+      var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = d.arquivo;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function(){ URL.revokeObjectURL(a.href); }, 30000);
+      toast('Planilha gerada.', 'ok');
+    }).withFailureHandler(erro).apiCsvRelatorio(window.TOKEN, modoEvento && tipo === 'panorama' ? 'panorama' : (modoEvento ? tipo : 'panorama'), op);
+  };
+
+  render();
+  if (window.RELATORIO_AUTO || tipo === 'mesas') { window.RELATORIO_AUTO = false; gerarRelatorio(); }
+})();
+</script>

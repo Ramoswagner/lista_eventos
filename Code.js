@@ -18,6 +18,9 @@ const VIEW_MAP = {
   'evento-visao':   'EventoVisaoGeral',// dashboard do evento
   'evento-lista':   'EventoLista',     // lista de convidados + convites/lotes
   'evento-checkin': 'CheckinScanner',  // check-in do evento
+  'evento-mesas':   'EventoMesas',     // mapa de mesas do evento
+  'evento-relatorios': 'Relatorios',   // relatórios de um evento
+  'relatorios':     'Relatorios',      // panorama / comparativo de vários eventos
   'config':         'ConfigPainel'     // gestão de logins
 };
 
@@ -370,6 +373,7 @@ function apiListaConvidados(token, idEvento) {
   const convites = dbListar_(DB.CONVITES, c => c.ID_Evento === idEvento);
   const substitutoDe = {};
   convites.forEach(c => { if (c.ID_Convite_Original) substitutoDe[c.ID_Convite_Original] = c; });
+  const mesas = _rotulosMesas_(idEvento);
 
   const urlBase = _urlBase_();
   return { ok: true, dados: convites.map(c => {
@@ -392,7 +396,8 @@ function apiListaConvidados(token, idEvento) {
       checkinHora:      _fmtData_(c.Checkin_DataHora, 'HH:mm'),
       substituidoPor:   pSub ? _s_(pSub.Nome) : '',
       idLote:           _s_(c.ID_Lote),
-      descricao:        _s_(c.Observacoes)
+      descricao:        _s_(c.Observacoes),
+      mesa:             _ocupaLugar_(c) ? _s_(mesas[c.ID_Mesa]) : ''
     };
   }) };
 }
@@ -481,7 +486,8 @@ function apiCheckin(token, idConvite) {
       if (!convite) throw new Error('Convite não encontrado.');
       _validarJanela_(convite.ID_Evento, s);
       fazerCheckin_(idConvite, rotuloSessao_(s));
-      return { ok: true, mensagem: 'Entrada confirmada.' };
+      const mesa = _s_(_rotulosMesas_(convite.ID_Evento)[convite.ID_Mesa]);
+      return { ok: true, mensagem: 'Entrada confirmada.' + (mesa ? ' ' + mesa + '.' : ''), dados: { mesa: mesa } };
     });
   } catch (e) { return { ok: false, mensagem: e.message }; }
 }
@@ -496,7 +502,8 @@ function apiCheckinQR(token, qrToken, idEvento) {
       const convite = fazerCheckinPorQR_(qrToken, rotuloSessao_(s), idEvento, s);
       const pessoa  = dbBuscarPorId_(DB.PESSOAS, convite.ID_Pessoa);
       const nome    = pessoa ? _s_(pessoa.Nome) : '';
-      return { ok: true, mensagem: 'Bem-vindo(a), ' + nome + '!', dados: { nome: nome } };
+      const mesa    = _s_(_rotulosMesas_(convite.ID_Evento)[convite.ID_Mesa]);
+      return { ok: true, mensagem: 'Bem-vindo(a), ' + nome + '!' + (mesa ? ' ' + mesa + '.' : ''), dados: { nome: nome, mesa: mesa } };
     });
   } catch (e) { return { ok: false, mensagem: e.message }; }
 }

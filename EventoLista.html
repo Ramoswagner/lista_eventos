@@ -175,7 +175,7 @@
         (meuNome ? '<span class="pill pill-blue" style="cursor:pointer;" onclick="filtrarMeusConvidados()"><i class="fas fa-user"></i> Meus convidados</span>' : '') +
       '</div>' +
       '<div class="row g-2">' +
-        '<div class="col-12 col-md-3"><input class="form-control" id="fBusca" placeholder="🔍 Nome ou documento..."></div>' +
+        '<div class="col-12 col-md-3"><input class="form-control" id="fBusca" placeholder="Buscar por nome ou documento..."></div>' +
         selectFilter('fEmpresa', 'Empresa', opts.empresas) +
         selectFilter('fCategoria', 'Categoria', opts.categorias) +
         selectFilter('fGestor', 'Gestor', opts.gestores) +
@@ -264,7 +264,7 @@
     if (!filtrados.length) { tbl.innerHTML = '<div class="empty-state"><i class="fas fa-filter-circle-xmark"></i><p>Nenhum convidado bate com esses filtros.</p></div>'; return; }
 
     var traco = '<span class="text-muted">—</span>';
-    tbl.innerHTML = '<table class="table-hb resp"><thead><tr><th>Nome</th><th>Empresa</th><th>Cargo/Doc.</th><th>Categoria</th><th>Cidade/UF</th><th>Origem</th><th>Gestor</th><th>Status</th><th></th></tr></thead><tbody>' +
+    tbl.innerHTML = '<table class="table-hb resp"><thead><tr><th>Nome</th><th>Empresa</th><th>Cargo/Doc.</th><th>Categoria</th><th>Cidade/UF</th><th>Origem</th><th>Gestor</th><th>Mesa</th><th>Status</th><th></th></tr></thead><tbody>' +
       filtrados.map(function(c) {
         return '<tr>' +
           '<td class="td-titulo"><strong>' + esc(c.nome) + '</strong>' +
@@ -277,6 +277,7 @@
           '<td data-label="Cidade/UF">' + (c.cidade && c.cidade !== '/' ? esc(c.cidade) : traco) + '</td>' +
           '<td data-label="Origem"><span class="pill ' + (ORIGIN_PILL[c.origem] || 'pill-gray') + '">' + esc(origemLabel(c)) + '</span></td>' +
           '<td data-label="Convidado por">' + (c.gestor ? esc(c.gestor) : traco) + '</td>' +
+          '<td data-label="Mesa">' + (c.mesa ? '<span class="pill pill-violet"><i class="fas fa-chair"></i> ' + esc(c.mesa) + '</span>' : traco) + '</td>' +
           '<td data-label="Status"><span class="pill ' + (STATUS_PILL[c.status] || 'pill-gray') + '">' + esc(c.status) + '</span>' + (c.checkinHora ? ' <span class="small text-muted">' + esc(c.checkinHora) + '</span>' : '') + '</td>' +
           '<td class="text-end text-nowrap td-acoes">' + linhaAcoesConvidado(c) + '</td>' +
         '</tr>';

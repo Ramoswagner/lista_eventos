@@ -1,0 +1,570 @@
+<!-- EventoMesas.html — mapa de mesas: planta arrastável (SVG) + lista por mesa -->
+<style>
+  .mz-toolbar { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+  .mz-kpis { display:flex; gap:8px; flex-wrap:wrap; }
+  .mz-kpi { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:6px 12px; font-size:.78rem; color:var(--text-muted); }
+  .mz-kpi strong { color:var(--ink-900); font-size:.95rem; margin-right:4px; }
+  .mz-kpi.alerta strong { color:var(--danger); }
+  .mz-toggle { display:inline-flex; background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:3px; }
+  .mz-toggle button { border:none; background:none; padding:6px 12px; border-radius:8px; font-size:.8rem; font-weight:600; color:var(--text-muted); }
+  .mz-toggle button.on { background:#fff; color:var(--ink-900); box-shadow:var(--shadow-sm); }
+  .mz-grid { display:grid; grid-template-columns:minmax(0,1fr) 290px; gap:14px; align-items:start; }
+  .mz-planta-wrap { overflow:auto; -webkit-overflow-scrolling:touch; border-radius:var(--r-lg); }
+  .mz-planta { display:block; width:100%; min-width:720px; background:#FBFCFE; user-select:none; -webkit-user-select:none; }
+  .mz-mesa { cursor:pointer; }
+  .mz-mesa.arrastavel { cursor:grab; touch-action:none; }
+  .mz-mesa.arrastando { cursor:grabbing; }
+  .mz-mesa:hover .mz-tampo { filter:brightness(.98); }
+  .mz-mesa.alvo .mz-tampo { stroke:#10B981 !important; stroke-width:3; }
+  .mz-mesa.sem-lugar { opacity:.45; }
+  .mz-legenda { display:flex; gap:14px; flex-wrap:wrap; font-size:.74rem; color:var(--text-muted); padding:10px 14px; border-top:1px solid var(--border); }
+  .mz-legenda span { display:inline-flex; align-items:center; gap:6px; }
+  .mz-dot { width:11px; height:11px; border-radius:50%; display:inline-block; }
+  .mz-lateral .card-hb-body { padding:14px; }
+  .mz-semmesa-lista { max-height:430px; overflow-y:auto; margin:0 -4px; }
+  .mz-pessoa { display:flex; align-items:center; gap:9px; padding:7px 6px; border-radius:8px; cursor:pointer; font-size:.82rem; }
+  .mz-pessoa:hover { background:var(--blue-50); }
+  .mz-pessoa input { flex:none; width:17px; height:17px; }
+  .mz-pessoa .sub { font-size:.7rem; color:var(--text-muted); }
+  .mz-sentar-aviso { background:#EAFBF3; border:1px solid #A7F3D0; color:#047857; border-radius:10px; padding:9px 12px; font-size:.8rem; font-weight:600; display:none; margin-bottom:10px; }
+  .mz-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:12px; }
+  .mz-card { background:#fff; border:1px solid var(--border); border-radius:var(--r-lg); box-shadow:var(--shadow-sm); padding:14px; display:flex; flex-direction:column; gap:8px; }
+  .mz-card.vip { border-color:#FCD34D; background:linear-gradient(#FFFDF5,#fff 60%); }
+  .mz-card h6 { margin:0; font-weight:700; color:var(--ink-900); font-size:.92rem; display:flex; align-items:center; gap:8px; }
+  .mz-barra { height:6px; background:var(--bg); border-radius:20px; overflow:hidden; }
+  .mz-barra > div { height:100%; border-radius:20px; }
+  .mz-lista-nomes { list-style:none; padding:0; margin:0; font-size:.8rem; }
+  .mz-lista-nomes li { display:flex; justify-content:space-between; align-items:center; gap:6px; padding:4px 0; border-bottom:1px dashed var(--border); }
+  .mz-lista-nomes li:last-child { border-bottom:none; }
+  .mz-x { border:none; background:none; color:var(--text-faint); padding:2px 6px; border-radius:6px; }
+  .mz-x:hover { color:var(--danger); background:var(--danger-bg); }
+  @media (max-width:992px) { .mz-grid { grid-template-columns:1fr; } .mz-semmesa-lista { max-height:300px; } }
+</style>
+
+<div id="mesasWrap"><div class="skel" style="height:80px;margin-bottom:14px;"></div><div class="skel" style="height:420px;"></div></div>
+
+<!-- Modal: adicionar mesas -->
+<div class="modal fade" id="modalNovasMesas" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down"><div class="modal-content" style="border-radius:16px;border:none;">
+  <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold"><i class="fas fa-plus me-2 text-primary"></i>Adicionar mesas</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body">
+    <div class="row g-2 mb-3">
+      <div class="col-6"><label class="form-label">Quantidade</label><input type="number" min="1" max="100" class="form-control" id="nmQtd" value="10"></div>
+      <div class="col-6"><label class="form-label">Lugares por mesa</label><input type="number" min="1" max="60" class="form-control" id="nmCap" value="8"></div>
+    </div>
+    <label class="form-label">Formato</label>
+    <div class="d-flex gap-2 mb-3">
+      <label class="btn-hb-outline flex-fill justify-content-center" style="cursor:pointer;"><input type="radio" name="nmFormato" value="Redonda" checked class="form-check-input me-1"> <i class="far fa-circle"></i> Redonda</label>
+      <label class="btn-hb-outline flex-fill justify-content-center" style="cursor:pointer;"><input type="radio" name="nmFormato" value="Retangular" class="form-check-input me-1"> <i class="far fa-square"></i> Retangular</label>
+    </div>
+    <div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="nmVip"><label class="form-check-label small" for="nmVip">Mesas VIP (autoridades e apoiadores vão para elas na distribuição automática)</label></div>
+    <p class="small text-muted mb-0" id="nmResumo"></p>
+  </div>
+  <div class="modal-footer" style="border-top:1px solid var(--border);"><button class="btn-hb-outline" data-bs-dismiss="modal">Cancelar</button><button class="btn-hb" id="btnCriarMesas" onclick="criarMesas()"><i class="fas fa-check"></i> Criar mesas</button></div>
+</div></div></div>
+
+<!-- Modal: detalhes da mesa -->
+<div class="modal fade" id="modalMesa" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down"><div class="modal-content" style="border-radius:16px;border:none;">
+  <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold" id="mmTitulo">Mesa</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body">
+    <div id="mmSentados" class="mb-3"></div>
+    <div id="mmAdicionar" class="mb-3"></div>
+    <div id="mmEditar">
+      <div class="small fw-bold text-uppercase mb-2" style="color:var(--text-muted);font-size:.68rem;letter-spacing:.4px;">Dados da mesa</div>
+      <div class="row g-2 mb-2">
+        <div class="col-4"><label class="form-label">Número</label><input type="number" min="1" class="form-control" id="mmNumero"></div>
+        <div class="col-8"><label class="form-label">Nome <span class="text-muted fw-normal">(opcional)</span></label><input class="form-control" id="mmNome" maxlength="40" placeholder="Ex: Diretoria"></div>
+      </div>
+      <div class="row g-2 mb-2">
+        <div class="col-4"><label class="form-label">Lugares</label><input type="number" min="1" max="60" class="form-control" id="mmCap"></div>
+        <div class="col-8"><label class="form-label">Formato</label><select class="form-select" id="mmFormato"><option value="Redonda">Redonda</option><option value="Retangular">Retangular</option></select></div>
+      </div>
+      <div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="mmVip"><label class="form-check-label small" for="mmVip">Mesa VIP</label></div>
+      <div class="mb-1"><label class="form-label">Observações</label><input class="form-control" id="mmObs" maxlength="200" placeholder="Ex: perto do palco"></div>
+    </div>
+  </div>
+  <div class="modal-footer" style="border-top:1px solid var(--border);" id="mmRodape">
+    <button class="btn btn-sm btn-outline-danger me-auto" onclick="excluirMesa()"><i class="fas fa-trash"></i> Excluir mesa</button>
+    <button class="btn-hb-outline" data-bs-dismiss="modal">Fechar</button>
+    <button class="btn-hb" id="btnSalvarMesa" onclick="salvarMesa()"><i class="fas fa-check"></i> Salvar</button>
+  </div>
+</div></div></div>
+
+<!-- Modal: distribuição automática -->
+<div class="modal fade" id="modalDistribuir" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down"><div class="modal-content" style="border-radius:16px;border:none;">
+  <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold"><i class="fas fa-wand-magic-sparkles me-2 text-primary"></i>Distribuir automaticamente</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body">
+    <p class="small text-muted">Coloca quem está <strong>sem mesa</strong> nos lugares livres. Quem já tem mesa não é movido. Autoridades e apoiadores (deputados, prefeitos, patrocinadores, doadores…) vão primeiro para as mesas VIP.</p>
+    <label class="form-label">Manter juntos</label>
+    <select class="form-select mb-3" id="dsAgrupar">
+      <option value="empresa">Pessoas da mesma empresa</option>
+      <option value="gestor">Convidados do mesmo gestor</option>
+      <option value="categoria">Pessoas da mesma categoria</option>
+      <option value="nenhum">Não agrupar (ordem da lista)</option>
+    </select>
+    <div class="form-check"><input class="form-check-input" type="checkbox" id="dsConfirmados"><label class="form-check-label small" for="dsConfirmados">Só quem já confirmou presença</label></div>
+  </div>
+  <div class="modal-footer" style="border-top:1px solid var(--border);"><button class="btn-hb-outline" data-bs-dismiss="modal">Cancelar</button><button class="btn-hb" id="btnDistribuir" onclick="distribuir()"><i class="fas fa-check"></i> Distribuir</button></div>
+</div></div></div>
+
+<script>
+(function() {
+  var idEvento = window.EventoAtual && window.EventoAtual.id;
+  var wrap = document.getElementById('mesasWrap');
+  if (!idEvento) { wrap.innerHTML = '<div class="empty-state"><i class="fas fa-triangle-exclamation"></i><p>Nenhum evento selecionado.</p></div>'; return; }
+
+  var D = null;                       // dados do servidor
+  var modo = window.innerWidth < 768 ? 'lista' : 'planta';
+  var selecionados = {};              // idConvite → true (sem mesa, para sentar)
+  var buscaSemMesa = '';
+  var mesaAberta = null;
+  var pendentesPos = {};              // posições arrastadas ainda não salvas
+  var timerPos = null;
+  var NS = 'http://www.w3.org/2000/svg';
+  // Análise: colorir cadeiras por gestor e/ou destacar um gestor
+  var corPor = 'ocupacao';            // 'ocupacao' | 'gestor'
+  var destaqueGestor = '';
+  var PALETA = ['#1E3A8A','#0D9488','#F97316','#7C3AED','#DB2777','#65A30D','#0891B2','#B45309','#475569','#DC2626'];
+  var corGestor = {};
+  function prepararCores() {
+    corGestor = {};
+    var nomes = {};
+    D.convidados.forEach(function(c){ nomes[c.gestor || '—'] = true; });
+    Object.keys(nomes).sort().forEach(function(g, i){ corGestor[g] = PALETA[i % PALETA.length]; });
+  }
+
+  function erro(err) { toast((err && (err.message || err.mensagem)) || 'Erro inesperado.', 'err'); }
+  function mesaPorId(id) { return D.mesas.filter(function(m){ return m.id === id; })[0]; }
+  function sentadosNa(id) { return D.convidados.filter(function(c){ return c.idMesa === id; }); }
+  function semMesa() { return D.convidados.filter(function(c){ return !c.idMesa; }); }
+  function qtdSelecionados() { return Object.keys(selecionados).length; }
+
+  carregar();
+
+  function carregar(depois) {
+    google.script.run.withSuccessHandler(function(resp) {
+      if (resp && resp.auth === false) { forcarLogout('Sessão expirada.'); return; }
+      if (!resp.ok) { wrap.innerHTML = '<div class="card-hb"><div class="empty-state"><i class="fas fa-triangle-exclamation"></i><p>' + esc(resp.mensagem) + '</p></div></div>'; return; }
+      D = resp.dados;
+      prepararCores();
+      if (destaqueGestor && !corGestor[destaqueGestor]) destaqueGestor = '';
+      // Limpa seleção de quem já foi sentado ou saiu da lista
+      Object.keys(selecionados).forEach(function(id) {
+        var c = D.convidados.filter(function(x){ return x.idConvite === id; })[0];
+        if (!c || c.idMesa) delete selecionados[id];
+      });
+      render();
+      if (depois) depois();
+    }).withFailureHandler(erro).apiMesasEvento(window.TOKEN, idEvento);
+  }
+
+  // ---------------------------------------------------------- render
+  function render() {
+    var r = D.resumo;
+    if (!D.mesas.length) {
+      wrap.innerHTML = '<div class="card-hb"><div class="empty-state"><i class="fas fa-table-cells"></i><h6>Nenhuma mesa ainda</h6>' +
+        '<p>Crie as mesas do salão (ex.: 10 mesas redondas de 8 lugares). Depois é só arrastar para montar a planta e sentar os convidados.</p>' +
+        (D.podeEditar ? '<button class="btn-hb" onclick="abrirNovasMesas()"><i class="fas fa-plus"></i> Adicionar mesas</button>' : '<p class="small">Seu perfil pode apenas consultar.</p>') +
+        '<div class="small text-muted mt-3">' + r.semMesa + ' convidado(s) ativo(s) aguardando mesa.</div></div></div>';
+      return;
+    }
+    wrap.innerHTML =
+      '<div class="card-hb card-hb-body mb-3"><div class="mz-toolbar">' +
+        '<div class="mz-kpis">' +
+          '<span class="mz-kpi"><strong>' + r.mesas + '</strong>mesas</span>' +
+          '<span class="mz-kpi"><strong>' + r.lugares + '</strong>lugares</span>' +
+          '<span class="mz-kpi"><strong>' + r.sentados + '</strong>sentados</span>' +
+          '<span class="mz-kpi' + (r.semMesa > r.livres ? ' alerta' : '') + '"><strong>' + r.semMesa + '</strong>sem mesa</span>' +
+        '</div>' +
+        '<div class="d-flex gap-2 flex-wrap align-items-center">' +
+          '<select class="form-select form-select-sm" style="width:auto;" onchange="mudarCorMesas(this.value)" title="Como colorir as cadeiras">' +
+            '<option value="ocupacao"' + (corPor === 'ocupacao' ? ' selected' : '') + '>Ver: ocupação</option>' +
+            '<option value="gestor"' + (corPor === 'gestor' ? ' selected' : '') + '>Ver: por gestor</option></select>' +
+          '<select class="form-select form-select-sm" style="width:auto;max-width:190px;" onchange="destacarGestor(this.value)" title="Destacar os convidados de um gestor">' +
+            '<option value="">Destacar: ninguém</option>' + Object.keys(corGestor).map(function(g) {
+              var meu = window.SESSAO && window.SESSAO.gestor === g;
+              return '<option value="' + esc(g) + '"' + (destaqueGestor === g ? ' selected' : '') + '>' + esc(g === '—' ? 'Sem gestor' : (meu ? g + ' (meus)' : g)) + '</option>';
+            }).join('') + '</select>' +
+          '<div class="mz-toggle"><button class="' + (modo === 'planta' ? 'on' : '') + '" onclick="mudarModoMesas(\'planta\')"><i class="fas fa-map"></i> Planta</button><button class="' + (modo === 'lista' ? 'on' : '') + '" onclick="mudarModoMesas(\'lista\')"><i class="fas fa-list"></i> Lista</button></div>' +
+          (D.podeEditar ? '<button class="btn-hb-outline" onclick="abrirDistribuir()"><i class="fas fa-wand-magic-sparkles"></i> Distribuir</button>' +
+                          '<button class="btn-hb" onclick="abrirNovasMesas()"><i class="fas fa-plus"></i> Mesas</button>' : '') +
+          '<button class="btn-hb-outline" onclick="imprimirMapaMesas()" title="Relatório do mapa de mesas"><i class="fas fa-print"></i></button>' +
+        '</div>' +
+      '</div>' +
+      resumoDestaque() +
+      (r.semMesa > r.livres ? '<div class="small mt-2" style="color:var(--danger);"><i class="fas fa-triangle-exclamation me-1"></i>Faltam ' + (r.semMesa - r.livres) + ' lugar(es) para todos os convidados ativos.</div>' : '') +
+      '</div>' +
+      '<div class="mz-grid">' +
+        '<div>' + (modo === 'planta' ? plantaHtml() : cardsHtml()) + '</div>' +
+        '<div class="mz-lateral">' + semMesaHtml() + '</div>' +
+      '</div>';
+    if (modo === 'planta') desenharPlanta();
+    atualizarAvisoSentar();
+  }
+
+  window.mudarModoMesas = function(m) { modo = m; render(); };
+  window.mudarCorMesas = function(v) { corPor = v; render(); };
+  window.destacarGestor = function(g) { destaqueGestor = g; render(); };
+
+  // Resumo do destaque: em quais mesas estão os convidados do gestor
+  function resumoDestaque() {
+    if (!destaqueGestor) return '';
+    var dele = D.convidados.filter(function(c){ return (c.gestor || '—') === destaqueGestor; });
+    var mesas = {};
+    dele.forEach(function(c){ if (c.idMesa) { var m = mesaPorId(c.idMesa); if (m) mesas[m.numero] = (mesas[m.numero] || 0) + 1; } });
+    var semM = dele.filter(function(c){ return !c.idMesa; }).length;
+    var nums = Object.keys(mesas).sort(function(a,b){ return a-b; });
+    return '<div class="small mt-2" style="color:var(--ink-700);"><i class="fas fa-user-tie me-1" style="color:' + corGestor[destaqueGestor] + '"></i><strong>' + esc(destaqueGestor) + '</strong>: ' + dele.length + ' convidado(s)' +
+      (nums.length ? ' · mesas ' + nums.map(function(n){ return n + ' (' + mesas[n] + ')'; }).join(', ') : '') + (semM ? ' · ' + semM + ' sem mesa' : '') + '</div>';
+  }
+  window.imprimirMapaMesas = function() { window.RELATORIO_INICIAL = 'mesas'; goToEventTab('evento-relatorios'); };
+
+  // ---------------------------------------------------------- planta (SVG)
+  function plantaHtml() {
+    return '<div class="card-hb"><div class="mz-planta-wrap"><svg id="mzSvg" class="mz-planta" viewBox="0 0 ' + D.planta.LARGURA + ' ' + D.planta.ALTURA + '" xmlns="' + NS + '"></svg></div>' +
+      '<div class="mz-legenda">' +
+        (corPor === 'gestor' ? Object.keys(corGestor).map(function(g){ return '<span><i class="mz-dot" style="background:' + corGestor[g] + '"></i> ' + esc(g === '—' ? 'Sem gestor' : g) + '</span>'; }).join('')
+          : '<span><i class="mz-dot" style="background:var(--ink-900)"></i> lugar ocupado</span>') +
+        '<span><i class="mz-dot" style="background:#fff;border:1.5px solid #CBD5E1"></i> lugar livre</span>' +
+        '<span><i class="mz-dot" style="background:#FEF3C7;border:1.5px solid #F59E0B"></i> mesa VIP</span>' +
+        (D.podeEditar ? '<span class="ms-auto"><i class="fas fa-hand-pointer"></i> arraste para posicionar · toque para abrir</span>' : '') +
+      '</div></div>';
+  }
+
+  function el(tag, attrs, pai) {
+    var e = document.createElementNS(NS, tag);
+    Object.keys(attrs || {}).forEach(function(k){ e.setAttribute(k, attrs[k]); });
+    if (pai) pai.appendChild(e);
+    return e;
+  }
+
+  function desenharPlanta() {
+    var svg = document.getElementById('mzSvg');
+    if (!svg) return;
+    // fundo quadriculado discreto
+    var defs = el('defs', {}, svg);
+    var pat = el('pattern', { id:'mzGrade', width:40, height:40, patternUnits:'userSpaceOnUse' }, defs);
+    el('path', { d:'M 40 0 L 0 0 0 40', fill:'none', stroke:'#EEF2F7', 'stroke-width':1 }, pat);
+    el('rect', { x:0, y:0, width:D.planta.LARGURA, height:D.planta.ALTURA, fill:'url(#mzGrade)' }, svg);
+    D.mesas.forEach(function(m) { desenharMesa(svg, m); });
+  }
+
+  function geometria(m) {
+    var cap = Math.max(1, m.capacidade);
+    if (m.formato === 'Retangular') {
+      var porLado = Math.ceil(cap / 2);
+      return { w: Math.max(70, 26 + porLado * 24), h: 46 };
+    }
+    return { r: Math.min(62, Math.max(30, 20 + cap * 2.6)) };
+  }
+
+  function desenharMesa(svg, m) {
+    var ocup = m.ocupados, cap = m.capacidade;
+    var cheia = ocup >= cap, excesso = ocup > cap;
+    var livres = cap - ocup;
+    var g = el('g', { 'class':'mz-mesa' + (D.podeEditar ? ' arrastavel' : ''), transform:'translate(' + m.x + ',' + m.y + ')', 'data-id': m.id }, svg);
+    var geo = geometria(m);
+    var corBorda = excesso ? '#EF4444' : (m.vip ? '#F59E0B' : (cheia ? '#10B981' : '#0088CC'));
+    var fundo = m.vip ? '#FEF3C7' : '#FFFFFF';
+    // Pessoas sentadas, agrupadas por gestor, uma por cadeira (na ordem).
+    var gente = sentadosNa(m.id).slice().sort(function(a, b){ return (a.gestor || '').localeCompare(b.gestor || '') || a.nome.localeCompare(b.nome); });
+    var totalCadeiras = Math.max(cap, gente.length);
+    var assento = function(x, y, i) {
+      var p = gente[i], fill = '#FFFFFF', stroke = '#CBD5E1';
+      if (p) {
+        var cg = corGestor[p.gestor || '—'] || '#0A2B4E';
+        if (i >= cap) fill = '#EF4444';
+        else if (destaqueGestor) fill = (p.gestor || '—') === destaqueGestor ? cg : '#E2E8F0';
+        else fill = corPor === 'gestor' ? cg : '#0A2B4E';
+        stroke = 'none';
+      }
+      var c = el('circle', { cx:x, cy:y, r:7.5, fill:fill, stroke:stroke, 'stroke-width':1.5 }, g);
+      if (p) { var t = el('title', {}, c); t.textContent = p.nome + (p.gestor ? ' — convidado por ' + p.gestor : '') + (p.empresa ? ' (' + p.empresa + ')' : ''); }
+    };
+    if (geo.r) {
+      var R = geo.r + 14;
+      for (var i = 0; i < totalCadeiras; i++) {
+        var a = -Math.PI / 2 + i * 2 * Math.PI / totalCadeiras;
+        assento(Math.cos(a) * R, Math.sin(a) * R, i);
+      }
+      el('circle', { 'class':'mz-tampo', cx:0, cy:0, r:geo.r, fill:fundo, stroke:corBorda, 'stroke-width':2.2 }, g);
+    } else {
+      var porLado = Math.ceil(totalCadeiras / 2), passo = (geo.w - 16) / porLado;
+      for (var j = 0; j < totalCadeiras; j++) {
+        var lado = j < porLado ? -1 : 1, k = j < porLado ? j : j - porLado;
+        assento(-geo.w / 2 + 8 + passo * (k + .5), lado * (geo.h / 2 + 12), j);
+      }
+      el('rect', { 'class':'mz-tampo', x:-geo.w / 2, y:-geo.h / 2, width:geo.w, height:geo.h, rx:10, fill:fundo, stroke:corBorda, 'stroke-width':2.2 }, g);
+    }
+    var t1 = el('text', { x:0, y:-1, 'text-anchor':'middle', 'font-size':17, 'font-weight':800, fill:'#0A2B4E' }, g); t1.textContent = m.numero;
+    var t2 = el('text', { x:0, y:15, 'text-anchor':'middle', 'font-size':10.5, 'font-weight':600, fill: excesso ? '#EF4444' : '#64748B' }, g); t2.textContent = ocup + '/' + cap;
+    var base = (geo.r ? geo.r + 34 : geo.h / 2 + 34);
+    if (m.nome) {
+      var t3 = el('text', { x:0, y:base, 'text-anchor':'middle', 'font-size':11, 'font-weight':700, fill:'#123A63' }, g);
+      t3.textContent = m.nome.length > 22 ? m.nome.slice(0, 21) + '…' : m.nome;
+    }
+    if (m.vip) { var tv = el('text', { x:0, y:-(geo.r ? geo.r : geo.h / 2) - 22, 'text-anchor':'middle', 'font-size':9, 'font-weight':800, fill:'#B45309', 'letter-spacing':1 }, g); tv.textContent = 'VIP'; }
+    var nSel = qtdSelecionados();
+    if (nSel) g.classList.add(livres >= nSel ? 'alvo' : 'sem-lugar');
+    else if (destaqueGestor && !gente.some(function(p){ return (p.gestor || '—') === destaqueGestor; })) g.style.opacity = '.4';
+    ligarInteracao(g, m);
+  }
+
+  // Arrastar (mouse e toque) + toque simples abre a mesa.
+  function ligarInteracao(g, m) {
+    var svg = document.getElementById('mzSvg');
+    var inicio = null, orig = null, moveu = false;
+    function pontoSvg(ev) {
+      var p = svg.createSVGPoint(); p.x = ev.clientX; p.y = ev.clientY;
+      return p.matrixTransform(svg.getScreenCTM().inverse());
+    }
+    g.addEventListener('pointerdown', function(ev) {
+      if (ev.button !== undefined && ev.button !== 0) return;
+      inicio = pontoSvg(ev); orig = { x: m.x, y: m.y }; moveu = false;
+      if (D.podeEditar) { g.setPointerCapture(ev.pointerId); }
+    });
+    g.addEventListener('pointermove', function(ev) {
+      if (!inicio || !D.podeEditar) return;
+      var p = pontoSvg(ev), dx = p.x - inicio.x, dy = p.y - inicio.y;
+      if (!moveu && Math.abs(dx) + Math.abs(dy) < 6) return;
+      moveu = true; g.classList.add('arrastando');
+      m.x = Math.round(Math.min(D.planta.LARGURA - 30, Math.max(30, orig.x + dx)) / 5) * 5;
+      m.y = Math.round(Math.min(D.planta.ALTURA - 30, Math.max(30, orig.y + dy)) / 5) * 5;
+      g.setAttribute('transform', 'translate(' + m.x + ',' + m.y + ')');
+      g.parentNode.appendChild(g);   // traz para frente
+    });
+    function soltar() {
+      if (!inicio) return;
+      inicio = null; g.classList.remove('arrastando');
+      if (moveu) { agendarSalvarPosicao(m); }
+      else { cliqueMesa(m); }
+    }
+    g.addEventListener('pointerup', soltar);
+    g.addEventListener('pointercancel', function() { inicio = null; g.classList.remove('arrastando'); });
+  }
+
+  function agendarSalvarPosicao(m) {
+    pendentesPos[m.id] = { id: m.id, x: m.x, y: m.y };
+    clearTimeout(timerPos);
+    timerPos = setTimeout(function() {
+      var lote = Object.keys(pendentesPos).map(function(k){ return pendentesPos[k]; });
+      pendentesPos = {};
+      google.script.run.withSuccessHandler(function(resp) {
+        if (!resp.ok) toast(resp.mensagem, 'err');
+      }).withFailureHandler(erro).apiMoverMesas(window.TOKEN, lote);
+    }, 700);
+  }
+
+  function cliqueMesa(m) {
+    var ids = Object.keys(selecionados);
+    if (ids.length && D.podeEditar) { sentar(ids, m.id); return; }
+    abrirMesa(m.id);
+  }
+
+  // ---------------------------------------------------------- lista (cards)
+  function barra(m) {
+    var pct = m.capacidade ? Math.min(100, Math.round(100 * m.ocupados / m.capacidade)) : 0;
+    var cor = m.ocupados > m.capacidade ? 'var(--danger)' : (pct >= 100 ? 'var(--success)' : 'var(--blue-600)');
+    return '<div class="mz-barra"><div style="width:' + pct + '%;background:' + cor + '"></div></div>';
+  }
+
+  function cardsHtml() {
+    return '<div class="mz-cards">' + D.mesas.map(function(m) {
+      var nomes = sentadosNa(m.id);
+      var nSel = qtdSelecionados();
+      var livres = m.capacidade - m.ocupados;
+      return '<div class="mz-card' + (m.vip ? ' vip' : '') + '">' +
+        '<div class="d-flex justify-content-between align-items-start gap-2">' +
+          '<h6><i class="fas ' + (m.formato === 'Retangular' ? 'fa-square' : 'fa-circle') + '" style="color:' + (m.vip ? '#F59E0B' : 'var(--blue-600)') + ';font-size:.7rem;"></i>' + esc(m.rotulo) + (m.vip ? ' <span class="pill pill-amber">VIP</span>' : '') + '</h6>' +
+          '<span class="small fw-bold" style="color:' + (m.ocupados > m.capacidade ? 'var(--danger)' : 'var(--ink-900)') + '">' + m.ocupados + '/' + m.capacidade + '</span>' +
+        '</div>' + barra(m) +
+        (nomes.length ? '<ul class="mz-lista-nomes">' + nomes.map(function(c) {
+          return '<li><span><i class="fas fa-circle me-1" style="font-size:.5rem;vertical-align:middle;color:' + (corGestor[c.gestor || '—'] || '#CBD5E1') + '" title="' + esc(c.gestor || 'sem gestor') + '"></i>' + esc(c.nome) + '<span class="d-block text-muted" style="font-size:.7rem;padding-left:12px;">' + esc([c.empresa, c.gestor ? 'por ' + c.gestor : ''].filter(Boolean).join(' · ')) + '</span></span>' +
+            (D.podeEditar ? '<button class="mz-x" title="Tirar da mesa" onclick="tirarDaMesa(\'' + esc(c.idConvite) + '\')"><i class="fas fa-xmark"></i></button>' : '') + '</li>';
+        }).join('') + '</ul>' : '<div class="small text-muted">Mesa vazia.</div>') +
+        '<div class="d-flex gap-2 mt-auto pt-1">' +
+          (D.podeEditar && nSel ? '<button class="btn btn-sm ' + (livres >= nSel ? 'btn-success' : 'btn-outline-secondary') + ' flex-fill" ' + (livres >= nSel ? '' : 'disabled') + ' onclick="sentarSelecionadosEm(\'' + esc(m.id) + '\')"><i class="fas fa-chair"></i> Sentar ' + nSel + ' aqui</button>' : '') +
+          '<button class="btn btn-sm btn-outline-secondary flex-fill" onclick="abrirMesa(\'' + esc(m.id) + '\')"><i class="fas fa-pen"></i> ' + (D.podeEditar ? 'Abrir' : 'Ver') + '</button>' +
+        '</div>' +
+      '</div>';
+    }).join('') + '</div>';
+  }
+
+  // ---------------------------------------------------------- sem mesa (lateral)
+  function semMesaHtml() {
+    var lista = semMesa();
+    var q = buscaSemMesa.toLowerCase();
+    var filtrada = lista.filter(function(c) { return !q || (c.nome + ' ' + c.empresa + ' ' + c.gestor).toLowerCase().indexOf(q) !== -1; });
+    return '<div class="card-hb"><div class="card-hb-body">' +
+      '<div class="d-flex justify-content-between align-items-center mb-2"><strong style="color:var(--ink-900);font-size:.88rem;"><i class="fas fa-user-clock me-1 text-primary"></i> Sem mesa (' + lista.length + ')</strong>' +
+        (D.podeEditar && lista.length ? '<button class="btn btn-sm btn-link p-0" onclick="selecionarTodosSemMesa()">' + (qtdSelecionados() ? 'Limpar' : 'Marcar visíveis') + '</button>' : '') + '</div>' +
+      '<div class="mz-sentar-aviso" id="mzAviso"></div>' +
+      (lista.length ? '<input class="form-control form-control-sm mb-2" id="mzBusca" placeholder="Buscar nome, empresa ou gestor" value="' + esc(buscaSemMesa) + '">' : '') +
+      '<div class="mz-semmesa-lista">' + (filtrada.length ? filtrada.map(function(c) {
+        return '<label class="mz-pessoa">' + (D.podeEditar ? '<input type="checkbox" class="form-check-input m-0" data-id="' + esc(c.idConvite) + '"' + (selecionados[c.idConvite] ? ' checked' : '') + '>' : '') +
+          '<span style="min-width:0;"><span class="d-block text-truncate">' + esc(c.nome) + '</span><span class="sub d-block text-truncate">' + esc([c.empresa, c.categoria].filter(Boolean).join(' · ') || c.gestor || '') + '</span></span></label>';
+      }).join('') : '<div class="small text-muted py-2">' + (lista.length ? 'Ninguém encontrado.' : 'Todos os convidados ativos já têm mesa.') + '</div>') + '</div>' +
+    '</div></div>';
+  }
+
+  // eventos da lateral (delegados, pois a tela é redesenhada)
+  wrap.addEventListener('change', function(e) {
+    var id = e.target.getAttribute && e.target.getAttribute('data-id');
+    if (!id || e.target.type !== 'checkbox') return;
+    if (e.target.checked) selecionados[id] = true; else delete selecionados[id];
+    atualizarDestaques();
+  });
+  wrap.addEventListener('input', function(e) {
+    if (e.target.id !== 'mzBusca') return;
+    buscaSemMesa = e.target.value;
+    var pos = e.target.selectionStart;
+    var lateral = wrap.querySelector('.mz-lateral');
+    lateral.innerHTML = semMesaHtml();
+    var novo = document.getElementById('mzBusca'); novo.focus(); try { novo.setSelectionRange(pos, pos); } catch (err) {}
+    atualizarAvisoSentar();
+  });
+
+  window.selecionarTodosSemMesa = function() {
+    if (qtdSelecionados()) selecionados = {};
+    else wrap.querySelectorAll('.mz-semmesa-lista input[type=checkbox]').forEach(function(ch){ selecionados[ch.getAttribute('data-id')] = true; });
+    render();
+  };
+
+  function atualizarDestaques() {
+    if (modo === 'planta') {
+      var svg = document.getElementById('mzSvg');
+      if (svg) { svg.innerHTML = ''; desenharPlanta(); }
+    } else {
+      var col = wrap.querySelector('.mz-grid > div');
+      if (col) col.innerHTML = cardsHtml();
+    }
+    var btnTodos = wrap.querySelector('.mz-lateral .btn-link');
+    if (btnTodos) btnTodos.textContent = qtdSelecionados() ? 'Limpar' : 'Marcar visíveis';
+    atualizarAvisoSentar();
+  }
+
+  function atualizarAvisoSentar() {
+    var el = document.getElementById('mzAviso');
+    if (!el) return;
+    var n = qtdSelecionados();
+    el.style.display = n ? 'block' : 'none';
+    el.innerHTML = n ? '<i class="fas fa-chair me-1"></i>' + n + ' selecionado(s). ' + (modo === 'planta' ? 'Toque numa mesa com borda verde para sentar.' : 'Use "Sentar aqui" no cartão da mesa.') : '';
+  }
+
+  // ---------------------------------------------------------- ações
+  function sentar(ids, idMesa, depois) {
+    google.script.run.withSuccessHandler(function(resp) {
+      if (resp && resp.auth === false) { forcarLogout('Sessão expirada.'); return; }
+      if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
+      toast(resp.mensagem, 'ok');
+      ids.forEach(function(id){ delete selecionados[id]; });
+      carregar(depois);
+    }).withFailureHandler(erro).apiAtribuirMesa(window.TOKEN, idEvento, ids, idMesa);
+  }
+  window.sentarSelecionadosEm = function(idMesa) { sentar(Object.keys(selecionados), idMesa); };
+  window.tirarDaMesa = function(idConvite, reabrir) {
+    sentar([idConvite], '', reabrir ? function(){ abrirMesa(reabrir); } : null);
+  };
+
+  window.abrirNovasMesas = function() {
+    var r = D ? D.resumo : { semMesa: 0 };
+    document.getElementById('nmResumo').innerText = r.semMesa ? r.semMesa + ' convidado(s) ativo(s) sem mesa; ' + (r.livres || 0) + ' lugar(es) livre(s) nas mesas atuais.' : '';
+    new bootstrap.Modal(document.getElementById('modalNovasMesas')).show();
+  };
+  window.criarMesas = function() {
+    var btn = document.getElementById('btnCriarMesas'); btn.disabled = true;
+    var formato = (document.querySelector('input[name=nmFormato]:checked') || {}).value || 'Redonda';
+    google.script.run.withSuccessHandler(function(resp) {
+      btn.disabled = false;
+      if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
+      bootstrap.Modal.getInstance(document.getElementById('modalNovasMesas')).hide();
+      toast(resp.mensagem, 'ok'); carregar();
+    }).withFailureHandler(function(e){ btn.disabled = false; erro(e); }).apiCriarMesas(window.TOKEN, idEvento, {
+      quantidade: document.getElementById('nmQtd').value, capacidade: document.getElementById('nmCap').value,
+      formato: formato, vip: document.getElementById('nmVip').checked
+    });
+  };
+
+  window.abrirDistribuir = function() { new bootstrap.Modal(document.getElementById('modalDistribuir')).show(); };
+  window.distribuir = function() {
+    var btn = document.getElementById('btnDistribuir'); btn.disabled = true;
+    google.script.run.withSuccessHandler(function(resp) {
+      btn.disabled = false;
+      if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
+      bootstrap.Modal.getInstance(document.getElementById('modalDistribuir')).hide();
+      toast(resp.mensagem, 'ok'); selecionados = {}; carregar();
+    }).withFailureHandler(function(e){ btn.disabled = false; erro(e); }).apiDistribuirMesas(window.TOKEN, idEvento, {
+      agrupar: document.getElementById('dsAgrupar').value, somenteConfirmados: document.getElementById('dsConfirmados').checked
+    });
+  };
+
+  // ---------------------------------------------------------- modal da mesa
+  window.abrirMesa = function(id) {
+    var m = mesaPorId(id); if (!m) return;
+    mesaAberta = m;
+    var ed = D.podeEditar;
+    document.getElementById('mmTitulo').innerHTML = '<i class="fas ' + (m.formato === 'Retangular' ? 'fa-square' : 'fa-circle') + ' me-2" style="color:' + (m.vip ? '#F59E0B' : 'var(--blue-600)') + '"></i>' + esc(m.rotulo) + ' <span class="small text-muted fw-normal ms-1">' + m.ocupados + '/' + m.capacidade + ' lugares</span>';
+    var nomes = sentadosNa(m.id);
+    document.getElementById('mmSentados').innerHTML =
+      '<div class="small fw-bold text-uppercase mb-2" style="color:var(--text-muted);font-size:.68rem;letter-spacing:.4px;">Sentados</div>' +
+      (nomes.length ? '<ul class="mz-lista-nomes">' + nomes.map(function(c) {
+        return '<li><span>' + esc(c.nome) + '<span class="d-block text-muted" style="font-size:.72rem;">' + esc([c.empresa, c.categoria, c.gestor ? 'convidado por ' + c.gestor : '', c.status].filter(Boolean).join(' · ')) + '</span></span>' +
+          (ed ? '<button class="mz-x" title="Tirar da mesa" onclick="tirarDaMesa(\'' + esc(c.idConvite) + '\', \'' + esc(m.id) + '\')"><i class="fas fa-xmark"></i></button>' : '') + '</li>';
+      }).join('') + '</ul>' : '<div class="small text-muted">Ninguém nesta mesa ainda.</div>');
+    var livres = m.capacidade - m.ocupados, sem = semMesa();
+    document.getElementById('mmAdicionar').innerHTML = (ed && livres > 0 && sem.length) ?
+      '<div class="small fw-bold text-uppercase mb-2" style="color:var(--text-muted);font-size:.68rem;letter-spacing:.4px;">Adicionar (' + livres + ' lugar(es) livre(s))</div>' +
+      '<input class="form-control form-control-sm mb-2" id="mmBusca" placeholder="Buscar quem está sem mesa">' +
+      '<div class="mz-semmesa-lista" id="mmLista" style="max-height:210px;">' + sem.map(function(c) {
+        return '<label class="mz-pessoa" data-busca="' + esc((c.nome + ' ' + c.empresa + ' ' + c.gestor).toLowerCase()) + '"><input type="checkbox" class="form-check-input m-0 mm-add" value="' + esc(c.idConvite) + '"><span><span class="d-block">' + esc(c.nome) + '</span><span class="sub">' + esc([c.empresa, c.categoria].filter(Boolean).join(' · ')) + '</span></span></label>';
+      }).join('') + '</div>' +
+      '<button class="btn btn-sm btn-success w-100 mt-2" onclick="adicionarNaMesaAberta()"><i class="fas fa-chair"></i> Sentar selecionados</button>' : '';
+    var busca = document.getElementById('mmBusca');
+    if (busca) busca.addEventListener('input', function() {
+      var q = busca.value.toLowerCase();
+      document.querySelectorAll('#mmLista .mz-pessoa').forEach(function(l){ l.style.display = l.getAttribute('data-busca').indexOf(q) !== -1 ? '' : 'none'; });
+    });
+    document.getElementById('mmNumero').value = m.numero;
+    document.getElementById('mmNome').value = m.nome;
+    document.getElementById('mmCap').value = m.capacidade;
+    document.getElementById('mmFormato').value = m.formato;
+    document.getElementById('mmVip').checked = m.vip;
+    document.getElementById('mmObs').value = m.obs;
+    document.getElementById('mmEditar').style.display = ed ? '' : 'none';
+    document.getElementById('mmRodape').style.display = ed ? '' : 'none';
+    var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalMesa'));
+    modal.show();
+  };
+
+  window.adicionarNaMesaAberta = function() {
+    var ids = [].map.call(document.querySelectorAll('.mm-add:checked'), function(ch){ return ch.value; });
+    if (!ids.length) { toast('Marque quem vai sentar nesta mesa.', 'err'); return; }
+    var id = mesaAberta.id;
+    sentar(ids, id, function(){ abrirMesa(id); });
+  };
+
+  window.salvarMesa = function() {
+    var btn = document.getElementById('btnSalvarMesa'); btn.disabled = true;
+    google.script.run.withSuccessHandler(function(resp) {
+      btn.disabled = false;
+      if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
+      bootstrap.Modal.getInstance(document.getElementById('modalMesa')).hide();
+      toast(resp.mensagem, 'ok'); carregar();
+    }).withFailureHandler(function(e){ btn.disabled = false; erro(e); }).apiEditarMesa(window.TOKEN, mesaAberta.id, {
+      numero: document.getElementById('mmNumero').value, nome: document.getElementById('mmNome').value.trim(),
+      capacidade: document.getElementById('mmCap').value, formato: document.getElementById('mmFormato').value,
+      vip: document.getElementById('mmVip').checked, obs: document.getElementById('mmObs').value.trim()
+    });
+  };
+
+  window.excluirMesa = function() {
+    if (!mesaAberta) return;
+    var n = sentadosNa(mesaAberta.id).length;
+    if (!confirm('Excluir ' + mesaAberta.rotulo + '?' + (n ? ' ' + n + ' convidado(s) ficarão sem mesa.' : ''))) return;
+    google.script.run.withSuccessHandler(function(resp) {
+      if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
+      bootstrap.Modal.getInstance(document.getElementById('modalMesa')).hide();
+      toast(resp.mensagem, 'ok'); carregar();
+    }).withFailureHandler(erro).apiExcluirMesa(window.TOKEN, mesaAberta.id);
+  };
+})();
+</script>

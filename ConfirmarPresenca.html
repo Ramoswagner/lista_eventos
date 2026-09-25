@@ -7,26 +7,54 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    :root { --primary:#0A2B4E; --blue:#0088CC; --success:#10B981; --danger:#EF4444; }
-    html, body { overflow-x:hidden; max-width:100%; }
-    body { background:linear-gradient(135deg,#0A2B4E 0%,#0088CC 100%); min-height:100vh; font-family:'Inter',system-ui,sans-serif; padding:24px 16px; display:flex; align-items:center; justify-content:center; }
-    .card-main { background:#fff; border-radius:20px; box-shadow:0 25px 60px rgba(0,0,0,.3); max-width:440px; width:100%; overflow:hidden; }
+    :root { --primary:#0A2B4E; --blue:#0088CC; --blue-50:#EAF6FC; --success:#10B981; --danger:#EF4444; --muted:#64748B; --border:#E2E8F0; }
+    html, body { overflow-x:hidden; max-width:100%; -webkit-text-size-adjust:100%; }
+    body { background:linear-gradient(135deg,#0A2B4E 0%,#0088CC 100%); min-height:100vh; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Inter,sans-serif; padding:24px 16px; display:flex; align-items:flex-start; justify-content:center; }
+    .card-main { background:#fff; border-radius:20px; box-shadow:0 25px 60px rgba(0,0,0,.3); max-width:460px; width:100%; overflow:hidden; margin:auto 0; }
     .card-header-custom { background:var(--primary); color:#fff; padding:22px 30px; text-align:center; }
     .card-header-custom img { max-width:100%; height:60px; display:block; margin:0 auto; }
     .card-header-custom .subtitulo { font-size:.72rem; text-transform:uppercase; letter-spacing:.5px; color:rgba(255,255,255,.6); font-weight:700; margin-top:4px; }
-    .card-body-custom { padding:30px; text-align:center; }
-    .evt-nome { font-weight:800; color:var(--primary); font-size:1.15rem; margin-bottom:2px; }
-    .evt-meta { color:#64748B; font-size:.85rem; margin-bottom:22px; }
-    .btn-confirmar { background:var(--success); color:#fff; border:none; border-radius:12px; padding:13px; font-weight:700; width:100%; margin-bottom:10px; transition:.2s; }
+    .card-body-custom { padding:28px; text-align:center; }
+    .evt-nome { font-weight:800; color:var(--primary); font-size:1.15rem; margin:10px 0 8px; line-height:1.3; }
+    .meta-evento { display:flex; flex-wrap:wrap; justify-content:center; gap:6px; margin-bottom:20px; }
+    .chip { display:inline-flex; align-items:center; gap:6px; padding:5px 11px; border-radius:50px; font-size:.78rem; font-weight:600; background:#F1F5F9; color:#334155; }
+    .chip i { color:var(--blue); font-size:.75rem; }
+    .btn-confirmar { background:var(--success); color:#fff; border:none; border-radius:12px; padding:13px; font-weight:700; width:100%; margin-bottom:10px; transition:.2s; min-height:48px; }
     .btn-confirmar:hover { filter:brightness(0.93); transform:translateY(-1px); }
-    .btn-recusar { background:#fff; color:var(--danger); border:1.5px solid #FCA5A5; border-radius:12px; padding:12px; font-weight:700; width:100%; }
+    .btn-recusar { background:#fff; color:var(--danger); border:1.5px solid #FCA5A5; border-radius:12px; padding:12px; font-weight:700; width:100%; min-height:48px; }
     .btn-recusar:hover { background:#FEF2F2; }
-    .status-badge { display:inline-flex; align-items:center; gap:8px; padding:8px 18px; border-radius:50px; font-weight:700; font-size:.9rem; margin-bottom:6px; }
-    .status-ok { background:#EAFBF3; color:var(--success); }
-    .status-warn { background:#FFF6E9; color:#B4790A; }
-    .qr-box { background:#F8FAFC; border-radius:16px; padding:16px; margin:18px auto 6px; display:inline-block; }
+    .icone-status { width:64px; height:64px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:1.6rem; }
+    .icone-status.ok { background:#EAFBF3; color:var(--success); box-shadow:0 0 0 8px #F4FDF8; }
+    .icone-status.aviso { background:#FFF6E9; color:#B4790A; box-shadow:0 0 0 8px #FFFBF3; }
+    .icone-status.convite { background:var(--blue-50); color:var(--blue); box-shadow:0 0 0 8px #F4FAFD; }
+    .icone-status.erro { background:#FDECEC; color:var(--danger); box-shadow:0 0 0 8px #FEF6F6; }
+    .rotulo-status { font-weight:700; font-size:.95rem; margin-top:14px; }
+    .rotulo-status.ok { color:var(--success); } .rotulo-status.aviso { color:#B4790A; }
+    .qr-box { background:#F8FAFC; border:1px solid var(--border); border-radius:16px; padding:16px; margin:14px auto 6px; display:inline-block; }
     .qr-box img, .qr-box canvas { display:block; margin:0 auto; }
-    .qr-legenda { font-size:.78rem; color:#64748B; }
+    .qr-legenda { font-size:.78rem; color:var(--muted); }
+
+    /* Atualizar meus dados (opcional) */
+    .atualizar { border-top:1px solid var(--border); margin-top:22px; padding-top:16px; text-align:left; }
+    .atualizar-toggle { width:100%; background:none; border:none; display:flex; align-items:center; gap:10px; padding:4px 0; color:var(--primary); font-weight:700; font-size:.9rem; text-align:left; }
+    .atualizar-toggle .ic { width:30px; height:30px; border-radius:9px; background:var(--blue-50); color:var(--blue); display:inline-flex; align-items:center; justify-content:center; font-size:.82rem; flex:none; }
+    .atualizar-toggle .seta { margin-left:auto; color:var(--muted); transition:transform .2s; }
+    .atualizar-toggle[aria-expanded="true"] .seta { transform:rotate(180deg); }
+    .atualizar-toggle small { display:block; font-weight:500; color:var(--muted); font-size:.74rem; }
+    #formDados { display:none; margin-top:14px; }
+    #formDados.aberto { display:block; }
+    .form-label { font-weight:600; font-size:.8rem; color:var(--primary); margin-bottom:4px; }
+    .form-control, .form-select { border-radius:10px; border:1.5px solid var(--border); padding:10px 12px; font-size:16px; }
+    .form-control:focus, .form-select:focus { border-color:var(--blue); box-shadow:0 0 0 3px rgba(0,136,204,.13); }
+    .btn-salvar { background:var(--primary); color:#fff; border:none; border-radius:12px; padding:12px; font-weight:700; width:100%; min-height:46px; }
+    .btn-salvar:disabled { opacity:.6; }
+    .aviso-privacidade { font-size:.74rem; color:var(--muted); display:flex; gap:8px; align-items:flex-start; background:#F8FAFC; border-radius:10px; padding:9px 11px; }
+    .aviso-privacidade i { color:var(--blue); margin-top:2px; }
+    #msgDados { font-size:.82rem; font-weight:600; min-height:18px; margin-top:8px; }
+    @media (max-width:480px) {
+      body { padding:12px 10px; }
+      .card-body-custom { padding:22px 18px; }
+    }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
@@ -34,14 +62,37 @@
 
 <div class="card-main" id="cardMain">
   <div class="card-header-custom"><img id="logoInstituicao" src="https://hospitaldabaleia.org.br/wp-content/uploads/2023/08/Ativo-3@2x.png" alt="Hospital da Baleia"><div class="subtitulo">Gestão de Eventos</div></div>
-  <div class="card-body-custom" id="corpo">
-    <i class="fas fa-spinner fa-spin fa-2x text-primary my-4"></i>
+  <div class="card-body-custom">
+    <div id="corpo"><i class="fas fa-spinner fa-spin fa-2x text-primary my-4"></i></div>
+
+    <!-- Atualizar meus dados: opcional, sempre em branco (nada do cadastro atual aparece aqui) -->
+    <div class="atualizar" id="secaoDados" style="display:none;">
+      <button type="button" class="atualizar-toggle" id="toggleDados" aria-expanded="false" aria-controls="formDados" onclick="alternarDados()">
+        <span class="ic"><i class="fas fa-user-pen"></i></span>
+        <span>Atualizar meus dados <small>Opcional — mudou de telefone ou e-mail? Atualize aqui.</small></span>
+        <i class="fas fa-chevron-down seta"></i>
+      </button>
+      <form id="formDados" novalidate>
+        <div class="aviso-privacidade mb-3"><i class="fas fa-lock"></i><span>Preencha só o que quiser atualizar. Campos em branco continuam como estão. Por segurança, seus dados atuais não são mostrados aqui.</span></div>
+        <div class="mb-2"><label class="form-label" for="dNome">Nome completo</label><input class="form-control" id="dNome" autocomplete="name" maxlength="120"></div>
+        <div class="mb-2"><label class="form-label" for="dEmail">E-mail</label><input class="form-control" id="dEmail" type="email" autocomplete="email" autocapitalize="off" maxlength="120"></div>
+        <div class="row g-2 mb-2">
+          <div class="col-6"><label class="form-label" for="dDoc">CPF / Documento</label><input class="form-control" id="dDoc" inputmode="numeric" autocomplete="off" maxlength="30"></div>
+          <div class="col-6"><label class="form-label" for="dTel">Telefone</label><input class="form-control" id="dTel" type="tel" autocomplete="tel" placeholder="(31) 9...." maxlength="25"></div>
+        </div>
+        <div class="mb-2"><label class="form-label" for="dCargo">Cargo / Função</label><input class="form-control" id="dCargo" autocomplete="organization-title" maxlength="80"></div>
+        <div class="mb-3"><label class="form-label" for="dCategoria">Quem é você?</label><select class="form-select" id="dCategoria"><option value="">— não alterar —</option></select></div>
+        <button type="submit" class="btn-salvar" id="btnSalvarDados"><i class="fas fa-check me-1"></i> Salvar meus dados</button>
+        <div id="msgDados"></div>
+      </form>
+    </div>
   </div>
 </div>
 
 <script>
   // Token validado no servidor (doGet): só letras, números e hífen — ou vazio.
   var TOKEN = <?!= JSON.stringify(qrToken) ?>;
+  var categoriasCarregadas = false;
 
   function esc(v) {
     return String(v === null || v === undefined ? '' : v).replace(/[&<>"']/g, function(c) {
@@ -54,7 +105,7 @@
   } else {
     google.script.run
       .withSuccessHandler(render)
-      .withFailureHandler(function(err) { renderErro('Não foi possível carregar o convite. Tente de novo em instantes.'); })
+      .withFailureHandler(function() { renderErro('Não foi possível carregar o convite. Tente de novo em instantes.'); })
       .apiInfoConvitePublico(TOKEN);
   }
 
@@ -69,7 +120,7 @@
   // aba Check-in do sistema.
   function blocoQR() {
     return '<div class="qr-box"><div id="qrCode"></div></div>' +
-      '<div class="qr-legenda mb-3"><i class="fas fa-qrcode"></i> Apresente este QR Code na entrada (pode ser pela tela do celular).</div>';
+      '<div class="qr-legenda mb-3"><i class="fas fa-qrcode me-1"></i> Apresente este QR Code na entrada (pode ser pela tela do celular).</div>';
   }
   function desenharQR() {
     var el = document.getElementById('qrCode');
@@ -81,50 +132,50 @@
     }
   }
 
+  function cabecalho(d, classeIcone, icone, rotulo, classeRotulo) {
+    return '<div class="icone-status ' + classeIcone + '"><i class="fas ' + icone + '"></i></div>' +
+      (rotulo ? '<div class="rotulo-status ' + (classeRotulo || '') + '">' + rotulo + '</div>' : '') +
+      '<div class="evt-nome">' + esc(d.evento) + '</div>' +
+      '<div class="meta-evento">' +
+        '<span class="chip"><i class="fas fa-calendar-days"></i>' + esc(d.dataEvento || 'Data a definir') + '</span>' +
+        (d.local ? '<span class="chip"><i class="fas fa-location-dot"></i>' + esc(d.local) + '</span>' : '') +
+      '</div>';
+  }
+
   function render(resp) {
     if (!resp.ok) { renderErro(resp.mensagem); return; }
     var d = resp.dados;
     var corpo = document.getElementById('corpo');
-    var meta = esc(d.dataEvento || 'data a definir') + (d.local ? ' · ' + esc(d.local) : '');
+    prepararCategorias(d.categorias);
+    document.getElementById('secaoDados').style.display = '';
 
     if (d.status === 'Presente') {
-      corpo.innerHTML =
-        '<div class="status-badge status-ok"><i class="fas fa-circle-check"></i> Entrada registrada</div>' +
-        '<div class="evt-nome mt-2">' + esc(d.evento) + '</div>' +
-        '<div class="evt-meta">' + meta + '</div>' +
+      corpo.innerHTML = cabecalho(d, 'ok', 'fa-door-open', 'Entrada registrada', 'ok') +
         '<p class="text-muted small mb-0">Olá, ' + esc(d.nome) + '. Seja bem-vindo(a)!</p>';
       return;
     }
 
     if (d.status === 'Confirmado') {
-      corpo.innerHTML =
-        '<div class="status-badge status-ok"><i class="fas fa-circle-check"></i> Presença confirmada</div>' +
-        '<div class="evt-nome mt-2">' + esc(d.evento) + '</div>' +
-        '<div class="evt-meta mb-0">' + meta + '</div>' +
+      corpo.innerHTML = cabecalho(d, 'ok', 'fa-check', 'Presença confirmada', 'ok') +
         blocoQR() +
         '<p class="text-muted small mb-2">Olá, ' + esc(d.nome) + '. Te esperamos lá!</p>' +
-        '<button class="btn-recusar mt-2" onclick="responder(\'Recusado\')"><i class="fas fa-xmark"></i> Não vou mais poder ir</button>';
+        '<button class="btn-recusar mt-2" onclick="responder(\'Recusado\')"><i class="fas fa-xmark me-1"></i> Não vou mais poder ir</button>';
       desenharQR();
       return;
     }
 
     if (d.status === 'Recusado') {
-      corpo.innerHTML =
-        '<div class="status-badge status-warn"><i class="fas fa-circle-info"></i> Você avisou que não vai</div>' +
-        '<div class="evt-nome mt-2">' + esc(d.evento) + '</div>' +
-        '<div class="evt-meta">' + meta + '</div>' +
+      corpo.innerHTML = cabecalho(d, 'aviso', 'fa-calendar-xmark', 'Você avisou que não vai', 'aviso') +
         '<p class="text-muted small mb-0">Olá, ' + esc(d.nome) + '. Mudou de ideia?</p>' +
-        '<button class="btn-confirmar mt-3" onclick="responder(\'Confirmado\')"><i class="fas fa-check"></i> Confirmar presença</button>';
+        '<button class="btn-confirmar mt-3" onclick="responder(\'Confirmado\')"><i class="fas fa-check me-1"></i> Confirmar presença</button>';
       return;
     }
 
-    corpo.innerHTML =
-      '<p class="text-muted small mb-1">Você foi convidado(a) para</p>' +
-      '<div class="evt-nome">' + esc(d.evento) + '</div>' +
-      '<div class="evt-meta">' + meta + '</div>' +
-      '<p class="mb-4">Olá, <strong>' + esc(d.nome) + '</strong>' + (d.empresa ? ' (' + esc(d.empresa) + ')' : '') + '. Você vai?</p>' +
-      '<button class="btn-confirmar" onclick="responder(\'Confirmado\')"><i class="fas fa-check"></i> Sim, vou comparecer</button>' +
-      '<button class="btn-recusar" onclick="responder(\'Recusado\')"><i class="fas fa-xmark"></i> Não vou poder ir</button>';
+    corpo.innerHTML = cabecalho(d, 'convite', 'fa-envelope-open-text', '', '') +
+      '<p class="text-muted small mb-1">Você foi convidado(a)</p>' +
+      '<p class="mb-4">Olá, <strong>' + esc(d.nome) + '</strong>' + (d.empresa ? ' <span class="text-muted">(' + esc(d.empresa) + ')</span>' : '') + '. Você vai?</p>' +
+      '<button class="btn-confirmar" onclick="responder(\'Confirmado\')"><i class="fas fa-check me-1"></i> Sim, vou comparecer</button>' +
+      '<button class="btn-recusar" onclick="responder(\'Recusado\')"><i class="fas fa-xmark me-1"></i> Não vou poder ir</button>';
   }
 
   function recarregar() {
@@ -140,14 +191,66 @@
         if (!resp.ok) { renderErro(resp.mensagem); return; }
         recarregar();   // mostra o novo estado (com QR Code se confirmou)
       })
-      .withFailureHandler(function(err) { renderErro('Não foi possível registrar agora. Tente de novo em instantes.'); })
+      .withFailureHandler(function() { renderErro('Não foi possível registrar agora. Tente de novo em instantes.'); })
       .apiResponderConvitePublico(TOKEN, resposta);
   }
 
   function renderErro(msg) {
+    document.getElementById('secaoDados').style.display = 'none';
     document.getElementById('corpo').innerHTML =
-      '<i class="fas fa-triangle-exclamation fa-2x text-danger mb-3"></i><p class="text-muted mb-0">' + esc(msg) + '</p>';
+      '<div class="icone-status erro mb-3"><i class="fas fa-triangle-exclamation"></i></div><p class="text-muted mb-0">' + esc(msg) + '</p>';
   }
+
+  // ---------- atualizar meus dados ----------
+  function prepararCategorias(lista) {
+    if (categoriasCarregadas || !lista) return;
+    categoriasCarregadas = true;
+    document.getElementById('dCategoria').innerHTML = '<option value="">— não alterar —</option>' +
+      lista.map(function(c) { return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join('');
+  }
+
+  function alternarDados() {
+    var form = document.getElementById('formDados');
+    var btn = document.getElementById('toggleDados');
+    var abrir = !form.classList.contains('aberto');
+    form.classList.toggle('aberto', abrir);
+    btn.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+    if (abrir) setTimeout(function() { btn.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
+  }
+
+  function msgDados(texto, ok) {
+    var el = document.getElementById('msgDados');
+    el.style.color = ok ? '#10B981' : '#EF4444';
+    el.textContent = texto;
+  }
+
+  document.getElementById('formDados').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var dados = {
+      Nome: document.getElementById('dNome').value.trim(),
+      Email: document.getElementById('dEmail').value.trim(),
+      Documento: document.getElementById('dDoc').value.trim(),
+      Telefone: document.getElementById('dTel').value.trim(),
+      Cargo: document.getElementById('dCargo').value.trim(),
+      Categoria: document.getElementById('dCategoria').value
+    };
+    if (!Object.keys(dados).some(function(k) { return dados[k]; })) { msgDados('Preencha pelo menos um campo.', false); return; }
+    if (dados.Email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(dados.Email)) { msgDados('E-mail inválido.', false); return; }
+    var btn = document.getElementById('btnSalvarDados');
+    btn.disabled = true; msgDados('', true);
+    google.script.run
+      .withSuccessHandler(function(resp) {
+        btn.disabled = false;
+        if (!resp.ok) { msgDados(resp.mensagem, false); return; }
+        // Limpa o formulário: os dados salvos não ficam visíveis na tela.
+        ['dNome','dEmail','dDoc','dTel','dCargo'].forEach(function(id) { document.getElementById(id).value = ''; });
+        document.getElementById('dCategoria').value = '';
+        msgDados(resp.mensagem, true);
+        if (dados.Nome) recarregar();
+      })
+      .withFailureHandler(function() { btn.disabled = false; msgDados('Falha de conexão. Tente novamente.', false); })
+      .apiAtualizarMeusDados(TOKEN, dados);
+  });
 </script>
 </body>
 </html>
