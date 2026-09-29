@@ -214,10 +214,10 @@
 </div></div></div>
 
 <script>
-/*@GEO_SALAO@*/
 (function() {
   var idEvento = window.EventoAtual && window.EventoAtual.id;
   var wrap = document.getElementById('mesasWrap');
+  if (typeof GEO === 'undefined') { wrap.innerHTML = '<div class="empty-state"><i class="fas fa-triangle-exclamation"></i><p>Não foi possível carregar a planta. Recarregue a página.</p></div>'; return; }
   if (!idEvento) { wrap.innerHTML = '<div class="empty-state"><i class="fas fa-triangle-exclamation"></i><p>Nenhum evento selecionado.</p></div>'; return; }
 
   var D = null;                       // dados do servidor
