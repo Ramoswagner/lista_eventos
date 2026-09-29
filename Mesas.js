@@ -21,7 +21,7 @@ const STATUS_SENTAM = ['Convidado', 'Confirmado', 'Presente'];
 // Autoridades e apoiadores vão primeiro para as mesas VIP na distribuição automática.
 const CATEGORIAS_VIP = ['Deputado', 'Senador', 'Prefeito', 'Vereador', 'Secretário', 'Político', 'Patrocinador', 'Conselheiro', 'Doador'];
 const FORMATOS_MESA = ['Redonda', 'Quadrada', 'Retangular'];
-const PLANTA_PADRAO = { v: 2, w: 2500, h: 1800, corredor: 90, margem: 100, elementos: [] };
+const PLANTA_PADRAO = { v: 2, w: 2500, h: 1800, corredor: 90, margem: 100, cadeira: 55, forma: { tipo: 'retangulo' }, elementos: [] };
 const PLANTA_LEGADO = { fator: 2, w: 2000, h: 1280 };      // área lógica antiga 1000 x 640
 const CADEIRA_CM = 55;                                     // cadeira + pessoa sentada, a partir da borda do tampo
 const TIPOS_ELEMENTO = ['palco', 'pista', 'buffet', 'bar', 'entrada', 'banheiro', 'bloqueio'];
@@ -36,15 +36,7 @@ function _rotuloMesa_(m) {
 
 function _formatoMesa_(f) { return FORMATOS_MESA.indexOf(_s_(f)) !== -1 ? _s_(f) : 'Redonda'; }
 
-// Tamanho de tampo usual no mercado de eventos, pelo nº de lugares (cm).
-// Redonda: c = diâmetro. Retangular: c = comprimento, l = largura.
-function _tamanhoMesaPadrao_(formato, cap) {
-  cap = Math.max(1, Number(cap) || 1);
-  if (formato === 'Retangular') return { c: Math.max(120, Math.ceil(cap / 2) * 60), l: 80 };
-  if (formato === 'Quadrada') { const s = Math.max(80, Math.ceil(cap / 4) * 65); return { c: s, l: s }; }
-  const d = cap <= 4 ? 90 : cap <= 6 ? 120 : cap <= 8 ? 150 : cap <= 10 ? 160 : cap <= 12 ? 180 : Math.round(cap * 50 / Math.PI);
-  return { c: d, l: d };
-}
+function _tamanhoMesaPadrao_(formato, cap) { return _geo_().tamanhoPadrao(formato, cap); }
 
 function _tamanhoMesa_(m) {
   const formato = _formatoMesa_(m.Formato);
@@ -54,35 +46,14 @@ function _tamanhoMesa_(m) {
   return { c: c, l: formato === 'Retangular' ? (l || pad.l) : c, auto: false };
 }
 
-// Área ocupada com as cadeiras (retângulo alinhado aos eixos), para enquadrar a planta.
-function _pegadaMesa_(m) {
-  const t = _tamanhoMesa_(m), formato = _formatoMesa_(m.Formato);
-  let w = t.c + 2 * CADEIRA_CM, h = t.l + 2 * CADEIRA_CM;
-  if (formato === 'Retangular') w = t.c + 20;      // cadeiras só nos lados compridos
-  return Number(m.Rotacao) === 90 ? { w: h, h: w } : { w: w, h: h };
+// Área ocupada com as cadeiras, para enquadrar a planta e a área de espera.
+function _mesaGeo_(m) {
+  const t = _tamanhoMesa_(m);
+  return { formato: _formatoMesa_(m.Formato), comp: t.c, larg: t.l, rot: Number(m.Rotacao) === 90 ? 90 : 0 };
 }
+function _pegadaMesa_(m, cadeira) { return _geo_().pegada(_mesaGeo_(m), cadeira || CADEIRA_CM); }
 
-// Cadeiras em volta do tampo (cm, relativo ao centro da mesa, já girado).
-function _assentosMesa_(formato, t, n, rot) {
-  const pts = [], afast = 25;
-  if (formato === 'Retangular') {
-    const porLado = Math.max(1, Math.ceil(n / 2));
-    for (let i = 0; i < n; i++) {
-      const lado = i < porLado ? -1 : 1, k = i < porLado ? i : i - porLado;
-      pts.push({ x: -t.c / 2 + t.c * (k + .5) / porLado, y: lado * (t.l / 2 + afast) });
-    }
-  } else if (formato === 'Quadrada') {
-    const porLado = Math.max(1, Math.ceil(n / 4));
-    for (let i = 0; i < n; i++) {
-      const lado = Math.floor(i / porLado), k = i % porLado, pos = -t.c / 2 + t.c * (k + .5) / porLado, d = t.c / 2 + afast;
-      pts.push(lado === 0 ? { x: pos, y: -d } : lado === 1 ? { x: d, y: pos } : lado === 2 ? { x: -pos, y: d } : { x: -d, y: -pos });
-    }
-  } else {
-    const R = t.c / 2 + afast;
-    for (let i = 0; i < n; i++) { const a = -Math.PI / 2 + i * 2 * Math.PI / n; pts.push({ x: Math.cos(a) * R, y: Math.sin(a) * R }); }
-  }
-  return rot === 90 ? pts.map(p => ({ x: -p.y, y: p.x })) : pts;
-}
+function _assentosMesa_(m, n, cadeira) { return _geo_().assentos(_mesaGeo_(m), n, cadeira); }
 
 // Cores e nomes dos elementos do salão (iguais na tela e no relatório).
 const ESTILO_ELEMENTO = {
@@ -118,16 +89,26 @@ function _validarPlanta_(cfg) {
   const elementos = (Array.isArray(cfg.elementos) ? cfg.elementos : []).slice(0, 60).map((e, i) => ({
     id:   _s_(e.id).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 20) || ('E' + (i + 1)),
     tipo: TIPOS_ELEMENTO.indexOf(_s_(e.tipo)) !== -1 ? _s_(e.tipo) : 'bloqueio',
+    forma: e.forma === 'oval' ? 'oval' : 'ret',
     nome: _s_(e.nome).slice(0, 30),
     x:    _numLimitado_(e.x, 0, w, w / 2),
     y:    _numLimitado_(e.y, 0, h, h / 2),
     w:    _numLimitado_(e.w, 30, w, 300),
     h:    _numLimitado_(e.h, 30, h, 200)
   }));
+  const geo = _geo_(), f = cfg.forma || {};
+  const tipo = geo.FORMAS.indexOf(_s_(f.tipo)) !== -1 ? _s_(f.tipo) : 'retangulo';
+  const forma = { tipo: tipo };
+  if (geo.ORIENTACOES[tipo]) {
+    forma.orient = geo.ORIENTACOES[tipo].indexOf(_s_(f.orient)) !== -1 ? _s_(f.orient) : geo.ORIENTACOES[tipo][0];
+    forma.a = _numLimitado_(f.a, 100, 30000, Math.round(Math.min(w, h) / 3));
+    forma.b = _numLimitado_(f.b, 100, 30000, Math.round(Math.min(w, h) / 3));
+  }
   return {
-    v: 2, w: w, h: h,
+    v: 2, w: w, h: h, forma: forma,
     corredor: _numLimitado_(cfg.corredor, 30, 500, PLANTA_PADRAO.corredor),
     margem:   _numLimitado_(cfg.margem, 0, 500, PLANTA_PADRAO.margem),
+    cadeira:  _numLimitado_(cfg.cadeira, 30, 120, CADEIRA_CM),
     elementos: elementos
   };
 }
@@ -245,8 +226,7 @@ function apiMesasEvento(token, idEvento) {
       convidados: convidados,
       resumo: { mesas: mesas.length, lugares: lugares, sentados: sentados, semMesa: convidados.length - sentados, livres: Math.max(0, lugares - sentados) },
       podeEditar: temPermissao_(s.perfil, 'mesas', 'editar'),
-      planta: planta,
-      cadeiraCm: CADEIRA_CM
+      planta: planta
     } };
   } catch (e) { return { ok: false, mensagem: e.message }; }
 }
@@ -276,7 +256,7 @@ function apiSalvarPlanta(token, idEvento, cfg) {
 // "Organizar salão").
 function _posicoesEspera_(planta, existentes, novas) {
   const x0 = planta.w + 150;
-  const passo = novas.reduce((mx, m) => Math.max(mx, _pegadaMesa_(m).w, _pegadaMesa_(m).h), 0) + 40;
+  const passo = novas.reduce((mx, m) => Math.max(mx, _pegadaMesa_(m, planta.cadeira).w, _pegadaMesa_(m, planta.cadeira).h), 0) + 40;
   const colunas = Math.max(1, Math.floor(Math.max(planta.h, 600) / passo));
   const ocupadas = existentes.filter(p => p.x > planta.w);
   const pos = [];

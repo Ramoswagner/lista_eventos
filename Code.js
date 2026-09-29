@@ -79,7 +79,9 @@ function getViewContent(viewName) {
     return '<div class="alert alert-danger">Página não encontrada.</div>';
   }
   try {
-    return HtmlService.createHtmlOutputFromFile(fileName).getContent();
+    // A tela de Mesas usa a mesma geometria do servidor (Geometria.js).
+    return HtmlService.createHtmlOutputFromFile(fileName).getContent()
+      .replace('/*@GEO_SALAO@*/', function() { return 'var GEO = (' + _geoSalao_.toString() + ')();'; });
   } catch (e) {
     return '<div class="alert alert-danger">Erro ao carregar a tela.</div>';
   }

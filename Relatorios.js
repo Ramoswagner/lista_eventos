@@ -506,49 +506,76 @@ function _relPresenca_(idEvento, op, sessao) {
 // ------------------------------------------------------------
 // 3) MAPA DE MESAS
 // ------------------------------------------------------------
+// Largura útil da planta impressa em A4 retrato (210 mm - margens de 12 mm).
+const PLANTA_LARGURA_IMPRESSA_MM = 186;
+
 function _svgPlanta_(mesas, oc, planta) {
-  // Planta em escala real (cm): salão inteiro + mesas que estejam fora dele.
-  const pos = mesas.map(m => Object.assign(_posMesa_(m, planta), { m: m, p: _pegadaMesa_(m) }));
+  // Planta em escala real (cm): contorno do salão, cotas das paredes,
+  // elementos, mesas e barra de escala.
+  const geo = _geo_(), cad = planta.cadeira || CADEIRA_CM;
+  const fm = geo.contorno(planta);
+  const pos = mesas.map(m => Object.assign(_posMesa_(m, planta), { m: m, p: _pegadaMesa_(m, cad) }));
+  const fs = Math.max(26, Math.min(80, Math.max(planta.w, planta.h) / 45));
   let x0 = 0, y0 = 0, x1 = planta.w, y1 = planta.h;
   pos.forEach(q => { x0 = Math.min(x0, q.x - q.p.w / 2); x1 = Math.max(x1, q.x + q.p.w / 2); y0 = Math.min(y0, q.y - q.p.h / 2); y1 = Math.max(y1, q.y + q.p.h / 2); });
-  const pad = 80;
-  x0 -= pad; y0 -= pad + 60; x1 += pad; y1 += pad;
+  const pad = fs * 3;
+  x0 -= pad; y0 -= pad; x1 += pad; y1 += pad + fs * 3;       // espaço embaixo para a barra de escala
   const f = n => Math.round(n * 10) / 10;
-  const partes = ['<svg viewBox="' + f(x0) + ' ' + f(y0) + ' ' + f(x1 - x0) + ' ' + f(y1 - y0) + '" xmlns="http://www.w3.org/2000/svg" font-family="Arial, Helvetica, sans-serif">'];
-  partes.push('<rect x="0" y="0" width="' + planta.w + '" height="' + planta.h + '" fill="#FFFFFF" stroke="#334155" stroke-width="8"/>');
-  for (let x = 100; x < planta.w; x += 100) partes.push('<line x1="' + x + '" y1="0" x2="' + x + '" y2="' + planta.h + '" stroke="' + (x % 500 ? '#F1F5F9' : '#E2E8F0') + '" stroke-width="2"/>');
-  for (let y = 100; y < planta.h; y += 100) partes.push('<line x1="0" y1="' + y + '" x2="' + planta.w + '" y2="' + y + '" stroke="' + (y % 500 ? '#F1F5F9' : '#E2E8F0') + '" stroke-width="2"/>');
-  // Cotas do salão
-  const fonteCota = Math.max(28, Math.min(70, planta.w / 40));
-  partes.push('<text x="' + planta.w / 2 + '" y="' + (-24) + '" text-anchor="middle" font-size="' + fonteCota + '" fill="#475569">' + _h_(_metros_(planta.w)) + ' × ' + _h_(_metros_(planta.h)) + '</text>');
+  const vbw = x1 - x0;
+  const partes = ['<svg viewBox="' + f(x0) + ' ' + f(y0) + ' ' + f(vbw) + ' ' + f(y1 - y0) + '" xmlns="http://www.w3.org/2000/svg" font-family="Arial, Helvetica, sans-serif">'];
+  const d = geo.caminho(fm);
+  partes.push('<defs><clipPath id="salao"><path d="' + d + '"/></clipPath>' +
+    '<pattern id="g1" width="100" height="100" patternUnits="userSpaceOnUse"><path d="M 100 0 L 0 0 0 100" fill="none" stroke="#F1F5F9" stroke-width="2"/></pattern>' +
+    '<pattern id="g5" width="500" height="500" patternUnits="userSpaceOnUse"><path d="M 500 0 L 0 0 0 500" fill="none" stroke="#E2E8F0" stroke-width="3"/></pattern></defs>');
+  partes.push('<path d="' + d + '" fill="#FFFFFF"/>');
+  partes.push('<g clip-path="url(#salao)"><rect x="0" y="0" width="' + planta.w + '" height="' + planta.h + '" fill="url(#g1)"/><rect x="0" y="0" width="' + planta.w + '" height="' + planta.h + '" fill="url(#g5)"/></g>');
+  partes.push('<path d="' + d + '" fill="none" stroke="#334155" stroke-width="8" stroke-linejoin="round"/>');
+  // Cotas de cada parede
+  if (fm.tipo === 'poli') {
+    geo.arestas(fm).forEach(a => {
+      if (a.len < 150) return;
+      const mx = (a.x1 + a.x2) / 2 + a.nx * fs * 1.1, my = (a.y1 + a.y2) / 2 + a.ny * fs * 1.1 + fs * 0.35;
+      const vertical = Math.abs(a.x1 - a.x2) < 1;
+      partes.push('<text x="' + f(mx) + '" y="' + f(my) + '" text-anchor="middle" font-size="' + f(fs * 0.8) + '" fill="#475569"' + (vertical ? ' transform="rotate(-90 ' + f(mx) + ' ' + f(my - fs * 0.35) + ')"' : '') + '>' + _h_(geo.metros(a.len)) + '</text>');
+    });
+  } else {
+    partes.push('<text x="' + planta.w / 2 + '" y="' + f(-fs * 0.6) + '" text-anchor="middle" font-size="' + f(fs * 0.8) + '" fill="#475569">' + _h_(geo.metros(planta.w)) + ' × ' + _h_(geo.metros(planta.h)) + ' (oval)</text>');
+  }
   (planta.elementos || []).forEach(e => {
     const est = ESTILO_ELEMENTO[e.tipo] || ESTILO_ELEMENTO.bloqueio;
-    const fs = Math.max(22, Math.min(80, Math.min(e.w / 7, e.h / 2.5)));
-    partes.push('<rect x="' + f(e.x - e.w / 2) + '" y="' + f(e.y - e.h / 2) + '" width="' + e.w + '" height="' + e.h + '" rx="12" fill="' + est.fundo + '" stroke="' + est.borda + '" stroke-width="5"/>');
-    partes.push('<text x="' + e.x + '" y="' + f(e.y + fs * 0.35) + '" text-anchor="middle" font-size="' + f(fs) + '" font-weight="700" fill="' + est.borda + '">' + _h_(e.nome || est.rotulo) + '</text>');
+    const fe = Math.max(22, Math.min(80, Math.min(e.w / 7, e.h / 2.5)));
+    if (e.forma === 'oval') partes.push('<ellipse cx="' + e.x + '" cy="' + e.y + '" rx="' + e.w / 2 + '" ry="' + e.h / 2 + '" fill="' + est.fundo + '" stroke="' + est.borda + '" stroke-width="5"/>');
+    else partes.push('<rect x="' + f(e.x - e.w / 2) + '" y="' + f(e.y - e.h / 2) + '" width="' + e.w + '" height="' + e.h + '" rx="12" fill="' + est.fundo + '" stroke="' + est.borda + '" stroke-width="5"/>');
+    partes.push('<text x="' + e.x + '" y="' + f(e.y + fe * 0.35) + '" text-anchor="middle" font-size="' + f(fe) + '" font-weight="700" fill="' + est.borda + '">' + _h_(e.nome || est.rotulo) + '</text>');
   });
   pos.forEach(q => {
     const m = q.m, t = _tamanhoMesa_(m), formato = _formatoMesa_(m.Formato), rot = Number(m.Rotacao) === 90 ? 90 : 0;
     const cap = Math.max(1, Number(m.Capacidade) || 0), ocup = oc[m.ID_Mesa] || 0, vip = m.VIP === 'Sim';
     const borda = ocup > cap ? '#EF4444' : (vip ? '#F59E0B' : (ocup >= cap ? '#16A34A' : '#1B2A6B'));
     const g = ['<g transform="translate(' + f(q.x) + ',' + f(q.y) + ')">'];
-    _assentosMesa_(formato, t, Math.max(cap, ocup), rot).forEach((a, i) =>
+    _assentosMesa_(m, Math.max(cap, ocup), cad).forEach((a, i) =>
       g.push('<circle cx="' + f(a.x) + '" cy="' + f(a.y) + '" r="19" fill="' + (i < ocup ? (i < cap ? '#1B2A6B' : '#EF4444') : '#FFFFFF') + '" stroke="' + (i < ocup ? 'none' : '#94A3B8') + '" stroke-width="3"/>'));
     const tw = rot === 90 ? t.l : t.c, th = rot === 90 ? t.c : t.l;
     if (formato === 'Redonda') g.push('<circle r="' + t.c / 2 + '" fill="' + (vip ? '#FEF3C7' : '#FFFFFF') + '" stroke="' + borda + '" stroke-width="5"/>');
     else g.push('<rect x="' + (-tw / 2) + '" y="' + (-th / 2) + '" width="' + tw + '" height="' + th + '" rx="8" fill="' + (vip ? '#FEF3C7' : '#FFFFFF') + '" stroke="' + borda + '" stroke-width="5"/>');
-    const fs = Math.max(26, Math.min(60, Math.min(tw, th) * 0.34));
-    g.push('<text y="' + f(fs * 0.2) + '" text-anchor="middle" font-size="' + f(fs) + '" font-weight="700" fill="#0F172A">' + _h_(m.Numero) + '</text>');
-    g.push('<text y="' + f(fs * 0.2 + fs * 0.7) + '" text-anchor="middle" font-size="' + f(fs * 0.5) + '" fill="#64748B">' + ocup + '/' + cap + '</text>');
+    const fm2 = Math.max(26, Math.min(60, Math.min(tw, th) * 0.34));
+    g.push('<text y="' + f(fm2 * 0.2) + '" text-anchor="middle" font-size="' + f(fm2) + '" font-weight="700" fill="#0F172A">' + _h_(m.Numero) + '</text>');
+    g.push('<text y="' + f(fm2 * 0.2 + fm2 * 0.7) + '" text-anchor="middle" font-size="' + f(fm2 * 0.5) + '" fill="#64748B">' + ocup + '/' + cap + '</text>');
     if (_s_(m.Nome)) g.push('<text y="' + f(q.p.h / 2 + 34) + '" text-anchor="middle" font-size="30" font-weight="700" fill="#1B2A6B">' + _h_(_s_(m.Nome).slice(0, 24)) + '</text>');
     g.push('</g>');
     partes.push(g.join(''));
   });
+  // Barra de escala (vale em qualquer tamanho de impressão) + escala numérica em A4.
+  const L = geo.barraEscala(planta.w), bx = 0, by = y1 - fs * 2.2, bh = fs * 0.45;
+  for (let k = 0; k < 4; k++) partes.push('<rect x="' + f(bx + k * L / 4) + '" y="' + f(by) + '" width="' + f(L / 4) + '" height="' + f(bh) + '" fill="' + (k % 2 ? '#FFFFFF' : '#334155') + '" stroke="#334155" stroke-width="3"/>');
+  partes.push('<text x="' + bx + '" y="' + f(by - fs * 0.3) + '" font-size="' + f(fs * 0.7) + '" fill="#334155">0</text>');
+  partes.push('<text x="' + f(bx + L) + '" y="' + f(by - fs * 0.3) + '" text-anchor="middle" font-size="' + f(fs * 0.7) + '" fill="#334155">' + _h_(geo.metros(L)) + '</text>');
+  const escala = Math.round(vbw * 10 / PLANTA_LARGURA_IMPRESSA_MM / 10) * 10;
+  partes.push('<text x="' + f(bx + L + fs) + '" y="' + f(by + bh) + '" font-size="' + f(fs * 0.7) + '" fill="#64748B">Escala aprox. 1:' + escala + ' em A4 (impressão sem "ajustar à página") · ' +
+    'mesa + cadeira ' + _h_(geo.metros(cad)) + ' + corredor ' + _h_(geo.metros(planta.corredor)) + '</text>');
   partes.push('</svg>');
   return partes.join('');
 }
-
-function _metros_(cm) { return (Math.round(Number(cm) / 10) / 10).toLocaleString('pt-BR') + ' m'; }
 
 function _relMesas_(idEvento, op, sessao) {
   const ctx = _contextoEvento_(idEvento);

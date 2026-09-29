@@ -50,9 +50,14 @@ Links abertos pelo endereço de teste (`/dev`) são corrigidos automaticamente p
 
 Aba **Mesas** dentro do evento. A planta é em **escala real (metros)**:
 
-- **Salão**: largura × profundidade, **corredor mínimo** (espaço livre entre os encostos das cadeiras de mesas vizinhas; 0,90 m confortável, 1,20 m para cadeira de rodas) e distância das paredes.
-- **Tamanho real das mesas**: automático pelo nº de lugares (redonda de 8 = Ø 1,50 m; de 10 = Ø 1,60 m; de 12 = Ø 1,80 m; retangular = 60 cm por pessoa × 0,80 m) ou informado em metros. Formatos redonda, quadrada e retangular (a retangular pode girar 90°). Cada cadeira ocupa 55 cm a partir da borda.
-- **Elementos**: palco, pista de dança, buffet, bar, entrada, banheiros e áreas bloqueadas/pilares, com medidas em metros. Arraste para posicionar; toque para editar.
+- **Salão**: formato **retângulo, L, T, U, I/H ou oval**, com largura e profundidade totais e as medidas do recorte/haste/vão, mais a posição (ex.: T com a haste para baixo). A tela mostra a prévia com a medida de cada parede.
+- **Como a conta é feita** (aparece na tela do Salão com a mesa do evento):
+  - tampo real + **cadeira** em volta (padrão 0,55 m = cadeira ~0,45 m + ~0,10 m para afastar; ajustável);
+  - **corredor mínimo** entre os encostos das cadeiras de mesas vizinhas (padrão 0,90 m; 1,20 m para cadeira de rodas);
+  - exemplo: redonda Ø 1,60 m ocupa 2,70 × 2,70 m. Entre duas mesas: 0,55 + 0,90 + 0,55 = **2,00 m de tampo a tampo** (3,60 m de centro a centro);
+  - da parede até o encosto: padrão 1,00 m. Elementos ficam a pelo menos metade do corredor das cadeiras.
+- **Tamanho real das mesas**: automático pelo nº de lugares (redonda de 8 = Ø 1,50 m; de 10 = Ø 1,60 m; de 12 = Ø 1,80 m; retangular = 0,60 m por pessoa × 0,80 m) ou informado em metros. Formatos redonda, quadrada e retangular (a retangular pode girar 90°).
+- **Elementos**: palco, pista de dança, buffet, bar, entrada, banheiros e áreas bloqueadas/pilares, **retangulares ou redondos/ovais**, com medidas em metros. Arraste para posicionar; toque para editar.
 - **Organizar salão**: posiciona todas as mesas em *grade*, *intercalada* (cabe ~15–30% mais com redondas) ou *dois blocos com corredor central*, sem invadir os elementos, com a numeração a partir do palco e as VIP na frente. Antes de aplicar mostra **quantas mesas cabem** e, se não couberem todas, o que fazer (corredor menor, outro arranjo ou salão de A × B m). Tem **Desfazer**.
 - **Mesas novas** nascem na área "fora do salão" e são encaixadas sozinhas nos espaços livres, sem mexer nas outras. O que não couber fica fora do salão, sem sobrepor nada ("Encaixar N de fora").
 - **Arrastar**: encaixa de 10 em 10 cm e alinha com as outras mesas (linhas-guia azuis). A área das cadeiras fica verde se o corredor está ok ou vermelha se não. Mesas com pouco espaço ficam marcadas em vermelho, e o rodapé mostra quantas.
@@ -61,7 +66,7 @@ Aba **Mesas** dentro do evento. A planta é em **escala real (metros)**:
 - **Ver por gestor / Destacar gestor**: cada cadeira na cor do gestor que convidou.
 - **Distribuir**: senta automaticamente quem está sem mesa, mantendo juntos empresa, gestor ou categoria; autoridades e apoiadores vão para as mesas VIP.
 - Eventos criados antes desta versão são convertidos sozinhos para um salão de 20 × 12,8 m, mantendo o desenho. Ajuste as medidas em **Salão**.
-- O relatório **Mapa de mesas** imprime a planta em escala, com as medidas e os elementos.
+- O relatório **Mapa de mesas** imprime a planta em escala: contorno do salão com a medida de cada parede, elementos e mesas. Tem **barra de escala**, que vale em qualquer tamanho de papel, e a **escala aproximada 1:N para A4**, que só vale imprimindo sem "ajustar à página". Também traz as medidas usadas na conta (cadeira e corredor).
 
 ## Relatórios (PDF)
 

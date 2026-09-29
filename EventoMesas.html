@@ -26,6 +26,15 @@
   .mz-arranjo:has(input:checked) { border-color:var(--blue-600); background:var(--blue-50); }
   .mz-arranjo svg { display:block; margin:0 auto 6px; }
   .mz-arranjo small { display:block; font-weight:400; color:var(--text-muted); font-size:.68rem; }
+  .mz-formas { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; }
+  .mz-forma { border:1.5px solid var(--border); border-radius:10px; padding:8px 4px 6px; text-align:center; font-size:.72rem; font-weight:600; color:var(--ink-900); cursor:pointer; background:#fff; }
+  .mz-forma.on { border-color:var(--blue-600); background:var(--blue-50); }
+  .mz-forma svg { display:block; margin:0 auto 4px; }
+  .mz-previa-salao { background:#F4F6FA; border-radius:12px; padding:10px; height:100%; min-height:200px; display:flex; align-items:center; }
+  .mz-previa-salao svg { width:100%; height:220px; }
+  .mz-conta { background:var(--bg); border-radius:10px; padding:10px 12px; font-size:.8rem; color:var(--ink-700); }
+  .mz-conta b { color:var(--ink-900); }
+  @media (max-width:576px) { .mz-formas { grid-template-columns:repeat(3,1fr); } }
   .mz-ok { background:#EAFBF3; border:1px solid #A7F3D0; color:#047857; border-radius:10px; padding:9px 12px; font-size:.82rem; }
   .mz-nok { background:#FFF7ED; border:1px solid #FED7AA; color:#9A3412; border-radius:10px; padding:9px 12px; font-size:.82rem; }
   .mz-mesa { cursor:pointer; }
@@ -159,16 +168,30 @@
 </div></div></div>
 
 <!-- Modal: salão -->
-<div class="modal fade" id="modalSalao" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down"><div class="modal-content" style="border-radius:16px;border:none;">
-  <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold"><i class="fas fa-ruler-combined me-2 text-primary"></i>Medidas do salão</h6><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
-  <div class="modal-body">
-    <div class="row g-2 mb-2">
-      <div class="col-6"><label class="form-label" for="slLarg">Largura (m)</label><input class="form-control" id="slLarg" inputmode="decimal"></div>
-      <div class="col-6"><label class="form-label" for="slProf">Profundidade (m)</label><input class="form-control" id="slProf" inputmode="decimal"></div>
-      <div class="col-6"><label class="form-label" for="slCorredor">Corredor mínimo (m)</label><input class="form-control" id="slCorredor" inputmode="decimal"></div>
-      <div class="col-6"><label class="form-label" for="slMargem">Distância das paredes (m)</label><input class="form-control" id="slMargem" inputmode="decimal"></div>
+<div class="modal fade" id="modalSalao" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg modal-fullscreen-sm-down"><div class="modal-content" style="border-radius:16px;border:none;">
+  <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold"><i class="fas fa-ruler-combined me-2 text-primary"></i>Salão: formato e medidas</h6><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+  <div class="modal-body" id="slCorpo">
+    <label class="form-label">Formato do salão</label>
+    <div class="mz-formas mb-3" id="slFormas"></div>
+    <div class="row g-3">
+      <div class="col-md-6">
+        <div class="row g-2">
+          <div class="col-6"><label class="form-label" for="slLarg">Largura total (m)</label><input class="form-control" id="slLarg" inputmode="decimal"></div>
+          <div class="col-6"><label class="form-label" for="slProf">Profundidade total (m)</label><input class="form-control" id="slProf" inputmode="decimal"></div>
+          <div class="col-6" id="slABox"><label class="form-label" for="slA" id="slARot">A (m)</label><input class="form-control" id="slA" inputmode="decimal"></div>
+          <div class="col-6" id="slBBox"><label class="form-label" for="slB" id="slBRot">B (m)</label><input class="form-control" id="slB" inputmode="decimal"></div>
+          <div class="col-12" id="slOrientBox"><label class="form-label" for="slOrient">Posição</label><select class="form-select" id="slOrient"></select></div>
+        </div>
+      </div>
+      <div class="col-md-6"><div class="mz-previa-salao"><svg id="slPrevia" viewBox="0 0 100 100"></svg></div></div>
     </div>
-    <p class="small text-muted mb-0">Corredor = espaço livre entre os encostos das cadeiras de mesas vizinhas (circulação de pessoas e garçons). Referência: 0,90 m confortável; 1,20 m para cadeira de rodas. A planta mostra em vermelho as mesas abaixo desse mínimo.</p>
+    <hr>
+    <div class="row g-2">
+      <div class="col-4"><label class="form-label" for="slCadeira">Cadeira (m)</label><input class="form-control" id="slCadeira" inputmode="decimal"><div class="form-text">faixa em volta do tampo</div></div>
+      <div class="col-4"><label class="form-label" for="slCorredor">Corredor mínimo (m)</label><input class="form-control" id="slCorredor" inputmode="decimal"><div class="form-text">entre encostos</div></div>
+      <div class="col-4"><label class="form-label" for="slMargem">Das paredes (m)</label><input class="form-control" id="slMargem" inputmode="decimal"><div class="form-text">até a cadeira</div></div>
+    </div>
+    <div class="mz-conta mt-3" id="slConta"></div>
   </div>
   <div class="modal-footer" style="border-top:1px solid var(--border);"><button class="btn-hb-outline" data-bs-dismiss="modal">Cancelar</button><button class="btn-hb" onclick="salvarSalao()"><i class="fas fa-check"></i> Salvar</button></div>
 </div></div></div>
@@ -180,6 +203,7 @@
     <div class="row g-2 mb-2">
       <div class="col-6"><label class="form-label" for="elTipo">Tipo</label><select class="form-select" id="elTipo"><option value="palco">Palco</option><option value="pista">Pista de dança</option><option value="buffet">Buffet</option><option value="bar">Bar</option><option value="entrada">Entrada</option><option value="banheiro">Banheiros</option><option value="bloqueio">Área bloqueada / pilar</option></select></div>
       <div class="col-6"><label class="form-label" for="elNome">Nome <span class="text-muted fw-normal">(opcional)</span></label><input class="form-control" id="elNome" maxlength="30"></div>
+      <div class="col-12"><label class="form-label" for="elForma">Forma</label><select class="form-select" id="elForma"><option value="ret">Retangular</option><option value="oval">Redonda / oval (largura = profundidade para círculo)</option></select></div>
       <div class="col-5"><label class="form-label" for="elLarg">Largura (m)</label><input class="form-control" id="elLarg" inputmode="decimal"></div>
       <div class="col-5"><label class="form-label" for="elProf">Profundidade (m)</label><input class="form-control" id="elProf" inputmode="decimal"></div>
       <div class="col-2 d-flex align-items-end"><button class="btn btn-outline-secondary w-100" type="button" onclick="girarElemento()" title="Trocar largura e profundidade" aria-label="Girar"><i class="fas fa-rotate"></i></button></div>
@@ -190,6 +214,7 @@
 </div></div></div>
 
 <script>
+/*@GEO_SALAO@*/
 (function() {
   var idEvento = window.EventoAtual && window.EventoAtual.id;
   var wrap = document.getElementById('mesasWrap');
@@ -320,59 +345,29 @@
     bloqueio: { rotulo: 'Área bloqueada', fundo: '#F1F5F9', borda: '#94A3B8', w: 200,  h: 200 }
   };
   function P() { return D.planta; }
-  function CAD() { return D.cadeiraCm || 55; }
-  function metros(cm) { return (Math.round(cm / 10) / 10).toLocaleString('pt-BR') + ' m'; }
+  function CAD() { return P().cadeira || GEO.CADEIRA_PADRAO; }
+  var metros = GEO.metros;
+  function FM() { return GEO.contorno(P()); }        // contorno do salão (polígono ou elipse)
 
-  function tamanhoPadrao(formato, cap) {
-    cap = Math.max(1, Number(cap) || 1);
-    if (formato === 'Retangular') return { c: Math.max(120, Math.ceil(cap / 2) * 60), l: 80 };
-    if (formato === 'Quadrada') { var q = Math.max(80, Math.ceil(cap / 4) * 65); return { c: q, l: q }; }
-    return { c: cap <= 4 ? 90 : cap <= 6 ? 120 : cap <= 8 ? 150 : cap <= 10 ? 160 : cap <= 12 ? 180 : Math.round(cap * 50 / Math.PI), l: 0 };
-  }
+  function tamanhoPadrao(formato, cap) { return GEO.tamanhoPadrao(formato, cap); }
   function descTamanho(formato, c, l) {
     return formato === 'Redonda' ? 'Ø ' + metros(c) : (formato === 'Quadrada' ? metros(c) + ' × ' + metros(c) : metros(c) + ' × ' + metros(l || 80));
   }
-  // Área ocupada com as cadeiras (w x h) — igual a _pegadaMesa_ do servidor.
-  function pegada(m) {
-    var w = m.comp + 2 * CAD(), h = (m.formato === 'Redonda' ? m.comp : m.larg) + 2 * CAD();
-    if (m.formato === 'Retangular') w = m.comp + 20;
-    return m.rot === 90 ? { w: h, h: w } : { w: w, h: h };
-  }
-  function assentos(m, n) {
-    var pts = [], af = 25, t = { c: m.comp, l: m.formato === 'Redonda' ? m.comp : m.larg };
-    var i, k, porLado;
-    if (m.formato === 'Retangular') {
-      porLado = Math.max(1, Math.ceil(n / 2));
-      for (i = 0; i < n; i++) { var lado = i < porLado ? -1 : 1; k = i < porLado ? i : i - porLado; pts.push({ x: -t.c / 2 + t.c * (k + .5) / porLado, y: lado * (t.l / 2 + af) }); }
-    } else if (m.formato === 'Quadrada') {
-      porLado = Math.max(1, Math.ceil(n / 4));
-      for (i = 0; i < n; i++) {
-        var ld = Math.floor(i / porLado), pos = -t.c / 2 + t.c * ((i % porLado) + .5) / porLado, d = t.c / 2 + af;
-        pts.push(ld === 0 ? { x: pos, y: -d } : ld === 1 ? { x: d, y: pos } : ld === 2 ? { x: -pos, y: d } : { x: -d, y: -pos });
-      }
-    } else {
-      var R = t.c / 2 + af;
-      for (i = 0; i < n; i++) { var a = -Math.PI / 2 + i * 2 * Math.PI / n; pts.push({ x: Math.cos(a) * R, y: Math.sin(a) * R }); }
-    }
-    return m.rot === 90 ? pts.map(function(p){ return { x: -p.y, y: p.x }; }) : pts;
-  }
+  // Área ocupada com as cadeiras e posição das cadeiras: mesma conta do servidor (Geometria.js).
+  function pegada(m) { return GEO.pegada(m, CAD()); }
+  function assentos(m, n) { return GEO.assentos(m, n, CAD()); }
   function noSalao(m) { return m.x >= 0 && m.x <= P().w && m.y >= 0 && m.y <= P().h; }
-
-  // Folga entre duas áreas (cm). Negativa = sobrepõe. Redonda x redonda usa círculos.
-  function folga(a, b) {
-    if (a.redonda && b.redonda) return Math.hypot(a.x - b.x, a.y - b.y) - (a.w + b.w) / 2;
-    return Math.max(Math.abs(a.x - b.x) - (a.w + b.w) / 2, Math.abs(a.y - b.y) - (a.h + b.h) / 2);
-  }
+  var folga = GEO.folga;
   function caixaMesa(m, x, y) { var p = pegada(m); return { x: x === undefined ? m.x : x, y: y === undefined ? m.y : y, w: p.w, h: p.h, redonda: m.formato === 'Redonda' }; }
-  function caixaElem(e) { return { x: e.x, y: e.y, w: e.w, h: e.h }; }
+  function caixaElem(e) { return { x: e.x, y: e.y, w: e.w, h: e.h, oval: e.forma === 'oval' }; }
 
   // Mesas no salão com corredor menor que o mínimo, encostadas em elemento ou saindo pela parede.
   function calcularConflitos() {
-    var cor = P().corredor, res = {}, dentro = D.mesas.filter(noSalao);
+    var cor = P().corredor, res = {}, dentro = D.mesas.filter(noSalao), fm = FM();
     var cx = dentro.map(function(m){ return caixaMesa(m); });
     for (var i = 0; i < dentro.length; i++) {
       var a = cx[i];
-      if (a.x - a.w / 2 < 0 || a.y - a.h / 2 < 0 || a.x + a.w / 2 > P().w || a.y + a.h / 2 > P().h) res[dentro[i].id] = 'parede';
+      if (!GEO.caixaDentro(fm, a, 0)) res[dentro[i].id] = 'parede';
       for (var j = i + 1; j < dentro.length; j++) {
         if (Math.abs(a.x - cx[j].x) > 1500 || Math.abs(a.y - cx[j].y) > 1500) continue;
         if (folga(a, cx[j]) < cor - 1) { res[dentro[i].id] = res[dentro[i].id] || 'perto'; res[dentro[j].id] = res[dentro[j].id] || 'perto'; }
@@ -418,6 +413,7 @@
   function limites() {
     var x0 = 0, y0 = 0, x1 = P().w, y1 = P().h;
     D.mesas.forEach(function(m){ var p = pegada(m); x0 = Math.min(x0, m.x - p.w / 2); y0 = Math.min(y0, m.y - p.h / 2); x1 = Math.max(x1, m.x + p.w / 2); y1 = Math.max(y1, m.y + p.h / 2); });
+    y1 = Math.max(y1, P().h + Math.max(28, Math.min(90, Math.max(P().w, P().h) / 40)) * 2.4);   // barra de escala
     return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
   }
   function aplicarView() { var svg = document.getElementById('mzSvg'); if (svg && view) svg.setAttribute('viewBox', [view.x, view.y, view.w, view.h].map(function(n){ return Math.round(n); }).join(' ')); }
@@ -456,13 +452,32 @@
     var p5 = el('pattern', { id:'mzG5', width:500, height:500, patternUnits:'userSpaceOnUse' }, defs);
     el('path', { d:'M 500 0 L 0 0 0 500', fill:'none', stroke:'#DDE4EE', 'stroke-width':3 }, p5);
     var fundo = el('g', { id:'mzFundo' }, svg);
-    el('rect', { x:0, y:0, width:P().w, height:P().h, fill:'#FFFFFF' }, fundo);
-    el('rect', { x:0, y:0, width:P().w, height:P().h, fill:'url(#mzG1)' }, fundo);
-    el('rect', { x:0, y:0, width:P().w, height:P().h, fill:'url(#mzG5)' }, fundo);
-    el('rect', { x:0, y:0, width:P().w, height:P().h, fill:'none', stroke:'#334155', 'stroke-width':8 }, fundo);
-    var fc = Math.max(28, Math.min(90, P().w / 35));
-    var tc = el('text', { x:P().w / 2, y:-22, 'text-anchor':'middle', 'font-size':fc, 'font-weight':700, fill:'#475569' }, fundo); tc.textContent = metros(P().w);
-    var tl = el('text', { x:-22, y:P().h / 2, 'text-anchor':'middle', 'font-size':fc, 'font-weight':700, fill:'#475569', transform:'rotate(-90 -22 ' + P().h / 2 + ')' }, fundo); tl.textContent = metros(P().h);
+    var fm = FM(), d = GEO.caminho(fm);
+    var clip = el('clipPath', { id:'mzClip' }, defs); el('path', { d:d }, clip);
+    el('path', { d:d, fill:'#FFFFFF' }, fundo);
+    var grade = el('g', { 'clip-path':'url(#mzClip)' }, fundo);
+    el('rect', { x:0, y:0, width:P().w, height:P().h, fill:'url(#mzG1)' }, grade);
+    el('rect', { x:0, y:0, width:P().w, height:P().h, fill:'url(#mzG5)' }, grade);
+    el('path', { d:d, fill:'none', stroke:'#334155', 'stroke-width':8, 'stroke-linejoin':'round' }, fundo);
+    var fc = Math.max(28, Math.min(90, Math.max(P().w, P().h) / 40));
+    // Cotas: comprimento de cada parede (ou largura x profundidade no oval).
+    if (fm.tipo === 'poli') {
+      GEO.arestas(fm).forEach(function(a) {
+        if (a.len < 150) return;
+        var mx = (a.x1 + a.x2) / 2 + a.nx * fc * 1.1, my = (a.y1 + a.y2) / 2 + a.ny * fc * 1.1;
+        var t = el('text', { x:mx, y:my + fc * 0.35, 'text-anchor':'middle', 'font-size':fc * 0.8, 'font-weight':700, fill:'#475569' }, fundo);
+        if (Math.abs(a.x1 - a.x2) < 1) t.setAttribute('transform', 'rotate(-90 ' + mx + ' ' + my + ')');
+        t.textContent = metros(a.len);
+      });
+    } else {
+      var to = el('text', { x:P().w / 2, y:-fc * 0.6, 'text-anchor':'middle', 'font-size':fc * 0.8, 'font-weight':700, fill:'#475569' }, fundo);
+      to.textContent = metros(P().w) + ' × ' + metros(P().h) + ' (oval)';
+    }
+    // Barra de escala (igual à do PDF)
+    var L = GEO.barraEscala(P().w), by = P().h + fc * 1.6, bh = fc * 0.45;
+    for (var k = 0; k < 4; k++) el('rect', { x:k * L / 4, y:by, width:L / 4, height:bh, fill:k % 2 ? '#FFFFFF' : '#334155', stroke:'#334155', 'stroke-width':3 }, fundo);
+    var e0 = el('text', { x:0, y:by - fc * 0.3, 'font-size':fc * 0.7, fill:'#334155' }, fundo); e0.textContent = '0';
+    var e1 = el('text', { x:L, y:by - fc * 0.3, 'text-anchor':'middle', 'font-size':fc * 0.7, fill:'#334155' }, fundo); e1.textContent = metros(L);
     // Área de espera (mesas fora do salão)
     var fora = D.mesas.filter(function(m){ return !noSalao(m); });
     if (fora.length) {
@@ -496,7 +511,8 @@
   function desenharElemento(cam, e) {
     var est = ESTILO[e.tipo] || ESTILO.bloqueio;
     var g = el('g', { 'class':'mz-elem' + (D.podeEditar ? ' arrastavel' : ''), transform:'translate(' + e.x + ',' + e.y + ')' }, cam);
-    el('rect', { x:-e.w / 2, y:-e.h / 2, width:e.w, height:e.h, rx:12, fill:est.fundo, stroke:est.borda, 'stroke-width':5 }, g);
+    if (e.forma === 'oval') el('ellipse', { rx:e.w / 2, ry:e.h / 2, fill:est.fundo, stroke:est.borda, 'stroke-width':5 }, g);
+    else el('rect', { x:-e.w / 2, y:-e.h / 2, width:e.w, height:e.h, rx:12, fill:est.fundo, stroke:est.borda, 'stroke-width':5 }, g);
     var fs = Math.max(20, Math.min(90, Math.min(e.w / 7, e.h / 2.5)));
     var t = el('text', { x:0, y:fs * 0.35, 'text-anchor':'middle', 'font-size':fs, 'font-weight':700, fill:est.borda }, g); t.textContent = e.nome || est.rotulo;
     var t2 = el('text', { x:0, y:fs * 0.35 + fs * 0.8, 'text-anchor':'middle', 'font-size':fs * 0.5, fill:est.borda, opacity:.8 }, g); t2.textContent = metros(e.w) + ' × ' + metros(e.h);
@@ -671,48 +687,14 @@
   }
 
   // ---------------------------------------------------------- organizar (motor)
-  // Gera as vagas do salão para uma "pegada" de mesa. Arranjos:
-  //  grade      — fileiras e colunas alinhadas
-  //  intercalada— fileiras deslocadas (xadrez); com mesas redondas cabe ~15% mais
-  //  blocos     — dois blocos com corredor central
-  function gerarVagas(op, fp, obstaculos, W, H) {
-    var c = op.corredor, m = op.margem, vagas = [];
-    var cw = fp.w + (op.encostar ? 0 : c), ch = fp.h + c;
-    var regioes = op.arranjo === 'blocos'
-      ? [{ x0: m, x1: W / 2 - op.central / 2 }, { x0: W / 2 + op.central / 2, x1: W - m }]
-      : [{ x0: m, x1: W - m }];
-    var passoY = (op.arranjo === 'intercalada' && fp.redonda) ? cw * Math.sqrt(3) / 2 : ch;
-    var fila = 0;
-    for (var y = m + fp.h / 2; y + fp.h / 2 <= H - m + 0.5; y += passoY, fila++) {
-      regioes.forEach(function(r) {
-        var larg = r.x1 - r.x0;
-        if (larg < fp.w) return;
-        var cols = Math.floor((larg - fp.w) / cw) + 1;
-        var ini = r.x0 + (larg - ((cols - 1) * cw + fp.w)) / 2 + fp.w / 2;
-        // Intercalada: centraliza o conjunto (fileiras pares + ímpares deslocadas meia mesa).
-        if (op.arranjo === 'intercalada') ini = Math.max(r.x0 + fp.w / 2, ini - cw / 4);
-        var desl = (op.arranjo === 'intercalada' && fila % 2) ? cw / 2 : 0;
-        for (var k = 0; k < cols; k++) {
-          var x = ini + k * cw + desl;
-          if (x + fp.w / 2 > r.x1 + 0.5) continue;
-          var cx = { x: x, y: y, w: fp.w, h: fp.h, redonda: fp.redonda };
-          if (obstaculos.some(function(o){ return folga(cx, o) < o.folga; })) continue;
-          vagas.push({ x: Math.round(x), y: Math.round(y), fila: fila });
-        }
-      });
-    }
-    // Ordem: a partir da frente (lado do palco, ou a parede de cima), fileira por fileira.
+  // O cálculo das vagas está em Geometria.js (o mesmo do servidor): procura a
+  // malha que coloca mais mesas dentro do contorno do salão (retângulo, L, T,
+  // U, I ou oval), respeitando paredes, corredor, elementos e mesas fixas.
+  //  grade — fileiras alinhadas · intercalada — xadrez · blocos — corredor central
+  function gerarVagas(op, fp, obstaculos, W, H, forma) {
     var palco = P().elementos.filter(function(e){ return e.tipo === 'palco'; })[0];
-    var lado = 'topo';
-    if (palco) {
-      var d = { topo: palco.y, baixo: H - palco.y, esq: palco.x, dir: W - palco.x };
-      lado = Object.keys(d).sort(function(a, b){ return d[a] - d[b]; })[0];
-    }
-    var prof = function(v){ return lado === 'topo' ? v.y : lado === 'baixo' ? -v.y : lado === 'esq' ? v.x : -v.x; };
-    var trav = function(v){ return lado === 'topo' || lado === 'baixo' ? v.x : v.y; };
-    var passo = (lado === 'topo' || lado === 'baixo') ? passoY : cw;
-    vagas.sort(function(a, b){ return Math.round(prof(a) / passo * 2) - Math.round(prof(b) / passo * 2) || trav(a) - trav(b); });
-    return vagas;
+    return GEO.gerarVagas({ w: W, h: H, forma: forma || P().forma, fp: fp, corredor: op.corredor, margem: op.margem,
+      arranjo: op.arranjo, central: op.central, encostar: op.encostar, obst: obstaculos, palco: palco || null });
   }
 
   function pegadaMaior(lista) {
@@ -721,13 +703,16 @@
     if (fp.redonda) fp.w = fp.h = Math.max(fp.w, fp.h);
     return fp;
   }
-  function obstaculosElementos(op) { return P().elementos.map(function(e){ return { x: e.x, y: e.y, w: e.w, h: e.h, folga: op.corredor / 2 }; }); }
+  function obstaculosElementos(op) { return P().elementos.map(function(e){ var b = caixaElem(e); b.folga = op.corredor / 2; return b; }); }
 
   // Resultado de um arranjo para as mesas escolhidas.
+  // W/H: simular um salão maior (mesma forma, proporções mantidas).
   function simular(op, lista, fixas, W, H) {
     var fp = pegadaMaior(lista);
     var obst = obstaculosElementos(op).concat((fixas || []).map(function(m){ var b = caixaMesa(m); b.folga = op.corredor; return b; }));
-    return { vagas: gerarVagas(op, fp, obst, W || P().w, H || P().h), fp: fp };
+    var forma = P().forma;
+    if (W && forma && forma.a) { var k = W / P().w; forma = Object.assign({}, forma, { a: forma.a * k, b: forma.b * k }); }
+    return { vagas: gerarVagas(op, fp, obst, W || P().w, H || P().h, forma), fp: fp };
   }
 
   function ordenarParaArranjo(lista, vipFrente) {
@@ -742,7 +727,7 @@
       var r2 = simular(Object.assign({}, op, { corredor: c }), lista, fixas);
       if (r2.vagas.length >= n) { s.push('reduzir o corredor para <strong>' + metros(c) + '</strong>'); break; }
     }
-    for (var k = 1.05; k <= 4; k += 0.05) {
+    for (var k = 1.1; k <= 4; k += 0.1) {
       var W = Math.ceil(P().w * k / 50) * 50, H = Math.ceil(P().h * k / 50) * 50;
       var r3 = simular(op, lista, fixas, W, H);
       if (r3.vagas.length >= n) { s.push('um salão de <strong>' + metros(W) + ' × ' + metros(H) + '</strong>'); break; }
@@ -837,19 +822,100 @@
 
   // ---------------------------------------------------------- salão e elementos
   function lerM(id, padrao) { var v = parseFloat(String(document.getElementById(id).value).replace(',', '.')); return isNaN(v) ? padrao : Math.round(v * 100); }
+  // Formatos de salão: rótulos dos parâmetros A/B e posições de cada um.
+  var FORMAS_SALAO = {
+    retangulo: { rotulo: 'Retângulo' },
+    L: { rotulo: 'Em L', a: 'Recorte: largura (m)', b: 'Recorte: profundidade (m)', orient: { 'inf-dir': 'Recorte embaixo à direita', 'inf-esq': 'Recorte embaixo à esquerda', 'sup-dir': 'Recorte em cima à direita', 'sup-esq': 'Recorte em cima à esquerda' } },
+    T: { rotulo: 'Em T', a: 'Haste: largura (m)', b: 'Barra: profundidade (m)', orient: { baixo: 'Haste para baixo', cima: 'Haste para cima', dir: 'Haste para a direita', esq: 'Haste para a esquerda' } },
+    U: { rotulo: 'Em U', a: 'Vão: largura (m)', b: 'Vão: profundidade (m)', orient: { cima: 'Aberto em cima', baixo: 'Aberto embaixo', esq: 'Aberto à esquerda', dir: 'Aberto à direita' } },
+    I: { rotulo: 'Em I / H', a: 'Centro: largura (m)', b: 'Abas: profundidade (m)', orient: { vertical: 'Centro na vertical', horizontal: 'Centro na horizontal' } },
+    oval: { rotulo: 'Oval / redondo' }
+  };
+  var formaEdit = null;
+  function numM(id) { var v = parseFloat(String(document.getElementById(id).value).replace(',', '.')); return isNaN(v) ? NaN : Math.round(v * 100); }
+  function mCampo(cm) { return String(Math.round(cm) / 100).replace('.', ','); }
+  function iconeForma(tipo) {
+    var fm = GEO.contorno({ w: 440, h: 300, forma: { tipo: tipo, a: 150, b: 120 } });
+    return '<svg width="44" height="30" viewBox="-20 -20 480 340"><path d="' + GEO.caminho(fm) + '" fill="#E0F2FE" stroke="#0369A1" stroke-width="20"/></svg>';
+  }
+  function lerSalao() {
+    var cfg = { w: numM('slLarg'), h: numM('slProf'), cadeira: numM('slCadeira'), corredor: numM('slCorredor'), margem: numM('slMargem'), forma: { tipo: formaEdit } };
+    if (FORMAS_SALAO[formaEdit].a) { cfg.forma.a = numM('slA'); cfg.forma.b = numM('slB'); cfg.forma.orient = document.getElementById('slOrient').value; }
+    return cfg;
+  }
+  function desenharFormas() {
+    document.getElementById('slFormas').innerHTML = Object.keys(FORMAS_SALAO).map(function(t) {
+      return '<button type="button" class="mz-forma' + (t === formaEdit ? ' on' : '') + '" onclick="escolherFormaSalao(\'' + t + '\')">' + iconeForma(t) + FORMAS_SALAO[t].rotulo + '</button>';
+    }).join('');
+    var f = FORMAS_SALAO[formaEdit];
+    ['slABox', 'slBBox', 'slOrientBox'].forEach(function(id){ document.getElementById(id).style.display = f.a ? '' : 'none'; });
+    if (f.a) {
+      document.getElementById('slARot').textContent = f.a; document.getElementById('slBRot').textContent = f.b;
+      var sel = document.getElementById('slOrient'), atual = sel.value;
+      sel.innerHTML = Object.keys(f.orient).map(function(o){ return '<option value="' + o + '">' + f.orient[o] + '</option>'; }).join('');
+      if (f.orient[atual]) sel.value = atual;
+    }
+  }
+  window.escolherFormaSalao = function(t) {
+    formaEdit = t;
+    if (FORMAS_SALAO[t].a && !document.getElementById('slA').value) {
+      var w = numM('slLarg') || P().w, h = numM('slProf') || P().h;
+      document.getElementById('slA').value = mCampo(Math.round(Math.min(w, h) / 300) * 100 || 500);
+      document.getElementById('slB').value = mCampo(Math.round(Math.min(w, h) / 300) * 100 || 500);
+    }
+    desenharFormas(); previaSalao();
+  };
+  // Prévia do contorno com cotas + a conta de espaço de uma mesa típica.
+  function previaSalao() {
+    var cfg = lerSalao();
+    if (!(cfg.w >= 500 && cfg.h >= 500)) return;
+    var fm = GEO.contorno(cfg), fs = Math.max(cfg.w, cfg.h) / 22;
+    var svg = document.getElementById('slPrevia');
+    svg.setAttribute('viewBox', [-fs * 2.4, -fs * 2.4, cfg.w + fs * 4.8, cfg.h + fs * 4.8].join(' '));
+    var h = '<path d="' + GEO.caminho(fm) + '" fill="#FFFFFF" stroke="#334155" stroke-width="' + fs / 6 + '"/>';
+    if (fm.tipo === 'poli') GEO.arestas(fm).forEach(function(a) {
+      var mx = (a.x1 + a.x2) / 2 + a.nx * fs * 1.2, my = (a.y1 + a.y2) / 2 + a.ny * fs * 1.2;
+      h += '<text x="' + mx + '" y="' + (my + fs * 0.35) + '" text-anchor="middle" font-size="' + fs + '" fill="#0369A1" font-weight="700"' + (Math.abs(a.x1 - a.x2) < 1 ? ' transform="rotate(-90 ' + mx + ' ' + my + ')"' : '') + '>' + metros(a.len) + '</text>';
+    });
+    else h += '<text x="' + cfg.w / 2 + '" y="' + (-fs * 0.8) + '" text-anchor="middle" font-size="' + fs + '" fill="#0369A1" font-weight="700">' + metros(cfg.w) + ' × ' + metros(cfg.h) + '</text>';
+    svg.innerHTML = h;
+    // Conta com a mesa mais comum do evento (ou redonda de 10).
+    var ref = D.mesas[0] || { formato: 'Redonda', comp: 160, larg: 160, rot: 0, capacidade: 10 };
+    var cad = cfg.cadeira || 55, cor = cfg.corredor || 90;
+    var pg = GEO.pegada(ref, cad);
+    var tampo = ref.formato === 'Redonda' ? 'Ø ' + metros(ref.comp) : metros(ref.comp) + ' × ' + metros(ref.formato === 'Retangular' ? ref.larg : ref.comp);
+    document.getElementById('slConta').innerHTML = '<b>Como é feita a conta</b> (mesa ' + (ref.numero ? ref.numero : 'redonda de 10') + '):<br>' +
+      'tampo <b>' + tampo + '</b> + cadeira <b>' + metros(cad) + '</b> de cada lado = ocupa <b>' + metros(pg.w) + ' × ' + metros(pg.h) + '</b>.<br>' +
+      'Entre duas mesas vizinhas: cadeira ' + metros(cad) + ' + corredor ' + metros(cor) + ' + cadeira ' + metros(cad) + ' = <b>' + metros(2 * cad + cor) + ' de tampo a tampo</b>' +
+      (ref.formato === 'Redonda' ? ' (<b>' + metros(ref.comp + 2 * cad + cor) + '</b> de centro a centro).' : '.') + '<br>' +
+      'Da parede até o encosto da cadeira: <b>' + metros(cfg.margem || 0) + '</b>. Elementos (palco, pista…) ficam a pelo menos ' + metros(cor / 2) + ' das cadeiras.';
+  }
   window.abrirSalao = function() {
-    document.getElementById('slLarg').value = (P().w / 100).toString().replace('.', ',');
-    document.getElementById('slProf').value = (P().h / 100).toString().replace('.', ',');
-    document.getElementById('slCorredor').value = (P().corredor / 100).toFixed(2).replace('.', ',');
-    document.getElementById('slMargem').value = (P().margem / 100).toFixed(2).replace('.', ',');
+    var f = P().forma || { tipo: 'retangulo' };
+    formaEdit = FORMAS_SALAO[f.tipo] ? f.tipo : 'retangulo';
+    document.getElementById('slLarg').value = mCampo(P().w);
+    document.getElementById('slProf').value = mCampo(P().h);
+    document.getElementById('slA').value = f.a ? mCampo(f.a) : '';
+    document.getElementById('slB').value = f.b ? mCampo(f.b) : '';
+    document.getElementById('slCadeira').value = mCampo(CAD());
+    document.getElementById('slCorredor').value = mCampo(P().corredor);
+    document.getElementById('slMargem').value = mCampo(P().margem);
+    desenharFormas();
+    if (f.orient) document.getElementById('slOrient').value = f.orient;
+    previaSalao();
     new bootstrap.Modal(document.getElementById('modalSalao')).show();
   };
+  document.getElementById('slCorpo').addEventListener('input', previaSalao);
+  document.getElementById('slCorpo').addEventListener('change', previaSalao);
   window.salvarSalao = function() {
-    var w = lerM('slLarg', 0), h = lerM('slProf', 0), c = lerM('slCorredor', 90), mg = lerM('slMargem', 100);
-    if (w < 500 || h < 500 || w > 30000 || h > 30000) { toast('Medidas do salão: de 5 m a 300 m.', 'err'); return; }
-    if (c < 30 || c > 500) { toast('Corredor: de 0,30 m a 5 m.', 'err'); return; }
-    P().w = w; P().h = h; P().corredor = c; P().margem = Math.max(0, Math.min(500, mg));
-    P().elementos.forEach(function(e){ e.x = Math.min(e.x, w); e.y = Math.min(e.y, h); });
+    var cfg = lerSalao();
+    if (!(cfg.w >= 500 && cfg.h >= 500 && cfg.w <= 30000 && cfg.h <= 30000)) { toast('Medidas do salão: de 5 m a 300 m.', 'err'); return; }
+    if (!(cfg.corredor >= 30 && cfg.corredor <= 500)) { toast('Corredor: de 0,30 m a 5 m.', 'err'); return; }
+    if (!(cfg.cadeira >= 30 && cfg.cadeira <= 120)) { toast('Cadeira: de 0,30 m a 1,20 m.', 'err'); return; }
+    if (cfg.forma.a !== undefined && !(cfg.forma.a >= 100 && cfg.forma.b >= 100)) { toast('Informe as medidas do formato (mínimo 1 m).', 'err'); return; }
+    P().w = cfg.w; P().h = cfg.h; P().corredor = cfg.corredor; P().cadeira = cfg.cadeira;
+    P().margem = Math.max(0, Math.min(500, cfg.margem || 0)); P().forma = cfg.forma;
+    P().elementos.forEach(function(e){ e.x = Math.min(e.x, cfg.w); e.y = Math.min(e.y, cfg.h); });
     bootstrap.Modal.getInstance(document.getElementById('modalSalao')).hide();
     view = null; render();
     salvarPlanta('Salão atualizado.');
@@ -871,6 +937,7 @@
     if (!e) return;
     elemAberto = e;
     document.getElementById('elTipo').value = e.tipo;
+    document.getElementById('elForma').value = e.forma === 'oval' ? 'oval' : 'ret';
     document.getElementById('elNome').value = e.nome;
     document.getElementById('elLarg').value = (e.w / 100).toString().replace('.', ',');
     document.getElementById('elProf').value = (e.h / 100).toString().replace('.', ',');
@@ -880,7 +947,7 @@
     var e = elemAberto; if (!e) return;
     var w = lerM('elLarg', e.w), h = lerM('elProf', e.h);
     if (w < 30 || h < 30) { toast('Medidas: mínimo 0,30 m.', 'err'); return; }
-    e.tipo = document.getElementById('elTipo').value; e.nome = document.getElementById('elNome').value.trim().slice(0, 30);
+    e.tipo = document.getElementById('elTipo').value; e.forma = document.getElementById('elForma').value; e.nome = document.getElementById('elNome').value.trim().slice(0, 30);
     e.w = Math.min(w, P().w); e.h = Math.min(h, P().h);
     bootstrap.Modal.getInstance(document.getElementById('modalElemento')).hide();
     render(); salvarPlanta('Elemento atualizado.');
