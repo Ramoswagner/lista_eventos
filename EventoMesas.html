@@ -9,8 +9,25 @@
   .mz-toggle button { border:none; background:none; padding:6px 12px; border-radius:8px; font-size:.8rem; font-weight:600; color:var(--text-muted); }
   .mz-toggle button.on { background:#fff; color:var(--ink-900); box-shadow:var(--shadow-sm); }
   .mz-grid { display:grid; grid-template-columns:minmax(0,1fr) 290px; gap:14px; align-items:start; }
-  .mz-planta-wrap { overflow:auto; -webkit-overflow-scrolling:touch; border-radius:var(--r-lg); }
-  .mz-planta { display:block; width:100%; min-width:720px; background:#FBFCFE; user-select:none; -webkit-user-select:none; }
+  .mz-planta-wrap { position:relative; border-radius:var(--r-lg); overflow:hidden; }
+  .mz-planta { display:block; width:100%; height:68vh; min-height:420px; background:#F4F6FA; user-select:none; -webkit-user-select:none; touch-action:none; cursor:grab; }
+  .mz-planta:active { cursor:grabbing; }
+  .mz-ptools { display:flex; gap:6px; flex-wrap:wrap; padding:10px 12px; border-bottom:1px solid var(--border); }
+  .mz-ptools .btn-sm { padding:5px 11px; font-size:.78rem; }
+  .mz-zoom { position:absolute; right:10px; bottom:10px; display:flex; flex-direction:column; background:#fff; border:1px solid var(--border); border-radius:10px; box-shadow:var(--shadow-sm); overflow:hidden; }
+  .mz-zoom button { border:none; background:#fff; width:36px; height:34px; color:var(--ink-900); }
+  .mz-zoom button + button { border-top:1px solid var(--border); }
+  .mz-zoom button:hover { background:var(--blue-50); }
+  .mz-status { font-size:.76rem; color:var(--text-muted); padding:8px 14px; border-top:1px solid var(--border); }
+  .mz-elem.arrastavel { cursor:move; }
+  .mz-arranjos { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .mz-arranjo { border:1.5px solid var(--border); border-radius:12px; padding:10px; cursor:pointer; text-align:center; font-size:.78rem; font-weight:600; color:var(--ink-900); margin:0; }
+  .mz-arranjo input { display:none; }
+  .mz-arranjo:has(input:checked) { border-color:var(--blue-600); background:var(--blue-50); }
+  .mz-arranjo svg { display:block; margin:0 auto 6px; }
+  .mz-arranjo small { display:block; font-weight:400; color:var(--text-muted); font-size:.68rem; }
+  .mz-ok { background:#EAFBF3; border:1px solid #A7F3D0; color:#047857; border-radius:10px; padding:9px 12px; font-size:.82rem; }
+  .mz-nok { background:#FFF7ED; border:1px solid #FED7AA; color:#9A3412; border-radius:10px; padding:9px 12px; font-size:.82rem; }
   .mz-mesa { cursor:pointer; }
   .mz-mesa.arrastavel { cursor:grab; touch-action:none; }
   .mz-mesa.arrastando { cursor:grabbing; }
@@ -48,14 +65,21 @@
   <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold"><i class="fas fa-plus me-2 text-primary"></i>Adicionar mesas</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
   <div class="modal-body">
     <div class="row g-2 mb-3">
-      <div class="col-6"><label class="form-label">Quantidade</label><input type="number" min="1" max="100" class="form-control" id="nmQtd" value="10"></div>
+      <div class="col-6"><label class="form-label">Quantidade</label><input type="number" min="1" max="200" class="form-control" id="nmQtd" value="10"></div>
       <div class="col-6"><label class="form-label">Lugares por mesa</label><input type="number" min="1" max="60" class="form-control" id="nmCap" value="8"></div>
     </div>
     <label class="form-label">Formato</label>
-    <div class="d-flex gap-2 mb-3">
+    <div class="d-flex gap-2 mb-3 flex-wrap">
       <label class="btn-hb-outline flex-fill justify-content-center" style="cursor:pointer;"><input type="radio" name="nmFormato" value="Redonda" checked class="form-check-input me-1"> <i class="far fa-circle"></i> Redonda</label>
-      <label class="btn-hb-outline flex-fill justify-content-center" style="cursor:pointer;"><input type="radio" name="nmFormato" value="Retangular" class="form-check-input me-1"> <i class="far fa-square"></i> Retangular</label>
+      <label class="btn-hb-outline flex-fill justify-content-center" style="cursor:pointer;"><input type="radio" name="nmFormato" value="Quadrada" class="form-check-input me-1"> <i class="far fa-square"></i> Quadrada</label>
+      <label class="btn-hb-outline flex-fill justify-content-center" style="cursor:pointer;"><input type="radio" name="nmFormato" value="Retangular" class="form-check-input me-1"> <i class="fas fa-grip-lines"></i> Retangular</label>
     </div>
+    <label class="form-label">Tamanho do tampo <span class="text-muted fw-normal">(em metros)</span></label>
+    <div class="row g-2 mb-1">
+      <div class="col-6"><input class="form-control" id="nmComp" inputmode="decimal" placeholder="Automático"></div>
+      <div class="col-6" id="nmLargBox"><input class="form-control" id="nmLarg" inputmode="decimal" placeholder="Largura (0,80)"></div>
+    </div>
+    <div class="form-text mb-3" id="nmTamanhoDica"></div>
     <div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="nmVip"><label class="form-check-label small" for="nmVip">Mesas VIP (autoridades e apoiadores vão para elas na distribuição automática)</label></div>
     <p class="small text-muted mb-0" id="nmResumo"></p>
   </div>
@@ -76,8 +100,14 @@
       </div>
       <div class="row g-2 mb-2">
         <div class="col-4"><label class="form-label">Lugares</label><input type="number" min="1" max="60" class="form-control" id="mmCap"></div>
-        <div class="col-8"><label class="form-label">Formato</label><select class="form-select" id="mmFormato"><option value="Redonda">Redonda</option><option value="Retangular">Retangular</option></select></div>
+        <div class="col-8"><label class="form-label">Formato</label><select class="form-select" id="mmFormato"><option value="Redonda">Redonda</option><option value="Quadrada">Quadrada</option><option value="Retangular">Retangular</option></select></div>
       </div>
+      <div class="row g-2 mb-2 align-items-end">
+        <div class="col-4"><label class="form-label" id="mmCompRot">Diâmetro (m)</label><input class="form-control" id="mmComp" inputmode="decimal"></div>
+        <div class="col-4" id="mmLargBox"><label class="form-label">Largura (m)</label><input class="form-control" id="mmLarg" inputmode="decimal"></div>
+        <div class="col-4" id="mmGirarBox"><div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="mmGirar"><label class="form-check-label small" for="mmGirar">Girar 90°</label></div></div>
+      </div>
+      <div class="form-text mb-2" id="mmTamanhoDica"></div>
       <div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="mmVip"><label class="form-check-label small" for="mmVip">Mesa VIP</label></div>
       <div class="mb-1"><label class="form-label">Observações</label><input class="form-control" id="mmObs" maxlength="200" placeholder="Ex: perto do palco"></div>
     </div>
@@ -106,6 +136,59 @@
   <div class="modal-footer" style="border-top:1px solid var(--border);"><button class="btn-hb-outline" data-bs-dismiss="modal">Cancelar</button><button class="btn-hb" id="btnDistribuir" onclick="distribuir()"><i class="fas fa-check"></i> Distribuir</button></div>
 </div></div></div>
 
+<!-- Modal: organizar salão -->
+<div class="modal fade" id="modalOrganizar" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down"><div class="modal-content" style="border-radius:16px;border:none;">
+  <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold"><i class="fas fa-table-cells-large me-2 text-primary"></i>Organizar salão</h6><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+  <div class="modal-body">
+    <p class="small text-muted">Posiciona todas as mesas no salão respeitando o tamanho real de cada mesa, as cadeiras, o corredor mínimo e os elementos (palco, pista, buffet…). A numeração começa pela frente (lado do palco). Dá para desfazer.</p>
+    <div class="mz-arranjos mb-3" onchange="atualizarPrevia()">
+      <label class="mz-arranjo"><input type="radio" name="orArranjo" value="grade" checked><svg width="64" height="40"><g fill="#0088CC"><circle cx="10" cy="8" r="5"/><circle cx="10" cy="20" r="5"/><circle cx="10" cy="32" r="5"/><circle cx="25" cy="8" r="5"/><circle cx="25" cy="20" r="5"/><circle cx="25" cy="32" r="5"/><circle cx="40" cy="8" r="5"/><circle cx="40" cy="20" r="5"/><circle cx="40" cy="32" r="5"/><circle cx="55" cy="8" r="5"/><circle cx="55" cy="20" r="5"/><circle cx="55" cy="32" r="5"/></g></svg>Grade<small>fileiras alinhadas</small></label>
+      <label class="mz-arranjo"><input type="radio" name="orArranjo" value="intercalada"><svg width="64" height="40"><g fill="#0088CC"><circle cx="10" cy="8" r="5"/><circle cx="17" cy="20" r="5"/><circle cx="10" cy="32" r="5"/><circle cx="25" cy="8" r="5"/><circle cx="32" cy="20" r="5"/><circle cx="25" cy="32" r="5"/><circle cx="40" cy="8" r="5"/><circle cx="47" cy="20" r="5"/><circle cx="40" cy="32" r="5"/><circle cx="55" cy="8" r="5"/><circle cx="55" cy="32" r="5"/></g></svg>Intercalada<small>cabe mais (redondas)</small></label>
+      <label class="mz-arranjo"><input type="radio" name="orArranjo" value="blocos"><svg width="64" height="40"><g fill="#0088CC"><circle cx="8" cy="8" r="5"/><circle cx="8" cy="20" r="5"/><circle cx="8" cy="32" r="5"/><circle cx="20" cy="8" r="5"/><circle cx="20" cy="20" r="5"/><circle cx="20" cy="32" r="5"/><circle cx="44" cy="8" r="5"/><circle cx="44" cy="20" r="5"/><circle cx="44" cy="32" r="5"/><circle cx="56" cy="8" r="5"/><circle cx="56" cy="20" r="5"/><circle cx="56" cy="32" r="5"/></g></svg>Dois blocos<small>corredor central</small></label>
+    </div>
+    <div class="row g-2 mb-2" oninput="atualizarPrevia()">
+      <div class="col-6"><label class="form-label" for="orCorredor">Corredor mínimo (m)</label><input class="form-control" id="orCorredor" inputmode="decimal"><div class="form-text">entre os encostos das cadeiras</div></div>
+      <div class="col-6"><label class="form-label" for="orMargem">Distância das paredes (m)</label><input class="form-control" id="orMargem" inputmode="decimal"></div>
+      <div class="col-6" id="orCentralBox"><label class="form-label" for="orCentral">Corredor central (m)</label><input class="form-control" id="orCentral" inputmode="decimal" value="2,00"></div>
+    </div>
+    <div class="form-check" id="orEncostarBox" onchange="atualizarPrevia()"><input class="form-check-input" type="checkbox" id="orEncostar"><label class="form-check-label small" for="orEncostar">Encostar as retangulares ponta com ponta (mesa imperial)</label></div>
+    <div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="orVip" checked><label class="form-check-label small" for="orVip">Mesas VIP mais perto do palco</label></div>
+    <div id="orPrevia"></div>
+  </div>
+  <div class="modal-footer" style="border-top:1px solid var(--border);"><button class="btn-hb-outline" data-bs-dismiss="modal">Cancelar</button><button class="btn-hb" onclick="aplicarOrganizar()"><i class="fas fa-check"></i> Organizar</button></div>
+</div></div></div>
+
+<!-- Modal: salão -->
+<div class="modal fade" id="modalSalao" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down"><div class="modal-content" style="border-radius:16px;border:none;">
+  <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold"><i class="fas fa-ruler-combined me-2 text-primary"></i>Medidas do salão</h6><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+  <div class="modal-body">
+    <div class="row g-2 mb-2">
+      <div class="col-6"><label class="form-label" for="slLarg">Largura (m)</label><input class="form-control" id="slLarg" inputmode="decimal"></div>
+      <div class="col-6"><label class="form-label" for="slProf">Profundidade (m)</label><input class="form-control" id="slProf" inputmode="decimal"></div>
+      <div class="col-6"><label class="form-label" for="slCorredor">Corredor mínimo (m)</label><input class="form-control" id="slCorredor" inputmode="decimal"></div>
+      <div class="col-6"><label class="form-label" for="slMargem">Distância das paredes (m)</label><input class="form-control" id="slMargem" inputmode="decimal"></div>
+    </div>
+    <p class="small text-muted mb-0">Corredor = espaço livre entre os encostos das cadeiras de mesas vizinhas (circulação de pessoas e garçons). Referência: 0,90 m confortável; 1,20 m para cadeira de rodas. A planta mostra em vermelho as mesas abaixo desse mínimo.</p>
+  </div>
+  <div class="modal-footer" style="border-top:1px solid var(--border);"><button class="btn-hb-outline" data-bs-dismiss="modal">Cancelar</button><button class="btn-hb" onclick="salvarSalao()"><i class="fas fa-check"></i> Salvar</button></div>
+</div></div></div>
+
+<!-- Modal: elemento do salão -->
+<div class="modal fade" id="modalElemento" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down"><div class="modal-content" style="border-radius:16px;border:none;">
+  <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold"><i class="fas fa-shapes me-2 text-primary"></i>Elemento do salão</h6><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+  <div class="modal-body">
+    <div class="row g-2 mb-2">
+      <div class="col-6"><label class="form-label" for="elTipo">Tipo</label><select class="form-select" id="elTipo"><option value="palco">Palco</option><option value="pista">Pista de dança</option><option value="buffet">Buffet</option><option value="bar">Bar</option><option value="entrada">Entrada</option><option value="banheiro">Banheiros</option><option value="bloqueio">Área bloqueada / pilar</option></select></div>
+      <div class="col-6"><label class="form-label" for="elNome">Nome <span class="text-muted fw-normal">(opcional)</span></label><input class="form-control" id="elNome" maxlength="30"></div>
+      <div class="col-5"><label class="form-label" for="elLarg">Largura (m)</label><input class="form-control" id="elLarg" inputmode="decimal"></div>
+      <div class="col-5"><label class="form-label" for="elProf">Profundidade (m)</label><input class="form-control" id="elProf" inputmode="decimal"></div>
+      <div class="col-2 d-flex align-items-end"><button class="btn btn-outline-secondary w-100" type="button" onclick="girarElemento()" title="Trocar largura e profundidade" aria-label="Girar"><i class="fas fa-rotate"></i></button></div>
+    </div>
+    <p class="small text-muted mb-0">Arraste o elemento na planta para posicioná-lo. As mesas nunca são colocadas em cima dele ao organizar.</p>
+  </div>
+  <div class="modal-footer" style="border-top:1px solid var(--border);"><button class="btn btn-sm btn-outline-danger me-auto" onclick="excluirElemento()"><i class="fas fa-trash"></i> Remover</button><button class="btn-hb-outline" data-bs-dismiss="modal">Cancelar</button><button class="btn-hb" onclick="salvarElemento()"><i class="fas fa-check"></i> Salvar</button></div>
+</div></div></div>
+
 <script>
 (function() {
   var idEvento = window.EventoAtual && window.EventoAtual.id;
@@ -117,8 +200,6 @@
   var selecionados = {};              // idConvite → true (sem mesa, para sentar)
   var buscaSemMesa = '';
   var mesaAberta = null;
-  var pendentesPos = {};              // posições arrastadas ainda não salvas
-  var timerPos = null;
   var NS = 'http://www.w3.org/2000/svg';
   // Análise: colorir cadeiras por gestor e/ou destacar um gestor
   var corPor = 'ocupacao';            // 'ocupacao' | 'gestor'
@@ -223,15 +304,107 @@
   }
   window.imprimirMapaMesas = function() { window.RELATORIO_INICIAL = 'mesas'; goToEventTab('evento-relatorios'); };
 
-  // ---------------------------------------------------------- planta (SVG)
+  // ---------------------------------------------------------- planta em escala real (cm)
+  // Tudo em centímetros: salão (P.w x P.h), tampo real de cada mesa e as
+  // cadeiras (CAD cm a partir da borda). Zoom na roda do mouse/pinça,
+  // arrastar o fundo move a vista, arrastar a mesa move a mesa.
+  var view = null;                    // viewBox atual {x,y,w,h}
+  var desfazer = null;                // posições antes do último "Organizar"
+  var ESTILO = {
+    palco:    { rotulo: 'Palco',          fundo: '#E2E8F0', borda: '#475569', w: 800,  h: 400 },
+    pista:    { rotulo: 'Pista de dança', fundo: '#EDE9FE', borda: '#7C3AED', w: 800,  h: 800 },
+    buffet:   { rotulo: 'Buffet',         fundo: '#FEF3C7', borda: '#D97706', w: 600,  h: 150 },
+    bar:      { rotulo: 'Bar',            fundo: '#FCE7F3', borda: '#DB2777', w: 400,  h: 120 },
+    entrada:  { rotulo: 'Entrada',        fundo: '#DCFCE7', borda: '#16A34A', w: 300,  h: 100 },
+    banheiro: { rotulo: 'Banheiros',      fundo: '#E0F2FE', borda: '#0284C7', w: 400,  h: 300 },
+    bloqueio: { rotulo: 'Área bloqueada', fundo: '#F1F5F9', borda: '#94A3B8', w: 200,  h: 200 }
+  };
+  function P() { return D.planta; }
+  function CAD() { return D.cadeiraCm || 55; }
+  function metros(cm) { return (Math.round(cm / 10) / 10).toLocaleString('pt-BR') + ' m'; }
+
+  function tamanhoPadrao(formato, cap) {
+    cap = Math.max(1, Number(cap) || 1);
+    if (formato === 'Retangular') return { c: Math.max(120, Math.ceil(cap / 2) * 60), l: 80 };
+    if (formato === 'Quadrada') { var q = Math.max(80, Math.ceil(cap / 4) * 65); return { c: q, l: q }; }
+    return { c: cap <= 4 ? 90 : cap <= 6 ? 120 : cap <= 8 ? 150 : cap <= 10 ? 160 : cap <= 12 ? 180 : Math.round(cap * 50 / Math.PI), l: 0 };
+  }
+  function descTamanho(formato, c, l) {
+    return formato === 'Redonda' ? 'Ø ' + metros(c) : (formato === 'Quadrada' ? metros(c) + ' × ' + metros(c) : metros(c) + ' × ' + metros(l || 80));
+  }
+  // Área ocupada com as cadeiras (w x h) — igual a _pegadaMesa_ do servidor.
+  function pegada(m) {
+    var w = m.comp + 2 * CAD(), h = (m.formato === 'Redonda' ? m.comp : m.larg) + 2 * CAD();
+    if (m.formato === 'Retangular') w = m.comp + 20;
+    return m.rot === 90 ? { w: h, h: w } : { w: w, h: h };
+  }
+  function assentos(m, n) {
+    var pts = [], af = 25, t = { c: m.comp, l: m.formato === 'Redonda' ? m.comp : m.larg };
+    var i, k, porLado;
+    if (m.formato === 'Retangular') {
+      porLado = Math.max(1, Math.ceil(n / 2));
+      for (i = 0; i < n; i++) { var lado = i < porLado ? -1 : 1; k = i < porLado ? i : i - porLado; pts.push({ x: -t.c / 2 + t.c * (k + .5) / porLado, y: lado * (t.l / 2 + af) }); }
+    } else if (m.formato === 'Quadrada') {
+      porLado = Math.max(1, Math.ceil(n / 4));
+      for (i = 0; i < n; i++) {
+        var ld = Math.floor(i / porLado), pos = -t.c / 2 + t.c * ((i % porLado) + .5) / porLado, d = t.c / 2 + af;
+        pts.push(ld === 0 ? { x: pos, y: -d } : ld === 1 ? { x: d, y: pos } : ld === 2 ? { x: -pos, y: d } : { x: -d, y: -pos });
+      }
+    } else {
+      var R = t.c / 2 + af;
+      for (i = 0; i < n; i++) { var a = -Math.PI / 2 + i * 2 * Math.PI / n; pts.push({ x: Math.cos(a) * R, y: Math.sin(a) * R }); }
+    }
+    return m.rot === 90 ? pts.map(function(p){ return { x: -p.y, y: p.x }; }) : pts;
+  }
+  function noSalao(m) { return m.x >= 0 && m.x <= P().w && m.y >= 0 && m.y <= P().h; }
+
+  // Folga entre duas áreas (cm). Negativa = sobrepõe. Redonda x redonda usa círculos.
+  function folga(a, b) {
+    if (a.redonda && b.redonda) return Math.hypot(a.x - b.x, a.y - b.y) - (a.w + b.w) / 2;
+    return Math.max(Math.abs(a.x - b.x) - (a.w + b.w) / 2, Math.abs(a.y - b.y) - (a.h + b.h) / 2);
+  }
+  function caixaMesa(m, x, y) { var p = pegada(m); return { x: x === undefined ? m.x : x, y: y === undefined ? m.y : y, w: p.w, h: p.h, redonda: m.formato === 'Redonda' }; }
+  function caixaElem(e) { return { x: e.x, y: e.y, w: e.w, h: e.h }; }
+
+  // Mesas no salão com corredor menor que o mínimo, encostadas em elemento ou saindo pela parede.
+  function calcularConflitos() {
+    var cor = P().corredor, res = {}, dentro = D.mesas.filter(noSalao);
+    var cx = dentro.map(function(m){ return caixaMesa(m); });
+    for (var i = 0; i < dentro.length; i++) {
+      var a = cx[i];
+      if (a.x - a.w / 2 < 0 || a.y - a.h / 2 < 0 || a.x + a.w / 2 > P().w || a.y + a.h / 2 > P().h) res[dentro[i].id] = 'parede';
+      for (var j = i + 1; j < dentro.length; j++) {
+        if (Math.abs(a.x - cx[j].x) > 1500 || Math.abs(a.y - cx[j].y) > 1500) continue;
+        if (folga(a, cx[j]) < cor - 1) { res[dentro[i].id] = res[dentro[i].id] || 'perto'; res[dentro[j].id] = res[dentro[j].id] || 'perto'; }
+      }
+      P().elementos.forEach(function(e){ if (folga(a, caixaElem(e)) < 0) res[dentro[i].id] = 'elemento'; });
+    }
+    return res;
+  }
+
   function plantaHtml() {
-    return '<div class="card-hb"><div class="mz-planta-wrap"><svg id="mzSvg" class="mz-planta" viewBox="0 0 ' + D.planta.LARGURA + ' ' + D.planta.ALTURA + '" xmlns="' + NS + '"></svg></div>' +
+    var fora = D.mesas.filter(function(m){ return !noSalao(m); }).length;
+    return '<div class="card-hb">' +
+      (D.podeEditar ? '<div class="mz-ptools">' +
+        '<button class="btn-hb-outline btn-sm" onclick="abrirSalao()"><i class="fas fa-ruler-combined"></i> Salão</button>' +
+        '<div class="dropdown d-inline-block"><button class="btn-hb-outline btn-sm dropdown-toggle" data-bs-toggle="dropdown"><i class="fas fa-shapes"></i> Elemento</button><ul class="dropdown-menu">' +
+          Object.keys(ESTILO).map(function(t){ return '<li><a class="dropdown-item small" href="#" onclick="novoElemento(\'' + t + '\');return false;"><i class="fas fa-square me-2" style="color:' + ESTILO[t].borda + '"></i>' + ESTILO[t].rotulo + '</a></li>'; }).join('') +
+        '</ul></div>' +
+        '<button class="btn-hb btn-sm" onclick="abrirOrganizar()"><i class="fas fa-table-cells-large"></i> Organizar salão</button>' +
+        (fora ? '<button class="btn-hb-outline btn-sm" onclick="encaixarFora()" title="Coloca as mesas de fora nos espaços livres, sem mexer nas outras"><i class="fas fa-arrow-right-to-bracket"></i> Encaixar ' + fora + ' de fora</button>' : '') +
+        (desfazer ? '<button class="btn-hb-outline btn-sm" onclick="desfazerArranjo()"><i class="fas fa-rotate-left"></i> Desfazer</button>' : '') +
+      '</div>' : '') +
+      '<div class="mz-planta-wrap"><svg id="mzSvg" class="mz-planta" xmlns="' + NS + '"></svg>' +
+        '<div class="mz-zoom"><button onclick="zoomPlanta(0.8)" title="Aproximar" aria-label="Aproximar"><i class="fas fa-plus"></i></button><button onclick="ajustarPlanta()" title="Ver tudo" aria-label="Ver tudo"><i class="fas fa-expand"></i></button><button onclick="zoomPlanta(1.25)" title="Afastar" aria-label="Afastar"><i class="fas fa-minus"></i></button></div>' +
+      '</div>' +
+      '<div class="mz-status" id="mzStatus"></div>' +
       '<div class="mz-legenda">' +
         (corPor === 'gestor' ? Object.keys(corGestor).map(function(g){ return '<span><i class="mz-dot" style="background:' + corGestor[g] + '"></i> ' + esc(g === '—' ? 'Sem gestor' : g) + '</span>'; }).join('')
           : '<span><i class="mz-dot" style="background:var(--ink-900)"></i> lugar ocupado</span>') +
         '<span><i class="mz-dot" style="background:#fff;border:1.5px solid #CBD5E1"></i> lugar livre</span>' +
-        '<span><i class="mz-dot" style="background:#FEF3C7;border:1.5px solid #F59E0B"></i> mesa VIP</span>' +
-        (D.podeEditar ? '<span class="ms-auto"><i class="fas fa-hand-pointer"></i> arraste para posicionar · toque para abrir</span>' : '') +
+        '<span><i class="mz-dot" style="background:#FEF3C7;border:1.5px solid #F59E0B"></i> VIP</span>' +
+        '<span><i class="mz-dot" style="background:#FEE2E2;border:1.5px dashed #EF4444"></i> corredor abaixo do mínimo</span>' +
+        '<span class="ms-auto">' + (D.podeEditar ? 'arraste mesas e elementos · ' : '') + 'roda do mouse/pinça: zoom · arraste o fundo: mover a vista</span>' +
       '</div></div>';
   }
 
@@ -242,39 +415,110 @@
     return e;
   }
 
+  function limites() {
+    var x0 = 0, y0 = 0, x1 = P().w, y1 = P().h;
+    D.mesas.forEach(function(m){ var p = pegada(m); x0 = Math.min(x0, m.x - p.w / 2); y0 = Math.min(y0, m.y - p.h / 2); x1 = Math.max(x1, m.x + p.w / 2); y1 = Math.max(y1, m.y + p.h / 2); });
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }
+  function aplicarView() { var svg = document.getElementById('mzSvg'); if (svg && view) svg.setAttribute('viewBox', [view.x, view.y, view.w, view.h].map(function(n){ return Math.round(n); }).join(' ')); }
+  window.ajustarPlanta = function() {
+    var b = limites(), pad = Math.max(b.w, b.h) * 0.04 + 60;
+    view = { x: b.x - pad, y: b.y - pad - 60, w: b.w + 2 * pad, h: b.h + 2 * pad + 60 };
+    var svg = document.getElementById('mzSvg');
+    if (svg && svg.clientWidth) {           // mesma proporção da tela, para o "ver tudo" usar o espaço todo
+      var r = svg.clientWidth / svg.clientHeight;
+      if (view.w / view.h < r) { var nw = view.h * r; view.x -= (nw - view.w) / 2; view.w = nw; }
+      else { var nh = view.w / r; view.y -= (nh - view.h) / 2; view.h = nh; }
+    }
+    aplicarView();
+  };
+  window.zoomPlanta = function(f, cx, cy) {
+    if (!view) return;
+    var nw = Math.min(80000, Math.max(250, view.w * f)); f = nw / view.w;
+    if (cx === undefined) { cx = view.x + view.w / 2; cy = view.y + view.h / 2; }
+    view = { x: cx - (cx - view.x) * f, y: cy - (cy - view.y) * f, w: view.w * f, h: view.h * f };
+    aplicarView();
+  };
+  function pontoSvg(ev) {
+    var svg = document.getElementById('mzSvg');
+    var p = svg.createSVGPoint(); p.x = ev.clientX; p.y = ev.clientY;
+    return p.matrixTransform(svg.getScreenCTM().inverse());
+  }
+  function cmPorPixel() { var svg = document.getElementById('mzSvg'); return svg && svg.clientWidth ? Math.max(view.w / svg.clientWidth, view.h / svg.clientHeight) : 1; }
+
   function desenharPlanta() {
     var svg = document.getElementById('mzSvg');
     if (!svg) return;
-    // fundo quadriculado discreto
+    svg.innerHTML = '';
     var defs = el('defs', {}, svg);
-    var pat = el('pattern', { id:'mzGrade', width:40, height:40, patternUnits:'userSpaceOnUse' }, defs);
-    el('path', { d:'M 40 0 L 0 0 0 40', fill:'none', stroke:'#EEF2F7', 'stroke-width':1 }, pat);
-    el('rect', { x:0, y:0, width:D.planta.LARGURA, height:D.planta.ALTURA, fill:'url(#mzGrade)' }, svg);
-    D.mesas.forEach(function(m) { desenharMesa(svg, m); });
-  }
-
-  function geometria(m) {
-    var cap = Math.max(1, m.capacidade);
-    if (m.formato === 'Retangular') {
-      var porLado = Math.ceil(cap / 2);
-      return { w: Math.max(70, 26 + porLado * 24), h: 46 };
+    var p1 = el('pattern', { id:'mzG1', width:100, height:100, patternUnits:'userSpaceOnUse' }, defs);
+    el('path', { d:'M 100 0 L 0 0 0 100', fill:'none', stroke:'#EEF2F7', 'stroke-width':2 }, p1);
+    var p5 = el('pattern', { id:'mzG5', width:500, height:500, patternUnits:'userSpaceOnUse' }, defs);
+    el('path', { d:'M 500 0 L 0 0 0 500', fill:'none', stroke:'#DDE4EE', 'stroke-width':3 }, p5);
+    var fundo = el('g', { id:'mzFundo' }, svg);
+    el('rect', { x:0, y:0, width:P().w, height:P().h, fill:'#FFFFFF' }, fundo);
+    el('rect', { x:0, y:0, width:P().w, height:P().h, fill:'url(#mzG1)' }, fundo);
+    el('rect', { x:0, y:0, width:P().w, height:P().h, fill:'url(#mzG5)' }, fundo);
+    el('rect', { x:0, y:0, width:P().w, height:P().h, fill:'none', stroke:'#334155', 'stroke-width':8 }, fundo);
+    var fc = Math.max(28, Math.min(90, P().w / 35));
+    var tc = el('text', { x:P().w / 2, y:-22, 'text-anchor':'middle', 'font-size':fc, 'font-weight':700, fill:'#475569' }, fundo); tc.textContent = metros(P().w);
+    var tl = el('text', { x:-22, y:P().h / 2, 'text-anchor':'middle', 'font-size':fc, 'font-weight':700, fill:'#475569', transform:'rotate(-90 -22 ' + P().h / 2 + ')' }, fundo); tl.textContent = metros(P().h);
+    // Área de espera (mesas fora do salão)
+    var fora = D.mesas.filter(function(m){ return !noSalao(m); });
+    if (fora.length) {
+      var b = { x0: 1e9, y0: 1e9, x1: -1e9, y1: -1e9 };
+      fora.forEach(function(m){ var p = pegada(m); b.x0 = Math.min(b.x0, m.x - p.w / 2); b.y0 = Math.min(b.y0, m.y - p.h / 2); b.x1 = Math.max(b.x1, m.x + p.w / 2); b.y1 = Math.max(b.y1, m.y + p.h / 2); });
+      el('rect', { x:b.x0 - 40, y:b.y0 - 40, width:b.x1 - b.x0 + 80, height:b.y1 - b.y0 + 80, rx:30, fill:'#FFF7ED', stroke:'#F59E0B', 'stroke-width':5, 'stroke-dasharray':'30 20' }, fundo);
+      var tf = el('text', { x:b.x0 - 30, y:b.y0 - 60, 'font-size':fc * 0.8, 'font-weight':700, fill:'#B45309' }, fundo); tf.textContent = 'Fora do salão · ' + fora.length + ' mesa(s)';
     }
-    return { r: Math.min(62, Math.max(30, 20 + cap * 2.6)) };
+    var camElem = el('g', { id:'mzElem' }, svg);
+    P().elementos.forEach(function(e){ desenharElemento(camElem, e); });
+    el('g', { id:'mzMesas' }, svg);
+    el('g', { id:'mzGuias' }, svg);
+    desenharMesas();
+    if (!view) ajustarPlanta(); else aplicarView();
+    ligarVista(svg);
   }
 
-  function desenharMesa(svg, m) {
+  function desenharMesas() {
+    var cam = document.getElementById('mzMesas');
+    if (!cam) return;
+    cam.innerHTML = '';
+    var conf = calcularConflitos();
+    D.mesas.forEach(function(m) { desenharMesa(cam, m, conf[m.id]); });
+    var n = Object.keys(conf).length, fora = D.mesas.filter(function(m){ return !noSalao(m); }).length;
+    var st = document.getElementById('mzStatus');
+    if (st) st.innerHTML = '<i class="fas fa-ruler-combined me-1"></i>Salão ' + metros(P().w) + ' × ' + metros(P().h) + ' · corredor mínimo ' + metros(P().corredor) +
+      (n ? ' · <span style="color:var(--danger);font-weight:700;">' + n + ' mesa(s) com pouco espaço</span>' : ' · <span style="color:var(--success);font-weight:600;">espaçamento ok</span>') +
+      (fora ? ' · <span style="color:#B45309;font-weight:700;">' + fora + ' fora do salão</span>' : '');
+  }
+
+  function desenharElemento(cam, e) {
+    var est = ESTILO[e.tipo] || ESTILO.bloqueio;
+    var g = el('g', { 'class':'mz-elem' + (D.podeEditar ? ' arrastavel' : ''), transform:'translate(' + e.x + ',' + e.y + ')' }, cam);
+    el('rect', { x:-e.w / 2, y:-e.h / 2, width:e.w, height:e.h, rx:12, fill:est.fundo, stroke:est.borda, 'stroke-width':5 }, g);
+    var fs = Math.max(20, Math.min(90, Math.min(e.w / 7, e.h / 2.5)));
+    var t = el('text', { x:0, y:fs * 0.35, 'text-anchor':'middle', 'font-size':fs, 'font-weight':700, fill:est.borda }, g); t.textContent = e.nome || est.rotulo;
+    var t2 = el('text', { x:0, y:fs * 0.35 + fs * 0.8, 'text-anchor':'middle', 'font-size':fs * 0.5, fill:est.borda, opacity:.8 }, g); t2.textContent = metros(e.w) + ' × ' + metros(e.h);
+    ligarArraste(g, e, 'elem');
+  }
+
+  function desenharMesa(cam, m, conflito) {
     var ocup = m.ocupados, cap = m.capacidade;
-    var cheia = ocup >= cap, excesso = ocup > cap;
-    var livres = cap - ocup;
-    var g = el('g', { 'class':'mz-mesa' + (D.podeEditar ? ' arrastavel' : ''), transform:'translate(' + m.x + ',' + m.y + ')', 'data-id': m.id }, svg);
-    var geo = geometria(m);
+    var cheia = ocup >= cap, excesso = ocup > cap, livres = cap - ocup;
+    var g = el('g', { 'class':'mz-mesa' + (D.podeEditar ? ' arrastavel' : ''), transform:'translate(' + m.x + ',' + m.y + ')', 'data-id': m.id }, cam);
+    var pg = pegada(m);
+    // Área das cadeiras: aparece em vermelho quando o corredor está abaixo do mínimo.
+    if (conflito) {
+      if (m.formato === 'Redonda') el('circle', { r:pg.w / 2, fill:'#FEE2E2', stroke:'#EF4444', 'stroke-width':4, 'stroke-dasharray':'16 10' }, g);
+      else el('rect', { x:-pg.w / 2, y:-pg.h / 2, width:pg.w, height:pg.h, rx:20, fill:'#FEE2E2', stroke:'#EF4444', 'stroke-width':4, 'stroke-dasharray':'16 10' }, g);
+      var tt = el('title', {}, g); tt.textContent = conflito === 'parede' ? 'Encostada/saindo pela parede' : conflito === 'elemento' ? 'Em cima de um elemento do salão' : 'Corredor menor que ' + metros(P().corredor);
+    }
     var corBorda = excesso ? '#EF4444' : (m.vip ? '#F59E0B' : (cheia ? '#10B981' : '#0088CC'));
     var fundo = m.vip ? '#FEF3C7' : '#FFFFFF';
-    // Pessoas sentadas, agrupadas por gestor, uma por cadeira (na ordem).
     var gente = sentadosNa(m.id).slice().sort(function(a, b){ return (a.gestor || '').localeCompare(b.gestor || '') || a.nome.localeCompare(b.nome); });
-    var totalCadeiras = Math.max(cap, gente.length);
-    var assento = function(x, y, i) {
-      var p = gente[i], fill = '#FFFFFF', stroke = '#CBD5E1';
+    assentos(m, Math.max(cap, gente.length)).forEach(function(pt, i) {
+      var p = gente[i], fill = '#FFFFFF', stroke = '#94A3B8';
       if (p) {
         var cg = corGestor[p.gestor || '—'] || '#0A2B4E';
         if (i >= cap) fill = '#EF4444';
@@ -282,81 +526,142 @@
         else fill = corPor === 'gestor' ? cg : '#0A2B4E';
         stroke = 'none';
       }
-      var c = el('circle', { cx:x, cy:y, r:7.5, fill:fill, stroke:stroke, 'stroke-width':1.5 }, g);
+      var c = el('circle', { cx:pt.x, cy:pt.y, r:19, fill:fill, stroke:stroke, 'stroke-width':3 }, g);
       if (p) { var t = el('title', {}, c); t.textContent = p.nome + (p.gestor ? ' — convidado por ' + p.gestor : '') + (p.empresa ? ' (' + p.empresa + ')' : ''); }
-    };
-    if (geo.r) {
-      var R = geo.r + 14;
-      for (var i = 0; i < totalCadeiras; i++) {
-        var a = -Math.PI / 2 + i * 2 * Math.PI / totalCadeiras;
-        assento(Math.cos(a) * R, Math.sin(a) * R, i);
-      }
-      el('circle', { 'class':'mz-tampo', cx:0, cy:0, r:geo.r, fill:fundo, stroke:corBorda, 'stroke-width':2.2 }, g);
-    } else {
-      var porLado = Math.ceil(totalCadeiras / 2), passo = (geo.w - 16) / porLado;
-      for (var j = 0; j < totalCadeiras; j++) {
-        var lado = j < porLado ? -1 : 1, k = j < porLado ? j : j - porLado;
-        assento(-geo.w / 2 + 8 + passo * (k + .5), lado * (geo.h / 2 + 12), j);
-      }
-      el('rect', { 'class':'mz-tampo', x:-geo.w / 2, y:-geo.h / 2, width:geo.w, height:geo.h, rx:10, fill:fundo, stroke:corBorda, 'stroke-width':2.2 }, g);
-    }
-    var t1 = el('text', { x:0, y:-1, 'text-anchor':'middle', 'font-size':17, 'font-weight':800, fill:'#0A2B4E' }, g); t1.textContent = m.numero;
-    var t2 = el('text', { x:0, y:15, 'text-anchor':'middle', 'font-size':10.5, 'font-weight':600, fill: excesso ? '#EF4444' : '#64748B' }, g); t2.textContent = ocup + '/' + cap;
-    var base = (geo.r ? geo.r + 34 : geo.h / 2 + 34);
-    if (m.nome) {
-      var t3 = el('text', { x:0, y:base, 'text-anchor':'middle', 'font-size':11, 'font-weight':700, fill:'#123A63' }, g);
-      t3.textContent = m.nome.length > 22 ? m.nome.slice(0, 21) + '…' : m.nome;
-    }
-    if (m.vip) { var tv = el('text', { x:0, y:-(geo.r ? geo.r : geo.h / 2) - 22, 'text-anchor':'middle', 'font-size':9, 'font-weight':800, fill:'#B45309', 'letter-spacing':1 }, g); tv.textContent = 'VIP'; }
+    });
+    var tw = m.rot === 90 ? m.larg : m.comp, th = m.rot === 90 ? m.comp : (m.formato === 'Redonda' ? m.comp : m.larg);
+    if (m.formato === 'Redonda') el('circle', { 'class':'mz-tampo', r:m.comp / 2, fill:fundo, stroke:corBorda, 'stroke-width':5 }, g);
+    else el('rect', { 'class':'mz-tampo', x:-tw / 2, y:-th / 2, width:tw, height:th, rx:8, fill:fundo, stroke:corBorda, 'stroke-width':5 }, g);
+    var fs = Math.max(24, Math.min(58, Math.min(tw, th) * 0.34));
+    var t1 = el('text', { x:0, y:fs * 0.2, 'text-anchor':'middle', 'font-size':fs, 'font-weight':800, fill:'#0A2B4E' }, g); t1.textContent = m.numero;
+    var t2 = el('text', { x:0, y:fs * 0.2 + fs * 0.72, 'text-anchor':'middle', 'font-size':fs * 0.5, 'font-weight':600, fill: excesso ? '#EF4444' : '#64748B' }, g); t2.textContent = ocup + '/' + cap;
+    if (m.nome) { var t3 = el('text', { x:0, y:pg.h / 2 + 34, 'text-anchor':'middle', 'font-size':30, 'font-weight':700, fill:'#123A63' }, g); t3.textContent = m.nome.length > 22 ? m.nome.slice(0, 21) + '…' : m.nome; }
+    if (m.vip) { var tv = el('text', { x:0, y:-pg.h / 2 - 12, 'text-anchor':'middle', 'font-size':24, 'font-weight':800, fill:'#B45309', 'letter-spacing':2 }, g); tv.textContent = 'VIP'; }
     var nSel = qtdSelecionados();
     if (nSel) g.classList.add(livres >= nSel ? 'alvo' : 'sem-lugar');
     else if (destaqueGestor && !gente.some(function(p){ return (p.gestor || '—') === destaqueGestor; })) g.style.opacity = '.4';
-    ligarInteracao(g, m);
+    ligarArraste(g, m, 'mesa');
   }
 
-  // Arrastar (mouse e toque) + toque simples abre a mesa.
-  function ligarInteracao(g, m) {
-    var svg = document.getElementById('mzSvg');
-    var inicio = null, orig = null, moveu = false;
-    function pontoSvg(ev) {
-      var p = svg.createSVGPoint(); p.x = ev.clientX; p.y = ev.clientY;
-      return p.matrixTransform(svg.getScreenCTM().inverse());
-    }
+  // Vista: arrastar o fundo = mover; roda = zoom; dois dedos = pinça.
+  function ligarVista(svg) {
+    if (svg.__ligado) return;
+    svg.__ligado = true;
+    var dedos = {}, ancora = null, pinca = null;
+    svg.addEventListener('wheel', function(ev) {
+      ev.preventDefault();
+      var p = pontoSvg(ev);
+      zoomPlanta(Math.exp(ev.deltaY * 0.0015), p.x, p.y);
+    }, { passive: false });
+    svg.addEventListener('pointerdown', function(ev) {
+      if (ev.target.closest && ev.target.closest('.mz-mesa, .mz-elem')) return;
+      dedos[ev.pointerId] = { x: ev.clientX, y: ev.clientY };
+      svg.setPointerCapture(ev.pointerId);
+      var ids = Object.keys(dedos);
+      if (ids.length === 1) { ancora = pontoSvg(ev); pinca = null; }
+      else if (ids.length === 2) {
+        var a = dedos[ids[0]], b = dedos[ids[1]];
+        pinca = { dist: Math.hypot(a.x - b.x, a.y - b.y), w: view.w }; ancora = null;
+      }
+    });
+    svg.addEventListener('pointermove', function(ev) {
+      if (!dedos[ev.pointerId]) return;
+      dedos[ev.pointerId] = { x: ev.clientX, y: ev.clientY };
+      var ids = Object.keys(dedos);
+      if (pinca && ids.length === 2) {
+        var a = dedos[ids[0]], b = dedos[ids[1]], d = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+        var meio = pontoSvg({ clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 });
+        zoomPlanta((pinca.w * pinca.dist / d) / view.w, meio.x, meio.y);
+      } else if (ancora) {
+        var p = pontoSvg(ev);
+        view.x += ancora.x - p.x; view.y += ancora.y - p.y; aplicarView();
+      }
+    });
+    function fim(ev) { delete dedos[ev.pointerId]; if (Object.keys(dedos).length < 2) pinca = null; if (!Object.keys(dedos).length) ancora = null; }
+    svg.addEventListener('pointerup', fim);
+    svg.addEventListener('pointercancel', fim);
+  }
+
+  // Arrastar mesa/elemento: encaixa de 10 em 10 cm e alinha com as outras mesas (guias).
+  function ligarArraste(g, obj, tipo) {
+    var off = null, ini = null, moveu = false;
     g.addEventListener('pointerdown', function(ev) {
       if (ev.button !== undefined && ev.button !== 0) return;
-      inicio = pontoSvg(ev); orig = { x: m.x, y: m.y }; moveu = false;
-      if (D.podeEditar) { g.setPointerCapture(ev.pointerId); }
+      ev.stopPropagation();
+      var p = pontoSvg(ev);
+      off = { x: p.x - obj.x, y: p.y - obj.y }; ini = { x: ev.clientX, y: ev.clientY, ox: obj.x, oy: obj.y }; moveu = false;
+      if (D.podeEditar) g.setPointerCapture(ev.pointerId);
     });
     g.addEventListener('pointermove', function(ev) {
-      if (!inicio || !D.podeEditar) return;
-      var p = pontoSvg(ev), dx = p.x - inicio.x, dy = p.y - inicio.y;
-      if (!moveu && Math.abs(dx) + Math.abs(dy) < 6) return;
+      if (!off || !D.podeEditar) return;
+      if (!moveu && Math.abs(ev.clientX - ini.x) + Math.abs(ev.clientY - ini.y) < 6) return;
       moveu = true; g.classList.add('arrastando');
-      m.x = Math.round(Math.min(D.planta.LARGURA - 30, Math.max(30, orig.x + dx)) / 5) * 5;
-      m.y = Math.round(Math.min(D.planta.ALTURA - 30, Math.max(30, orig.y + dy)) / 5) * 5;
-      g.setAttribute('transform', 'translate(' + m.x + ',' + m.y + ')');
-      g.parentNode.appendChild(g);   // traz para frente
+      var p = pontoSvg(ev), nx = Math.round((p.x - off.x) / 10) * 10, ny = Math.round((p.y - off.y) / 10) * 10;
+      var guias = document.getElementById('mzGuias'); guias.innerHTML = '';
+      if (tipo === 'mesa') {
+        var tol = 10 * cmPorPixel(), gx = null, gy = null;
+        D.mesas.forEach(function(o) {
+          if (o === obj) return;
+          if (gx === null && Math.abs(o.x - nx) < tol) gx = o.x;
+          if (gy === null && Math.abs(o.y - ny) < tol) gy = o.y;
+        });
+        if (gx !== null) { nx = gx; el('line', { x1:gx, y1:Math.min(ny, 0) - 200, x2:gx, y2:Math.max(ny, P().h) + 200, stroke:'#0088CC', 'stroke-width':3 * cmPorPixel() / 2, 'stroke-dasharray':'12 8' }, guias); }
+        if (gy !== null) { ny = gy; el('line', { x1:Math.min(nx, 0) - 200, y1:gy, x2:Math.max(nx, P().w) + 200, y2:gy, stroke:'#0088CC', 'stroke-width':3 * cmPorPixel() / 2, 'stroke-dasharray':'12 8' }, guias); }
+        // Mostra a área das cadeiras: verde se o corredor está ok, vermelho se não.
+        var cx = caixaMesa(obj, nx, ny), ok = true;
+        D.mesas.forEach(function(o){ if (o !== obj && noSalao(o) && folga(cx, caixaMesa(o)) < P().corredor - 1) ok = false; });
+        P().elementos.forEach(function(e){ if (folga(cx, caixaElem(e)) < 0) ok = false; });
+        var cor = ok ? '#10B981' : '#EF4444';
+        if (obj.formato === 'Redonda') el('circle', { cx:nx, cy:ny, r:cx.w / 2 + P().corredor / 2, fill:'none', stroke:cor, 'stroke-width':4 * cmPorPixel() / 2, 'stroke-dasharray':'14 10' }, guias);
+        else el('rect', { x:nx - cx.w / 2 - P().corredor / 2, y:ny - cx.h / 2 - P().corredor / 2, width:cx.w + P().corredor, height:cx.h + P().corredor, fill:'none', stroke:cor, 'stroke-width':4 * cmPorPixel() / 2, 'stroke-dasharray':'14 10' }, guias);
+      }
+      obj.x = nx; obj.y = ny;
+      g.setAttribute('transform', 'translate(' + nx + ',' + ny + ')');
+      g.parentNode.appendChild(g);
     });
     function soltar() {
-      if (!inicio) return;
-      inicio = null; g.classList.remove('arrastando');
-      if (moveu) { agendarSalvarPosicao(m); }
-      else { cliqueMesa(m); }
+      if (!off) return;
+      off = null; g.classList.remove('arrastando');
+      var guias = document.getElementById('mzGuias'); if (guias) guias.innerHTML = '';
+      if (!moveu) { if (tipo === 'mesa') cliqueMesa(obj); else if (D.podeEditar) abrirElemento(obj.id); return; }
+      if (tipo === 'mesa') { agendarSalvarPosicao(obj); desenharMesas(); if (noSalao(obj) !== (ini.ox >= 0 && ini.ox <= P().w && ini.oy >= 0 && ini.oy <= P().h)) desenharPlanta(); }
+      else salvarPlanta();
     }
     g.addEventListener('pointerup', soltar);
-    g.addEventListener('pointercancel', function() { inicio = null; g.classList.remove('arrastando'); });
+    g.addEventListener('pointercancel', function() { off = null; g.classList.remove('arrastando'); });
   }
 
+  var pendentesPos = {}, timerPos = null;
   function agendarSalvarPosicao(m) {
-    pendentesPos[m.id] = { id: m.id, x: m.x, y: m.y };
+    pendentesPos[m.id] = { id: m.id, x: Math.round(m.x), y: Math.round(m.y) };
     clearTimeout(timerPos);
-    timerPos = setTimeout(function() {
-      var lote = Object.keys(pendentesPos).map(function(k){ return pendentesPos[k]; });
-      pendentesPos = {};
+    timerPos = setTimeout(salvarPosicoesPendentes, 600);
+  }
+  function salvarPosicoesPendentes(depois) {
+    var lote = Object.keys(pendentesPos).map(function(k){ return pendentesPos[k]; });
+    pendentesPos = {};
+    if (!lote.length) { if (depois) depois(); return; }
+    google.script.run.withSuccessHandler(function(resp) {
+      if (!resp.ok) toast(resp.mensagem, 'err');
+      if (depois) depois();
+    }).withFailureHandler(erro).apiMoverMesas(window.TOKEN, lote);
+  }
+  function salvarMuitas(lista, msg) {
+    lista.forEach(function(p){ pendentesPos[p.id] = { id: p.id, x: Math.round(p.x), y: Math.round(p.y) }; });
+    clearTimeout(timerPos);
+    salvarPosicoesPendentes(function(){ if (msg) toast(msg, 'ok'); });
+  }
+
+  var timerPlanta = null;
+  function salvarPlanta(msg, depois) {
+    clearTimeout(timerPlanta);
+    timerPlanta = setTimeout(function() {
       google.script.run.withSuccessHandler(function(resp) {
-        if (!resp.ok) toast(resp.mensagem, 'err');
-      }).withFailureHandler(erro).apiMoverMesas(window.TOKEN, lote);
-    }, 700);
+        if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
+        if (msg) toast(msg, 'ok');
+        if (depois) depois();
+      }).withFailureHandler(erro).apiSalvarPlanta(window.TOKEN, idEvento, P());
+    }, msg ? 0 : 500);
   }
 
   function cliqueMesa(m) {
@@ -364,6 +669,231 @@
     if (ids.length && D.podeEditar) { sentar(ids, m.id); return; }
     abrirMesa(m.id);
   }
+
+  // ---------------------------------------------------------- organizar (motor)
+  // Gera as vagas do salão para uma "pegada" de mesa. Arranjos:
+  //  grade      — fileiras e colunas alinhadas
+  //  intercalada— fileiras deslocadas (xadrez); com mesas redondas cabe ~15% mais
+  //  blocos     — dois blocos com corredor central
+  function gerarVagas(op, fp, obstaculos, W, H) {
+    var c = op.corredor, m = op.margem, vagas = [];
+    var cw = fp.w + (op.encostar ? 0 : c), ch = fp.h + c;
+    var regioes = op.arranjo === 'blocos'
+      ? [{ x0: m, x1: W / 2 - op.central / 2 }, { x0: W / 2 + op.central / 2, x1: W - m }]
+      : [{ x0: m, x1: W - m }];
+    var passoY = (op.arranjo === 'intercalada' && fp.redonda) ? cw * Math.sqrt(3) / 2 : ch;
+    var fila = 0;
+    for (var y = m + fp.h / 2; y + fp.h / 2 <= H - m + 0.5; y += passoY, fila++) {
+      regioes.forEach(function(r) {
+        var larg = r.x1 - r.x0;
+        if (larg < fp.w) return;
+        var cols = Math.floor((larg - fp.w) / cw) + 1;
+        var ini = r.x0 + (larg - ((cols - 1) * cw + fp.w)) / 2 + fp.w / 2;
+        // Intercalada: centraliza o conjunto (fileiras pares + ímpares deslocadas meia mesa).
+        if (op.arranjo === 'intercalada') ini = Math.max(r.x0 + fp.w / 2, ini - cw / 4);
+        var desl = (op.arranjo === 'intercalada' && fila % 2) ? cw / 2 : 0;
+        for (var k = 0; k < cols; k++) {
+          var x = ini + k * cw + desl;
+          if (x + fp.w / 2 > r.x1 + 0.5) continue;
+          var cx = { x: x, y: y, w: fp.w, h: fp.h, redonda: fp.redonda };
+          if (obstaculos.some(function(o){ return folga(cx, o) < o.folga; })) continue;
+          vagas.push({ x: Math.round(x), y: Math.round(y), fila: fila });
+        }
+      });
+    }
+    // Ordem: a partir da frente (lado do palco, ou a parede de cima), fileira por fileira.
+    var palco = P().elementos.filter(function(e){ return e.tipo === 'palco'; })[0];
+    var lado = 'topo';
+    if (palco) {
+      var d = { topo: palco.y, baixo: H - palco.y, esq: palco.x, dir: W - palco.x };
+      lado = Object.keys(d).sort(function(a, b){ return d[a] - d[b]; })[0];
+    }
+    var prof = function(v){ return lado === 'topo' ? v.y : lado === 'baixo' ? -v.y : lado === 'esq' ? v.x : -v.x; };
+    var trav = function(v){ return lado === 'topo' || lado === 'baixo' ? v.x : v.y; };
+    var passo = (lado === 'topo' || lado === 'baixo') ? passoY : cw;
+    vagas.sort(function(a, b){ return Math.round(prof(a) / passo * 2) - Math.round(prof(b) / passo * 2) || trav(a) - trav(b); });
+    return vagas;
+  }
+
+  function pegadaMaior(lista) {
+    var fp = { w: 0, h: 0, redonda: true };
+    lista.forEach(function(m){ var p = pegada(m); fp.w = Math.max(fp.w, p.w); fp.h = Math.max(fp.h, p.h); if (m.formato !== 'Redonda') fp.redonda = false; });
+    if (fp.redonda) fp.w = fp.h = Math.max(fp.w, fp.h);
+    return fp;
+  }
+  function obstaculosElementos(op) { return P().elementos.map(function(e){ return { x: e.x, y: e.y, w: e.w, h: e.h, folga: op.corredor / 2 }; }); }
+
+  // Resultado de um arranjo para as mesas escolhidas.
+  function simular(op, lista, fixas, W, H) {
+    var fp = pegadaMaior(lista);
+    var obst = obstaculosElementos(op).concat((fixas || []).map(function(m){ var b = caixaMesa(m); b.folga = op.corredor; return b; }));
+    return { vagas: gerarVagas(op, fp, obst, W || P().w, H || P().h), fp: fp };
+  }
+
+  function ordenarParaArranjo(lista, vipFrente) {
+    return lista.slice().sort(function(a, b){ return (vipFrente ? (b.vip - a.vip) : 0) || a.numero - b.numero; });
+  }
+
+  // O que fazer quando não cabe: corredor menor, outro arranjo ou salão maior.
+  function sugestoes(op, lista, fixas) {
+    var n = lista.length, s = [];
+    if (op.arranjo !== 'intercalada') { var r = simular(Object.assign({}, op, { arranjo: 'intercalada' }), lista, fixas); if (r.vagas.length >= n) s.push('usar o arranjo <strong>intercalado</strong> (cabem ' + r.vagas.length + ')'); }
+    for (var c = op.corredor - 10; c >= 60; c -= 10) {
+      var r2 = simular(Object.assign({}, op, { corredor: c }), lista, fixas);
+      if (r2.vagas.length >= n) { s.push('reduzir o corredor para <strong>' + metros(c) + '</strong>'); break; }
+    }
+    for (var k = 1.05; k <= 4; k += 0.05) {
+      var W = Math.ceil(P().w * k / 50) * 50, H = Math.ceil(P().h * k / 50) * 50;
+      var r3 = simular(op, lista, fixas, W, H);
+      if (r3.vagas.length >= n) { s.push('um salão de <strong>' + metros(W) + ' × ' + metros(H) + '</strong>'); break; }
+    }
+    return s;
+  }
+
+  // Posições na área de espera (direita do salão) para o que não coube.
+  function posicoesEspera(lista) {
+    var fp = pegadaMaior(lista), passo = Math.max(fp.w, fp.h) + 40, lin = Math.max(1, Math.floor(Math.max(P().h, 600) / passo));
+    return lista.map(function(m, i){ return { id: m.id, x: P().w + 150 + passo / 2 + Math.floor(i / lin) * passo, y: passo / 2 + (i % lin) * passo }; });
+  }
+
+  function aplicarPosicoes(novas, msg) {
+    desfazer = D.mesas.map(function(m){ return { id: m.id, x: m.x, y: m.y }; });
+    var porId = {}; novas.forEach(function(p){ porId[p.id] = p; });
+    D.mesas.forEach(function(m){ if (porId[m.id]) { m.x = porId[m.id].x; m.y = porId[m.id].y; } });
+    render();
+    salvarMuitas(novas, msg);
+  }
+  window.desfazerArranjo = function() {
+    if (!desfazer) return;
+    var volta = desfazer; desfazer = null;
+    var porId = {}; volta.forEach(function(p){ porId[p.id] = p; });
+    D.mesas.forEach(function(m){ if (porId[m.id]) { m.x = porId[m.id].x; m.y = porId[m.id].y; } });
+    render();
+    salvarMuitas(volta, 'Arranjo desfeito.');
+  };
+
+  // Encaixa as mesas que estão fora do salão nos espaços livres, sem mexer nas outras.
+  window.encaixarFora = function(silencioso) {
+    var fora = ordenarParaArranjo(D.mesas.filter(function(m){ return !noSalao(m); }), true);
+    if (!fora.length) return;
+    var dentro = D.mesas.filter(noSalao);
+    var op = { arranjo: 'grade', corredor: P().corredor, margem: P().margem, central: 200, encostar: false };
+    var r = simular(op, fora, dentro);
+    var colocar = Math.min(r.vagas.length, fora.length);
+    var novas = [];
+    for (var i = 0; i < colocar; i++) novas.push({ id: fora[i].id, x: r.vagas[i].x, y: r.vagas[i].y });
+    var sobra = fora.length - colocar;
+    if (!colocar) { if (!silencioso) toast('Não há espaço livre no salão com o corredor de ' + metros(P().corredor) + '. Use "Organizar salão".', 'err'); return; }
+    aplicarPosicoes(novas, colocar + ' mesa(s) encaixada(s)' + (sobra ? '; ' + sobra + ' continuam fora do salão (sem espaço).' : '.'));
+  };
+
+  window.abrirOrganizar = function() {
+    document.getElementById('orCorredor').value = (P().corredor / 100).toFixed(2);
+    document.getElementById('orMargem').value = (P().margem / 100).toFixed(2);
+    atualizarPrevia();
+    new bootstrap.Modal(document.getElementById('modalOrganizar')).show();
+  };
+  function opcoesOrganizar() {
+    return {
+      arranjo: (document.querySelector('input[name=orArranjo]:checked') || {}).value || 'grade',
+      corredor: Math.round((parseFloat(String(document.getElementById('orCorredor').value).replace(',', '.')) || 0.9) * 100),
+      margem: Math.round((parseFloat(String(document.getElementById('orMargem').value).replace(',', '.')) || 0) * 100),
+      central: Math.round((parseFloat(String(document.getElementById('orCentral').value).replace(',', '.')) || 2) * 100),
+      encostar: document.getElementById('orEncostar').checked,
+      vipFrente: document.getElementById('orVip').checked
+    };
+  }
+  window.atualizarPrevia = function() {
+    var op = opcoesOrganizar(), lista = D.mesas;
+    document.getElementById('orCentralBox').style.display = op.arranjo === 'blocos' ? '' : 'none';
+    document.getElementById('orEncostarBox').style.display = D.mesas.some(function(m){ return m.formato === 'Retangular'; }) ? '' : 'none';
+    var r = simular(op, lista, []);
+    var n = lista.length, cabe = r.vagas.length;
+    var box = document.getElementById('orPrevia');
+    var bordaBorda = Math.round(op.corredor + 2 * CAD());
+    var html = '<div class="small text-muted mb-1">Mesa de referência (com cadeiras): ' + metros(r.fp.w) + ' × ' + metros(r.fp.h) + ' · distância entre tampos ≈ ' + metros(bordaBorda) + '</div>';
+    if (cabe >= n) html += '<div class="mz-ok"><i class="fas fa-circle-check me-1"></i>Cabem <strong>' + cabe + '</strong> mesas neste salão — as suas <strong>' + n + '</strong> cabem' + (cabe > n ? ' (sobram ' + (cabe - n) + ' vagas)' : '') + '.</div>';
+    else {
+      var sg = sugestoes(op, lista, []);
+      html += '<div class="mz-nok"><i class="fas fa-triangle-exclamation me-1"></i>Cabem <strong>' + cabe + '</strong> de <strong>' + n + '</strong> mesas. ' + (n - cabe === 1 ? 'A outra fica' : 'As outras ' + (n - cabe) + ' ficam') + ' na área "fora do salão".' +
+        (sg.length ? '<div class="mt-1">Para caber todas: ' + sg.join(', ou ') + '.</div>' : '') + '</div>';
+    }
+    box.innerHTML = html;
+  };
+  window.aplicarOrganizar = function() {
+    var op = opcoesOrganizar();
+    if (op.corredor < 30 || op.corredor > 500) { toast('Corredor: de 0,30 m a 5 m.', 'err'); return; }
+    var lista = ordenarParaArranjo(D.mesas, op.vipFrente);
+    var r = simular(op, lista, []);
+    var novas = [], i;
+    for (i = 0; i < lista.length && i < r.vagas.length; i++) novas.push({ id: lista[i].id, x: r.vagas[i].x, y: r.vagas[i].y });
+    var resto = lista.slice(novas.length);
+    novas = novas.concat(posicoesEspera(resto));
+    if (op.corredor !== P().corredor || op.margem !== P().margem) { P().corredor = op.corredor; P().margem = op.margem; salvarPlanta(); }
+    bootstrap.Modal.getInstance(document.getElementById('modalOrganizar')).hide();
+    view = null;
+    aplicarPosicoes(novas, 'Salão organizado: ' + (lista.length - resto.length) + ' mesa(s) posicionada(s)' + (resto.length ? ', ' + resto.length + ' fora do salão.' : '.'));
+  };
+
+  // ---------------------------------------------------------- salão e elementos
+  function lerM(id, padrao) { var v = parseFloat(String(document.getElementById(id).value).replace(',', '.')); return isNaN(v) ? padrao : Math.round(v * 100); }
+  window.abrirSalao = function() {
+    document.getElementById('slLarg').value = (P().w / 100).toString().replace('.', ',');
+    document.getElementById('slProf').value = (P().h / 100).toString().replace('.', ',');
+    document.getElementById('slCorredor').value = (P().corredor / 100).toFixed(2).replace('.', ',');
+    document.getElementById('slMargem').value = (P().margem / 100).toFixed(2).replace('.', ',');
+    new bootstrap.Modal(document.getElementById('modalSalao')).show();
+  };
+  window.salvarSalao = function() {
+    var w = lerM('slLarg', 0), h = lerM('slProf', 0), c = lerM('slCorredor', 90), mg = lerM('slMargem', 100);
+    if (w < 500 || h < 500 || w > 30000 || h > 30000) { toast('Medidas do salão: de 5 m a 300 m.', 'err'); return; }
+    if (c < 30 || c > 500) { toast('Corredor: de 0,30 m a 5 m.', 'err'); return; }
+    P().w = w; P().h = h; P().corredor = c; P().margem = Math.max(0, Math.min(500, mg));
+    P().elementos.forEach(function(e){ e.x = Math.min(e.x, w); e.y = Math.min(e.y, h); });
+    bootstrap.Modal.getInstance(document.getElementById('modalSalao')).hide();
+    view = null; render();
+    salvarPlanta('Salão atualizado.');
+  };
+
+  var elemAberto = null;
+  window.novoElemento = function(tipo) {
+    var est = ESTILO[tipo];
+    var cx = view ? view.x + view.w / 2 : P().w / 2, cy = view ? view.y + view.h / 2 : P().h / 2;
+    var e = { id: 'E' + Date.now().toString(36), tipo: tipo, nome: '', w: Math.min(est.w, P().w), h: Math.min(est.h, P().h),
+      x: Math.round(Math.min(Math.max(cx, 0), P().w) / 10) * 10, y: Math.round(Math.min(Math.max(cy, 0), P().h) / 10) * 10 };
+    if (tipo === 'palco') { e.x = Math.round(P().w / 20) * 10; e.y = Math.round(e.h / 2 + 50); }
+    P().elementos.push(e);
+    render();
+    salvarPlanta(est.rotulo + ' adicionado. Arraste para posicionar; toque para editar.');
+  };
+  window.abrirElemento = function(id) {
+    var e = P().elementos.filter(function(x){ return x.id === id; })[0];
+    if (!e) return;
+    elemAberto = e;
+    document.getElementById('elTipo').value = e.tipo;
+    document.getElementById('elNome').value = e.nome;
+    document.getElementById('elLarg').value = (e.w / 100).toString().replace('.', ',');
+    document.getElementById('elProf').value = (e.h / 100).toString().replace('.', ',');
+    new bootstrap.Modal(document.getElementById('modalElemento')).show();
+  };
+  window.salvarElemento = function() {
+    var e = elemAberto; if (!e) return;
+    var w = lerM('elLarg', e.w), h = lerM('elProf', e.h);
+    if (w < 30 || h < 30) { toast('Medidas: mínimo 0,30 m.', 'err'); return; }
+    e.tipo = document.getElementById('elTipo').value; e.nome = document.getElementById('elNome').value.trim().slice(0, 30);
+    e.w = Math.min(w, P().w); e.h = Math.min(h, P().h);
+    bootstrap.Modal.getInstance(document.getElementById('modalElemento')).hide();
+    render(); salvarPlanta('Elemento atualizado.');
+  };
+  window.girarElemento = function() {
+    var w = document.getElementById('elLarg').value; document.getElementById('elLarg').value = document.getElementById('elProf').value; document.getElementById('elProf').value = w;
+  };
+  window.excluirElemento = function() {
+    var e = elemAberto; if (!e) return;
+    P().elementos = P().elementos.filter(function(x){ return x !== e; });
+    bootstrap.Modal.getInstance(document.getElementById('modalElemento')).hide();
+    render(); salvarPlanta('Elemento removido.');
+  };
 
   // ---------------------------------------------------------- lista (cards)
   function barra(m) {
@@ -470,7 +1000,32 @@
     sentar([idConvite], '', reabrir ? function(){ abrirMesa(reabrir); } : null);
   };
 
+  // Dica de tamanho real conforme formato e lugares (e esconde a largura quando não se aplica).
+  function metrosCampo(id) { var v = parseFloat(String(document.getElementById(id).value).replace(',', '.')); return isNaN(v) || v <= 0 ? 0 : Math.round(v * 100); }
+  function dicaTamanho(formato, cap, prefixo) {
+    var pad = tamanhoPadrao(formato, cap);
+    document.getElementById(prefixo + 'LargBox').style.display = formato === 'Retangular' ? '' : 'none';
+    var comp = document.getElementById(prefixo + 'Comp');
+    comp.placeholder = 'Automático: ' + (formato === 'Redonda' ? 'Ø ' : '') + metros(pad.c).replace(' m', '');
+    var rot = document.getElementById(prefixo + 'CompRot');
+    if (rot) rot.textContent = formato === 'Redonda' ? 'Diâmetro (m)' : (formato === 'Quadrada' ? 'Lado (m)' : 'Comprimento (m)');
+    var c = metrosCampo(prefixo + 'Comp') || pad.c, l = metrosCampo(prefixo + 'Larg') || pad.l || 80;
+    var t = { comp: c, larg: formato === 'Redonda' ? c : (formato === 'Quadrada' ? c : l), formato: formato, rot: 0 };
+    var pg = pegada(t);
+    document.getElementById(prefixo + 'TamanhoDica').textContent = 'Tampo ' + descTamanho(formato, c, l) + ' · com as cadeiras ocupa ' + metros(pg.w) + ' × ' + metros(pg.h) + '.';
+  }
+  function ligarDicaNovas() {
+    var f = (document.querySelector('input[name=nmFormato]:checked') || {}).value || 'Redonda';
+    dicaTamanho(f, document.getElementById('nmCap').value, 'nm');
+  }
+  document.getElementById('modalNovasMesas').addEventListener('input', ligarDicaNovas);
+  document.getElementById('modalNovasMesas').addEventListener('change', ligarDicaNovas);
+  function ligarDicaMesa() { dicaTamanho(document.getElementById('mmFormato').value, document.getElementById('mmCap').value, 'mm'); document.getElementById('mmGirarBox').style.display = document.getElementById('mmFormato').value === 'Retangular' ? '' : 'none'; }
+  document.getElementById('mmEditar').addEventListener('input', ligarDicaMesa);
+  document.getElementById('mmEditar').addEventListener('change', ligarDicaMesa);
+
   window.abrirNovasMesas = function() {
+    ligarDicaNovas();
     var r = D ? D.resumo : { semMesa: 0 };
     document.getElementById('nmResumo').innerText = r.semMesa ? r.semMesa + ' convidado(s) ativo(s) sem mesa; ' + (r.livres || 0) + ' lugar(es) livre(s) nas mesas atuais.' : '';
     new bootstrap.Modal(document.getElementById('modalNovasMesas')).show();
@@ -482,10 +1037,13 @@
       btn.disabled = false;
       if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
       bootstrap.Modal.getInstance(document.getElementById('modalNovasMesas')).hide();
-      toast(resp.mensagem, 'ok'); carregar();
+      toast(resp.mensagem, 'ok');
+      // As novas nascem fora do salão: encaixa nos espaços livres (sem mexer nas outras).
+      carregar(function(){ if (modo === 'planta') encaixarFora(true); });
     }).withFailureHandler(function(e){ btn.disabled = false; erro(e); }).apiCriarMesas(window.TOKEN, idEvento, {
       quantidade: document.getElementById('nmQtd').value, capacidade: document.getElementById('nmCap').value,
-      formato: formato, vip: document.getElementById('nmVip').checked
+      formato: formato, vip: document.getElementById('nmVip').checked,
+      comprimento: metrosCampo('nmComp'), largura: metrosCampo('nmLarg')
     });
   };
 
@@ -532,6 +1090,10 @@
     document.getElementById('mmNome').value = m.nome;
     document.getElementById('mmCap').value = m.capacidade;
     document.getElementById('mmFormato').value = m.formato;
+    document.getElementById('mmComp').value = m.tamanhoAuto ? '' : String(m.comp / 100).replace('.', ',');
+    document.getElementById('mmLarg').value = m.tamanhoAuto || m.formato !== 'Retangular' ? '' : String(m.larg / 100).replace('.', ',');
+    document.getElementById('mmGirar').checked = m.rot === 90;
+    ligarDicaMesa();
     document.getElementById('mmVip').checked = m.vip;
     document.getElementById('mmObs').value = m.obs;
     document.getElementById('mmEditar').style.display = ed ? '' : 'none';
@@ -557,7 +1119,9 @@
     }).withFailureHandler(function(e){ btn.disabled = false; erro(e); }).apiEditarMesa(window.TOKEN, mesaAberta.id, {
       numero: document.getElementById('mmNumero').value, nome: document.getElementById('mmNome').value.trim(),
       capacidade: document.getElementById('mmCap').value, formato: document.getElementById('mmFormato').value,
-      vip: document.getElementById('mmVip').checked, obs: document.getElementById('mmObs').value.trim()
+      vip: document.getElementById('mmVip').checked, obs: document.getElementById('mmObs').value.trim(),
+      comprimento: metrosCampo('mmComp'), largura: metrosCampo('mmLarg'),
+      rotacao: document.getElementById('mmFormato').value === 'Retangular' && document.getElementById('mmGirar').checked ? 90 : 0
     });
   };
 

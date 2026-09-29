@@ -506,45 +506,49 @@ function _relPresenca_(idEvento, op, sessao) {
 // ------------------------------------------------------------
 // 3) MAPA DE MESAS
 // ------------------------------------------------------------
-function _svgPlanta_(mesas, oc) {
-  // Enquadra só a área ocupada pelas mesas (sem sobra de salão vazio).
-  const xs = mesas.map(m => Number(m.Pos_X) || 0), ys = mesas.map(m => Number(m.Pos_Y) || 0);
-  const margem = 95;
-  let x0 = Math.max(0, Math.min.apply(null, xs) - margem), x1 = Math.min(PLANTA.LARGURA, Math.max.apply(null, xs) + margem);
-  let y0 = Math.max(0, Math.min.apply(null, ys) - margem), y1 = Math.min(PLANTA.ALTURA, Math.max.apply(null, ys) + margem);
-  if (x1 - x0 < 500) { const c = (x0 + x1) / 2; x0 = Math.max(0, c - 250); x1 = x0 + 500; }
-  if (y1 - y0 < 220) { const c = (y0 + y1) / 2; y0 = Math.max(0, c - 110); y1 = y0 + 220; }
-  const partes = ['<svg viewBox="' + x0 + ' ' + y0 + ' ' + (x1 - x0) + ' ' + (y1 - y0) + '" xmlns="http://www.w3.org/2000/svg" font-family="Arial, Helvetica, sans-serif">'];
-  for (let x = 40; x < PLANTA.LARGURA; x += 40) partes.push('<line x1="' + x + '" y1="0" x2="' + x + '" y2="' + PLANTA.ALTURA + '" stroke="#EEF2F7" stroke-width="1"/>');
-  for (let y = 40; y < PLANTA.ALTURA; y += 40) partes.push('<line x1="0" y1="' + y + '" x2="' + PLANTA.LARGURA + '" y2="' + y + '" stroke="#EEF2F7" stroke-width="1"/>');
-  mesas.forEach(m => {
+function _svgPlanta_(mesas, oc, planta) {
+  // Planta em escala real (cm): salão inteiro + mesas que estejam fora dele.
+  const pos = mesas.map(m => Object.assign(_posMesa_(m, planta), { m: m, p: _pegadaMesa_(m) }));
+  let x0 = 0, y0 = 0, x1 = planta.w, y1 = planta.h;
+  pos.forEach(q => { x0 = Math.min(x0, q.x - q.p.w / 2); x1 = Math.max(x1, q.x + q.p.w / 2); y0 = Math.min(y0, q.y - q.p.h / 2); y1 = Math.max(y1, q.y + q.p.h / 2); });
+  const pad = 80;
+  x0 -= pad; y0 -= pad + 60; x1 += pad; y1 += pad;
+  const f = n => Math.round(n * 10) / 10;
+  const partes = ['<svg viewBox="' + f(x0) + ' ' + f(y0) + ' ' + f(x1 - x0) + ' ' + f(y1 - y0) + '" xmlns="http://www.w3.org/2000/svg" font-family="Arial, Helvetica, sans-serif">'];
+  partes.push('<rect x="0" y="0" width="' + planta.w + '" height="' + planta.h + '" fill="#FFFFFF" stroke="#334155" stroke-width="8"/>');
+  for (let x = 100; x < planta.w; x += 100) partes.push('<line x1="' + x + '" y1="0" x2="' + x + '" y2="' + planta.h + '" stroke="' + (x % 500 ? '#F1F5F9' : '#E2E8F0') + '" stroke-width="2"/>');
+  for (let y = 100; y < planta.h; y += 100) partes.push('<line x1="0" y1="' + y + '" x2="' + planta.w + '" y2="' + y + '" stroke="' + (y % 500 ? '#F1F5F9' : '#E2E8F0') + '" stroke-width="2"/>');
+  // Cotas do salão
+  const fonteCota = Math.max(28, Math.min(70, planta.w / 40));
+  partes.push('<text x="' + planta.w / 2 + '" y="' + (-24) + '" text-anchor="middle" font-size="' + fonteCota + '" fill="#475569">' + _h_(_metros_(planta.w)) + ' × ' + _h_(_metros_(planta.h)) + '</text>');
+  (planta.elementos || []).forEach(e => {
+    const est = ESTILO_ELEMENTO[e.tipo] || ESTILO_ELEMENTO.bloqueio;
+    const fs = Math.max(22, Math.min(80, Math.min(e.w / 7, e.h / 2.5)));
+    partes.push('<rect x="' + f(e.x - e.w / 2) + '" y="' + f(e.y - e.h / 2) + '" width="' + e.w + '" height="' + e.h + '" rx="12" fill="' + est.fundo + '" stroke="' + est.borda + '" stroke-width="5"/>');
+    partes.push('<text x="' + e.x + '" y="' + f(e.y + fs * 0.35) + '" text-anchor="middle" font-size="' + f(fs) + '" font-weight="700" fill="' + est.borda + '">' + _h_(e.nome || est.rotulo) + '</text>');
+  });
+  pos.forEach(q => {
+    const m = q.m, t = _tamanhoMesa_(m), formato = _formatoMesa_(m.Formato), rot = Number(m.Rotacao) === 90 ? 90 : 0;
     const cap = Math.max(1, Number(m.Capacidade) || 0), ocup = oc[m.ID_Mesa] || 0, vip = m.VIP === 'Sim';
     const borda = ocup > cap ? '#EF4444' : (vip ? '#F59E0B' : (ocup >= cap ? '#16A34A' : '#1B2A6B'));
-    const fundo = vip ? '#FEF3C7' : '#FFFFFF';
-    const g = ['<g transform="translate(' + (Number(m.Pos_X) || 0) + ',' + (Number(m.Pos_Y) || 0) + ')">'];
-    const cadeira = (x, y, i) => g.push('<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="7.5" fill="' + (i < ocup ? '#1B2A6B' : '#FFFFFF') + '" stroke="' + (i < ocup ? 'none' : '#CBD5E1') + '" stroke-width="1.5"/>');
-    let meiaAltura;
-    if (_s_(m.Formato) === 'Retangular') {
-      const porLado = Math.ceil(cap / 2), w = Math.max(70, 26 + porLado * 24), h = 46, passo = (w - 16) / porLado;
-      for (let i = 0; i < cap; i++) { const lado = i < porLado ? -1 : 1, k = i < porLado ? i : i - porLado; cadeira(-w / 2 + 8 + passo * (k + .5), lado * (h / 2 + 12), i); }
-      g.push('<rect x="' + (-w / 2) + '" y="' + (-h / 2) + '" width="' + w + '" height="' + h + '" rx="10" fill="' + fundo + '" stroke="' + borda + '" stroke-width="2.2"/>');
-      meiaAltura = h / 2;
-    } else {
-      const r = Math.min(62, Math.max(30, 20 + cap * 2.6)), R = r + 14;
-      for (let i = 0; i < cap; i++) { const a = -Math.PI / 2 + i * 2 * Math.PI / cap; cadeira(Math.cos(a) * R, Math.sin(a) * R, i); }
-      g.push('<circle r="' + r + '" fill="' + fundo + '" stroke="' + borda + '" stroke-width="2.2"/>');
-      meiaAltura = r;
-    }
-    g.push('<text y="-1" text-anchor="middle" font-size="17" font-weight="700" fill="#0F172A">' + _h_(m.Numero) + '</text>');
-    g.push('<text y="15" text-anchor="middle" font-size="10.5" fill="#64748B">' + ocup + '/' + cap + '</text>');
-    if (_s_(m.Nome)) g.push('<text y="' + (meiaAltura + 34) + '" text-anchor="middle" font-size="11" font-weight="700" fill="#1B2A6B">' + _h_(_s_(m.Nome).slice(0, 24)) + '</text>');
-    if (vip) g.push('<text y="' + (-meiaAltura - 22) + '" text-anchor="middle" font-size="9" font-weight="700" fill="#B45309" letter-spacing="1">VIP</text>');
+    const g = ['<g transform="translate(' + f(q.x) + ',' + f(q.y) + ')">'];
+    _assentosMesa_(formato, t, Math.max(cap, ocup), rot).forEach((a, i) =>
+      g.push('<circle cx="' + f(a.x) + '" cy="' + f(a.y) + '" r="19" fill="' + (i < ocup ? (i < cap ? '#1B2A6B' : '#EF4444') : '#FFFFFF') + '" stroke="' + (i < ocup ? 'none' : '#94A3B8') + '" stroke-width="3"/>'));
+    const tw = rot === 90 ? t.l : t.c, th = rot === 90 ? t.c : t.l;
+    if (formato === 'Redonda') g.push('<circle r="' + t.c / 2 + '" fill="' + (vip ? '#FEF3C7' : '#FFFFFF') + '" stroke="' + borda + '" stroke-width="5"/>');
+    else g.push('<rect x="' + (-tw / 2) + '" y="' + (-th / 2) + '" width="' + tw + '" height="' + th + '" rx="8" fill="' + (vip ? '#FEF3C7' : '#FFFFFF') + '" stroke="' + borda + '" stroke-width="5"/>');
+    const fs = Math.max(26, Math.min(60, Math.min(tw, th) * 0.34));
+    g.push('<text y="' + f(fs * 0.2) + '" text-anchor="middle" font-size="' + f(fs) + '" font-weight="700" fill="#0F172A">' + _h_(m.Numero) + '</text>');
+    g.push('<text y="' + f(fs * 0.2 + fs * 0.7) + '" text-anchor="middle" font-size="' + f(fs * 0.5) + '" fill="#64748B">' + ocup + '/' + cap + '</text>');
+    if (_s_(m.Nome)) g.push('<text y="' + f(q.p.h / 2 + 34) + '" text-anchor="middle" font-size="30" font-weight="700" fill="#1B2A6B">' + _h_(_s_(m.Nome).slice(0, 24)) + '</text>');
     g.push('</g>');
     partes.push(g.join(''));
   });
   partes.push('</svg>');
   return partes.join('');
 }
+
+function _metros_(cm) { return (Math.round(Number(cm) / 10) / 10).toLocaleString('pt-BR') + ' m'; }
 
 function _relMesas_(idEvento, op, sessao) {
   const ctx = _contextoEvento_(idEvento);
@@ -581,7 +585,7 @@ function _relMesas_(idEvento, op, sessao) {
         { r: 'Lugares livres', v: Math.max(0, lugares - sentados), s: '' }
       ])),
       _secao_('02', 'Planta do salão', 'Cadeira escura = ocupada · borda dourada = VIP',
-        mesas.length ? '<div class="planta">' + _svgPlanta_(mesas, oc) + '</div>' : '<div class="vazio">Nenhuma mesa cadastrada.</div>'),
+        mesas.length ? '<div class="planta">' + _svgPlanta_(mesas, oc, _plantaDoEvento_(e, mesas.length > 0)) + '</div>' : '<div class="vazio">Nenhuma mesa cadastrada.</div>'),
       _secao_('03', 'Convidados por mesa', sentados + ' convidado(s) em ' + mesas.length + ' mesa(s)',
         blocos.length ? '<div class="mesas-grade">' + blocos.join('') + '</div>' : '<div class="vazio">Nenhuma mesa cadastrada.</div>'),
       _secao_('04', 'Sem mesa', semMesa.length + ' convidado(s)',

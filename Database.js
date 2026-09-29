@@ -18,7 +18,7 @@ const DB = {
     colunas: [
       'ID_Evento', 'Nome', 'Data', 'Local', 'Capacidade',
       'Status', 'Descricao', 'Imagem_URL', 'Cor_Hex',
-      'Observacoes', 'Criado_Em'
+      'Observacoes', 'Criado_Em', 'Planta'
     ],
     validacoes: {
       Status: ['Planejamento', 'Ativo', 'Encerrado']
@@ -119,9 +119,9 @@ const DB = {
     prefixoId: 'M',
     colunas: [
       'ID_Mesa', 'ID_Evento', 'Numero', 'Capacidade', 'VIP', 'Pos_X', 'Pos_Y',
-      'Nome', 'Formato', 'Observacoes'
+      'Nome', 'Formato', 'Observacoes', 'Comprimento_cm', 'Largura_cm', 'Rotacao'
     ],
-    validacoes: { VIP: ['Sim', 'Não'], Formato: ['Redonda', 'Retangular'] }
+    validacoes: { VIP: ['Sim', 'Não'], Formato: ['Redonda', 'Quadrada', 'Retangular'] }
   },
 
   CATEGORIAS: {
@@ -233,7 +233,7 @@ function setupDatabase() {
 
 // Versão das listas de validação (ex.: perfis aceitos). Quando muda,
 // as abas que já existiam recebem as listas novas uma única vez.
-const VALIDACOES_VERSAO = '3';
+const VALIDACOES_VERSAO = '4';
 
 function _garantirAba_(ss, schema) {
   let aba = ss.getSheetByName(schema.nome);

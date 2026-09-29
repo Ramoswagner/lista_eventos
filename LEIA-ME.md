@@ -48,14 +48,20 @@ Links abertos pelo endereço de teste (`/dev`) são corrigidos automaticamente p
 
 ## Mesas
 
-Aba **Mesas** dentro do evento. Os gestores montam o salão:
+Aba **Mesas** dentro do evento. A planta é em **escala real (metros)**:
 
-- **+ Mesas**: cria várias de uma vez (ex.: 10 redondas de 8 lugares), numeradas em sequência. Mesa pode ter nome ("Diretoria") e ser VIP.
-- **Planta**: arraste as mesas para reproduzir o salão; toque numa mesa para ver quem está nela, editar ou excluir.
+- **Salão**: largura × profundidade, **corredor mínimo** (espaço livre entre os encostos das cadeiras de mesas vizinhas; 0,90 m confortável, 1,20 m para cadeira de rodas) e distância das paredes.
+- **Tamanho real das mesas**: automático pelo nº de lugares (redonda de 8 = Ø 1,50 m; de 10 = Ø 1,60 m; de 12 = Ø 1,80 m; retangular = 60 cm por pessoa × 0,80 m) ou informado em metros. Formatos redonda, quadrada e retangular (a retangular pode girar 90°). Cada cadeira ocupa 55 cm a partir da borda.
+- **Elementos**: palco, pista de dança, buffet, bar, entrada, banheiros e áreas bloqueadas/pilares, com medidas em metros. Arraste para posicionar; toque para editar.
+- **Organizar salão**: posiciona todas as mesas em *grade*, *intercalada* (cabe ~15–30% mais com redondas) ou *dois blocos com corredor central*, sem invadir os elementos, com a numeração a partir do palco e as VIP na frente. Antes de aplicar mostra **quantas mesas cabem** e, se não couberem todas, o que fazer (corredor menor, outro arranjo ou salão de A × B m). Tem **Desfazer**.
+- **Mesas novas** nascem na área "fora do salão" e são encaixadas sozinhas nos espaços livres, sem mexer nas outras. O que não couber fica fora do salão, sem sobrepor nada ("Encaixar N de fora").
+- **Arrastar**: encaixa de 10 em 10 cm e alinha com as outras mesas (linhas-guia azuis). A área das cadeiras fica verde se o corredor está ok ou vermelha se não. Mesas com pouco espaço ficam marcadas em vermelho, e o rodapé mostra quantas.
+- **Zoom**: roda do mouse, pinça no celular ou os botões + / − / ver tudo. Arraste o fundo para mover a vista.
 - **Sentar convidados**: marque pessoas em "Sem mesa" e toque na mesa (borda verde = cabe). A capacidade é respeitada.
-- **Ver por gestor / Destacar gestor**: cada cadeira na cor do gestor que convidou — para analisar a distribuição.
+- **Ver por gestor / Destacar gestor**: cada cadeira na cor do gestor que convidou.
 - **Distribuir**: senta automaticamente quem está sem mesa, mantendo juntos empresa, gestor ou categoria; autoridades e apoiadores vão para as mesas VIP.
-- O check-in mostra a mesa da pessoa; substituto herda a mesa do original; cancelado/recusado libera a cadeira.
+- Eventos criados antes desta versão são convertidos sozinhos para um salão de 20 × 12,8 m, mantendo o desenho. Ajuste as medidas em **Salão**.
+- O relatório **Mapa de mesas** imprime a planta em escala, com as medidas e os elementos.
 
 ## Relatórios (PDF)
 
