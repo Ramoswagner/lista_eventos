@@ -226,7 +226,6 @@ function apiInfoLotePublico(loteToken) {
       vagasTotal:  Number(lote.Vagas_Total) || 0,
       vagasUsadas,
       vagasLivres,
-      exigeNumero: !!_s_(lote.Numeros_Convite),
       inscricaoAberta: !motivoFechado,
       motivoFechado,
       inscritos
@@ -237,8 +236,12 @@ function apiInfoLotePublico(loteToken) {
 }
 
 /**
- * Inscrição pública: dadosPessoa { Nome, Numero, Email, Telefone, Cargo }.
- * Ocupa a vaga reservada do nº informado (ou a próxima vaga livre).
+ * Inscrição pública: dadosPessoa { Nome, Email, Telefone, Cargo }.
+ * O convidado NÃO informa o nº do convite: quem define o número é o
+ * gestor/organizador (ao criar o lote ou na lista). A inscrição ocupa a
+ * próxima vaga reservada ("Convidado N") e herda o nº e a mesa dela.
+ * E-mail ou telefone é obrigatório: é com ele que a pessoa gerencia a
+ * inscrição depois e que evitamos inscrição em dobro.
  */
 function apiInscreverNoLote(loteToken, dadosPessoa) {
   try {
@@ -247,8 +250,10 @@ function apiInscreverNoLote(loteToken, dadosPessoa) {
     if (nome.length < 3) return { ok: false, mensagem: 'Informe seu nome completo.' };
     const email = _s_(dadosPessoa.Email).toLowerCase();
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return { ok: false, mensagem: 'E-mail inválido.' };
-    const numero = _normNumero_(dadosPessoa.Numero);
-    if (!numero && !email) return { ok: false, mensagem: 'Informe o nº do seu convite ou o seu e-mail (usado para confirmar ou cancelar depois).' };
+    const telefone = _s_(dadosPessoa.Telefone).slice(0, 25);
+    const telDig = _soDigitos_(telefone);
+    if (telefone && (telDig.length < 8 || telDig.length > 15)) return { ok: false, mensagem: 'Telefone inválido (inclua o DDD).' };
+    if (!email && !telDig) return { ok: false, mensagem: 'Informe o e-mail ou o telefone (usado para confirmar ou cancelar depois).' };
 
     return _comLock_(function() {
       const lote = _lotePorToken_(loteToken);
@@ -258,48 +263,42 @@ function apiInscreverNoLote(loteToken, dadosPessoa) {
         return { ok: false, mensagem: 'Todas as vagas deste lote já foram preenchidas.' };
       }
 
-      const numerosLote = _s_(lote.Numeros_Convite) ? _parseNumeros_(lote.Numeros_Convite) : [];
-      if (numerosLote.length) {
-        if (!numero) return { ok: false, mensagem: 'Informe o nº impresso no seu convite.' };
-        if (numerosLote.indexOf(numero) === -1) return { ok: false, mensagem: 'O convite nº ' + numero + ' não pertence a este grupo. Confira o número.' };
-      }
+      // Já inscrito neste evento (mesmo e-mail, ou mesmo telefone + primeiro nome)?
+      const nome1 = nome.toLowerCase().split(' ')[0];
+      const pessoas = dbListar_(DB.PESSOAS);
+      const mesmaPessoa = p => (email && _s_(p.Email).toLowerCase() === email) ||
+        (!email && telDig && _soDigitos_(p.Telefone) === telDig && _s_(p.Nome).toLowerCase().split(' ')[0] === nome1);
+      const candidatos = pessoas.filter(mesmaPessoa);
+      const idsCand = {}; candidatos.forEach(p => idsCand[p.ID_Pessoa] = true);
+      const jaInscrito = dbListar_(DB.CONVITES, c => c.ID_Evento === lote.ID_Evento && idsCand[c.ID_Pessoa] && _conviteAtivo_(c))[0];
+      if (jaInscrito) return { ok: false, mensagem: (email ? 'Este e-mail' : 'Este telefone') + ' já tem inscrição neste evento. Use a opção "Confirmar ou cancelar presença" abaixo.' };
 
-      // Vaga reservada: a do nº informado ou a próxima sem nome.
-      const provisorios = _provisoriosDoLote_(lote.ID_Lote);
-      let vaga = numero ? provisorios.filter(c => _normNumero_(c.Numero_Convite) === numero)[0] : null;
-      if (numero && !vaga) {
-        const dono = dbListar_(DB.CONVITES, c => c.ID_Evento === lote.ID_Evento && _conviteAtivo_(c) && _normNumero_(c.Numero_Convite) === numero)[0];
-        if (dono) return { ok: false, mensagem: 'O convite nº ' + numero + ' já foi usado numa inscrição. Se for o seu, fale com quem te convidou.' };
-      }
-      if (!vaga) vaga = provisorios.filter(c => !_s_(c.Numero_Convite))[0] || null;
-
+      // Próxima vaga reservada ("Convidado N"), com o nº e a mesa definidos pelo gestor.
+      const vaga = _provisoriosDoLote_(lote.ID_Lote)[0] || null;
       if (!vaga) {
         const vg = _vagasEvento_(lote.ID_Evento);
         if (vg.disponiveis !== null && vg.disponiveis < 1) return { ok: false, mensagem: 'O evento atingiu a capacidade máxima.' };
       }
 
       // Reaproveita o cadastro pelo e-mail (sem CPF).
-      const existente = email ? dbListar_(DB.PESSOAS, p => _s_(p.Email).toLowerCase() === email)[0] : null;
-      let idPessoa = existente ? existente.ID_Pessoa : null;
-      if (idPessoa) {
-        const jaInscrito = dbListar_(DB.CONVITES, c => c.ID_Evento === lote.ID_Evento && c.ID_Pessoa === idPessoa && _conviteAtivo_(c));
-        if (jaInscrito.length) return { ok: false, mensagem: 'Este e-mail já tem inscrição neste evento.' };
-      } else {
-        idPessoa = dbInserir_(DB.PESSOAS, {
-          Nome: nome, Telefone: _s_(dadosPessoa.Telefone), Email: email, Cargo: _s_(dadosPessoa.Cargo),
-          ID_Empresa: _s_(lote.ID_Empresa), Categoria: 'Outro', Observacoes: 'Cadastro via lote público',
-          Gestor_Responsavel: _s_(lote.Gestor), Data_Cadastro: new Date(), Ativo: 'Sim'
-        }).ID_Pessoa;
-      }
+      const existente = email ? candidatos[0] : null;
+      const idPessoa = existente ? existente.ID_Pessoa : dbInserir_(DB.PESSOAS, {
+        Nome: nome, Telefone: telefone, Email: email, Cargo: _s_(dadosPessoa.Cargo).slice(0, 80),
+        ID_Empresa: _s_(lote.ID_Empresa), Categoria: 'Outro', Observacoes: 'Cadastro via lote público',
+        Gestor_Responsavel: _s_(lote.Gestor), Data_Cadastro: new Date(), Ativo: 'Sim'
+      }).ID_Pessoa;
 
       let convite;
       if (vaga) {
-        dbAtualizar_(DB.CONVITES, vaga.ID_Convite, { ID_Pessoa: idPessoa, Nome_Provisorio: '', Numero_Convite: numero || vaga.Numero_Convite || '' });
+        dbAtualizar_(DB.CONVITES, vaga.ID_Convite, { ID_Pessoa: idPessoa, Nome_Provisorio: '' });
         convite = dbBuscarPorId_(DB.CONVITES, vaga.ID_Convite);
       } else {
-        const n = _validarNumeroConvite_(lote.ID_Evento, numero, null);
         convite = convidarPessoa_(lote.ID_Evento, idPessoa, lote.Gestor, lote.ID_Lote);
-        if (n) dbAtualizar_(DB.CONVITES, convite.ID_Convite, { Numero_Convite: n });
+        // Lote com nºs mas sem vagas reservadas: recebe o próximo nº livre do grupo.
+        const usados = {};
+        dbListar_(DB.CONVITES, c => c.ID_Evento === lote.ID_Evento && _conviteAtivo_(c)).forEach(c => usados[_normNumero_(c.Numero_Convite)] = true);
+        const livre = _parseNumeros_(lote.Numeros_Convite).filter(n => !usados[n])[0];
+        if (livre) { dbAtualizar_(DB.CONVITES, convite.ID_Convite, { Numero_Convite: livre }); convite.Numero_Convite = livre; }
       }
 
       return {
@@ -313,7 +312,7 @@ function apiInscreverNoLote(loteToken, dadosPessoa) {
   }
 }
 
-// Acha a inscrição deste lote pelo e-mail, ou pelo nº do convite + primeiro nome.
+// Acha a inscrição deste lote pelo e-mail, ou pelo telefone (ou nº do convite) + primeiro nome.
 function _inscricaoPorBusca_(lote, busca, primeiroNome) {
   const b = _s_(busca).toLowerCase();
   if (!b) return null;
@@ -325,8 +324,9 @@ function _inscricaoPorBusca_(lote, busca, primeiroNome) {
   return dbListar_(DB.CONVITES, c => c.ID_Lote === lote.ID_Lote && _conviteAtivo_(c) && !_ehProvisorio_(c)).filter(c => {
     const p = pessoas[c.ID_Pessoa] || {};
     if (ehEmail) return _s_(p.Email).toLowerCase() === b;
-    return nome1.length >= 2 && _normNumero_(c.Numero_Convite) === numero &&
-      _s_(p.Nome).toLowerCase().split(' ')[0] === nome1;
+    if (nome1.length < 2 || _s_(p.Nome).toLowerCase().split(' ')[0] !== nome1) return false;
+    const dig = _soDigitos_(busca);
+    return (dig.length >= 8 && _soDigitos_(p.Telefone) === dig) || (!!numero && _normNumero_(c.Numero_Convite) === numero);
   }).map(c => ({ convite: c, pessoa: pessoas[c.ID_Pessoa] || {} }))[0] || null;
 }
 
@@ -335,7 +335,7 @@ function apiBuscarInscricaoLote(loteToken, busca, primeiroNome) {
     const lote = _lotePorToken_(loteToken);
     if (!lote) return { ok: false, mensagem: 'Link inválido.' };
     const achou = _inscricaoPorBusca_(lote, busca, primeiroNome);
-    if (!achou) return { ok: false, mensagem: 'Nenhuma inscrição encontrada. Confira o e-mail, ou o nº do convite e o seu primeiro nome.' };
+    if (!achou) return { ok: false, mensagem: 'Nenhuma inscrição encontrada. Confira o e-mail, ou o telefone e o seu primeiro nome.' };
     return { ok: true, dados: {
       nome:   _s_(achou.pessoa.Nome),
       cargo:  _s_(achou.pessoa.Cargo),

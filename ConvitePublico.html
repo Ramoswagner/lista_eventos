@@ -206,19 +206,14 @@
             <label class="form-label fw-semibold">Nome completo <span class="text-danger">*</span></label>
             <input type="text" id="inputNome" class="form-control" placeholder="Seu nome completo" autocomplete="name" required>
           </div>
+          <div class="col-12"><p class="small text-muted mb-0">Informe o <strong>e-mail</strong> ou o <strong>telefone</strong> — é com ele que você confirma ou cancela depois. Não pedimos CPF.</p></div>
           <div class="col-md-6">
-            <label class="form-label fw-semibold" for="inputNumero">Nº do convite <span class="text-danger" id="numeroObrig" style="display:none;">*</span></label>
-            <input type="text" id="inputNumero" class="form-control" placeholder="Ex: 101" inputmode="numeric" autocomplete="off" maxlength="12">
-            <div class="form-text" id="numeroAjuda">O número impresso no seu convite.</div>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label fw-semibold">Telefone</label>
-            <input type="tel" id="inputTelefone" class="form-control" placeholder="(00) 00000-0000">
-          </div>
-          <div class="col-12"><p class="small text-muted mb-0" id="dicaIdent">Informe o <strong>nº do convite</strong> ou o <strong>e-mail</strong> — é com ele que você confirma ou cancela depois. Não pedimos CPF.</p></div>
-          <div class="col-12">
-            <label class="form-label fw-semibold">E-mail</label>
+            <label class="form-label fw-semibold" for="inputEmail">E-mail</label>
             <input type="email" id="inputEmail" class="form-control" placeholder="seu@email.com" autocomplete="email" autocapitalize="off">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold" for="inputTelefone">Telefone</label>
+            <input type="tel" id="inputTelefone" class="form-control" placeholder="(00) 00000-0000" autocomplete="tel">
           </div>
           <div class="col-12">
             <label class="form-label fw-semibold">Cargo / Função</label>
@@ -245,7 +240,7 @@
         <a class="btn btn-success" id="linkPessoalAbrir" href="#" target="_blank" rel="noopener"><i class="fas fa-qrcode me-1"></i> Abrir meu link pessoal</a>
         <button class="btn btn-outline-secondary" type="button" onclick="copiarLinkPessoal()"><i class="fas fa-copy me-1"></i> Copiar link</button>
       </div>
-      <p class="small text-muted mt-3 mb-0">Também dá para voltar a esta página e, com seu e-mail (ou nº do convite e primeiro nome), confirmar ou cancelar a inscrição.</p>
+      <p class="small text-muted mt-3 mb-0">Também dá para voltar a esta página e, com seu e-mail (ou telefone e primeiro nome), confirmar ou cancelar a inscrição.</p>
     </div>
 
     <!-- Inscrições fechadas -->
@@ -255,9 +250,9 @@
     <div id="secaoConfirmacao" style="display:none;" class="mt-4">
       <hr>
       <div class="titulo-secao"><span class="ic"><i class="fas fa-calendar-check"></i></span>Confirmar ou cancelar presença</div>
-      <p class="text-muted small">Se você já está inscrito neste lote, informe seu e-mail — ou o nº do convite e o seu primeiro nome — para gerenciar sua presença.</p>
+      <p class="text-muted small">Se você já está inscrito neste lote, informe seu e-mail — ou o telefone e o seu primeiro nome — para gerenciar sua presença.</p>
       <div class="row g-2 mb-3">
-        <div class="col-sm-6"><input type="text" id="inputBusca" class="form-control" placeholder="E-mail ou nº do convite" autocapitalize="off" aria-label="E-mail ou nº do convite"></div>
+        <div class="col-sm-6"><input type="text" id="inputBusca" class="form-control" placeholder="E-mail ou telefone" autocapitalize="off" aria-label="E-mail ou telefone"></div>
         <div class="col-sm-4" id="boxPrimeiroNome" style="display:none;"><input type="text" id="inputPrimeiroNome" class="form-control" placeholder="Primeiro nome" autocomplete="given-name" aria-label="Primeiro nome"></div>
         <div class="col-sm-2 d-grid"><button class="btn btn-outline-primary" id="btnBuscar" type="button"><i class="fas fa-magnifying-glass"></i> Buscar</button></div>
       </div>
@@ -282,7 +277,6 @@
   let loteInfo = null;
   let buscaAtual = '';
   let primeiroNomeAtual = '';
-  let exigeNumero = false;
   let linkPessoal = '';
 
   google.script.run.withSuccessHandler(function(resp) {
@@ -366,9 +360,6 @@
       : (dados.vagasLivres <= 0 ? 'Vagas esgotadas' : 'Inscrições fechadas');
 
     const fechada = document.getElementById('secaoFechada');
-    exigeNumero = !!dados.exigeNumero;
-    document.getElementById('numeroObrig').style.display = exigeNumero ? '' : 'none';
-    if (exigeNumero) document.getElementById('dicaIdent').innerHTML = 'Informe o <strong>nº do seu convite</strong> (obrigatório). O e-mail é opcional. Não pedimos CPF.';
     if (!dados.inscricaoAberta) {
       document.getElementById('secaoFormulario').style.display = 'none';
       fechada.style.display = '';
@@ -407,11 +398,10 @@
   document.getElementById('formInscrição').addEventListener('submit', function(e) {
     e.preventDefault();
     const nome = document.getElementById('inputNome').value.trim();
-    const numero = document.getElementById('inputNumero').value.trim();
     const email = document.getElementById('inputEmail').value.trim();
+    const telefone = document.getElementById('inputTelefone').value.trim();
     if (!nome) { toast('Nome é obrigatório.', 'error'); return; }
-    if (exigeNumero && !numero) { toast('Informe o nº do seu convite.', 'error'); return; }
-    if (!numero && !email) { toast('Informe o nº do convite ou o e-mail.', 'error'); return; }
+    if (!email && !telefone) { toast('Informe o e-mail ou o telefone.', 'error'); return; }
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('E-mail inválido.', 'error'); return; }
 
     const btn = document.getElementById('btnInscrever');
@@ -434,15 +424,14 @@
       })
       .withFailureHandler(function() { toast('Falha de conexão. Tente novamente.', 'error'); liberar(); })
       .apiInscreverNoLote(LOTE_TOKEN, {
-        Nome: nome, Numero: numero, Email: email,
-        Telefone: document.getElementById('inputTelefone').value.trim(),
+        Nome: nome, Email: email, Telefone: telefone,
         Cargo: document.getElementById('inputCargo').value.trim()
       });
   });
 
   // ------------------------------------------------------------
   // BUSCAR INSCRIÇÃO PARA CONFIRMAR/CANCELAR (a busca é no servidor;
-  // a página nunca recebe e-mail nem nº de convite de ninguém)
+  // a página nunca recebe e-mail nem telefone de ninguém)
   // ------------------------------------------------------------
   document.getElementById('btnBuscar').addEventListener('click', buscar);
   document.getElementById('inputBusca').addEventListener('input', function() {
@@ -455,11 +444,11 @@
   function buscar() {
     const busca = document.getElementById('inputBusca').value.trim();
     const primeiroNome = document.getElementById('inputPrimeiroNome').value.trim();
-    if (!busca) { toast('Informe seu e-mail ou o nº do convite.', 'error'); return; }
+    if (!busca) { toast('Informe seu e-mail ou telefone.', 'error'); return; }
     if (busca.indexOf('@') === -1 && primeiroNome.length < 2) {
       document.getElementById('boxPrimeiroNome').style.display = '';
       document.getElementById('inputPrimeiroNome').focus();
-      toast('Com o nº do convite, informe também o seu primeiro nome.', 'error'); return;
+      toast('Com o telefone, informe também o seu primeiro nome.', 'error'); return;
     }
     const div = document.getElementById('resultadoBusca');
     div.innerHTML = '<div class="text-center text-muted py-2"><i class="fas fa-spinner fa-spin"></i> Buscando...</div>';

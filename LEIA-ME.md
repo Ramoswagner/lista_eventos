@@ -98,9 +98,10 @@ Se um cadastro antigo tiver CPF, ele fica guardado, mas **nunca aparece** em tel
 
 ## Nº do convite e vagas de grupo ("Convidado 1, 2, 3…")
 
-- Quem cadastra informa o **nº do convite** (o número impresso). Em grupo, cada pessoa declara o seu.
+- O **nº do convite é definido pelo gestor/organizador**, nunca pelo convidado: ao adicionar na lista, ao criar o lote ou depois, no ícone **#** da lista (e no walk-in, pela recepção).
 - **Criar lote**: informe os números do grupo (ex.: `101-110, 115`). Com "Reservar vagas" marcado, o lote já nasce com **Convidado 1, Convidado 2…** da empresa, cada um com seu número — eles aparecem em **Mesas** para distribuir mesmo sem nome.
-- Na página do lote, a pessoa se inscreve com nome + nº do convite (e-mail opcional) e ocupa a vaga daquele número. Para confirmar/cancelar depois: e-mail, **ou** nº do convite + primeiro nome. Cancelar devolve a vaga como "Convidado N" com o mesmo número e mesa.
+- Na página do lote, a pessoa informa nome e **e-mail ou telefone** (sem CPF, sem nº). Ela ocupa a próxima vaga "Convidado N" e herda o nº e a mesa que o gestor definiu. Sem vagas reservadas, recebe o próximo nº livre do grupo.
+- Para confirmar/cancelar depois: e-mail, **ou** telefone + primeiro nome (ou pelo link pessoal). Cancelar devolve a vaga como "Convidado N" com o mesmo número e mesa.
 - Se a empresa não mandar os nomes, as vagas continuam como "Convidado N" e entram assim mesmo no check-in.
 
 ## Check-in (recepção)
