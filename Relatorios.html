@@ -76,7 +76,6 @@
       box.innerHTML = '<div class="small fw-bold text-uppercase mb-2" style="color:var(--text-muted);font-size:.68rem;letter-spacing:.4px;">Opções</div><div class="rl-opcoes">' +
         '<select class="form-select form-select-sm" id="opSomente" style="width:auto;"><option value="todos">Todos da lista</option><option value="confirmados">Só confirmados</option><option value="presentes">Só presentes</option></select>' +
         '<select class="form-select form-select-sm" id="opGestor" style="width:auto;max-width:220px;"><option value="">Todos os gestores</option></select>' +
-        '<div class="form-check"><input class="form-check-input" type="checkbox" id="opDoc"><label class="form-check-label" for="opDoc">Documento</label></div>' +
         '<div class="form-check"><input class="form-check-input" type="checkbox" id="opContato"><label class="form-check-label" for="opContato">Telefone / e-mail</label></div>' +
         '<div class="form-check"><input class="form-check-input" type="checkbox" id="opInativos"><label class="form-check-label" for="opInativos">Incluir cancelados e substituídos</label></div>' +
       '</div>';
@@ -88,7 +87,6 @@
     } else if (tipo === 'base') {
       box.innerHTML = '<div class="small fw-bold text-uppercase mb-2" style="color:var(--text-muted);font-size:.68rem;letter-spacing:.4px;">Opções</div><div class="rl-opcoes">' +
         '<select class="form-select form-select-sm" id="opBaseGestor" style="width:auto;max-width:240px;"><option value="">Todos os gestores (geral)</option></select>' +
-        '<div class="form-check"><input class="form-check-input" type="checkbox" id="opBaseDoc"><label class="form-check-label" for="opBaseDoc">Documento</label></div>' +
         '<div class="form-check"><input class="form-check-input" type="checkbox" id="opBaseContato"><label class="form-check-label" for="opBaseContato">Telefone / e-mail</label></div>' +
       '</div><p class="small text-muted mt-2 mb-0"><i class="fas fa-circle-info me-1"></i>A pessoa entra na tabela de cada gestor que a cadastrou ou já a convidou.</p>';
       google.script.run.withSuccessHandler(function(resp) {
@@ -143,14 +141,13 @@
   function opcoesAtuais() {
     if (!modoEvento && tipo === 'base') return {
       gestor: document.getElementById('opBaseGestor').value,
-      documento: document.getElementById('opBaseDoc').checked, contato: document.getElementById('opBaseContato').checked };
+      contato: document.getElementById('opBaseContato').checked };
     if (!modoEvento) return { eventos: Object.keys(eventosSel) };
     if (tipo === 'panorama') return { eventos: [ev.id] };
     var op = { idEvento: ev.id };
     if (tipo === 'lista') {
       op.somente = document.getElementById('opSomente').value;
       op.gestor = document.getElementById('opGestor').value;
-      op.documento = document.getElementById('opDoc').checked;
       op.contato = document.getElementById('opContato').checked;
       op.incluirInativos = document.getElementById('opInativos').checked;
     }

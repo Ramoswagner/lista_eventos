@@ -219,18 +219,18 @@ function criarDadosExemplo() {
   const emp1 = dbInserir_(DB.EMPRESAS, { Nome: 'Construtora Horizonte (EXEMPLO)', Segmento: 'Construção civil', Cidade: 'Belo Horizonte', UF: 'MG', Contato: 'Paula Mendes', Observacoes: TAG, Criado_Em: new Date() });
   const emp2 = dbInserir_(DB.EMPRESAS, { Nome: 'Farmácia Vida (EXEMPLO)', Segmento: 'Saúde', Cidade: 'Contagem', UF: 'MG', Contato: 'Ricardo Alves', Observacoes: TAG, Criado_Em: new Date() });
 
-  // Pessoas (CPFs fictícios, com zero à esquerda para testar)
+  // Pessoas (sem CPF: o sistema não pede documento)
   function pessoa(nome, doc, cat, idEmp, cargo, email) {
-    return dbInserir_(DB.PESSOAS, { Nome: nome + ' (EXEMPLO)', Documento: doc, Email: email || '', Telefone: '+55 31 99999-0000', ID_Empresa: idEmp || '', Cargo: cargo || '', Cidade: 'Belo Horizonte', UF: 'MG', Categoria: cat, Observacoes: TAG, Data_Cadastro: new Date(), Ativo: 'Sim' }).ID_Pessoa;
+    return dbInserir_(DB.PESSOAS, { Nome: nome + ' (EXEMPLO)', Email: email || '', Telefone: '+55 31 99999-0000', ID_Empresa: idEmp || '', Cargo: cargo || '', Cidade: 'Belo Horizonte', UF: 'MG', Categoria: cat, Observacoes: TAG, Data_Cadastro: new Date(), Ativo: 'Sim' }).ID_Pessoa;
   }
-  const pAna     = pessoa('Ana Souza',        '012.345.678-90', 'Empresário',     emp1.ID_Empresa, 'Diretora',   'ana@exemplo.com');
-  const pBruno   = pessoa('Bruno Lima',       '023.456.789-01', 'Médico',         '',              'Cardiologista');
-  const pCarla   = pessoa('Carla Dias',       '034.567.890-12', 'Deputado',       '',              'Deputada Estadual');
-  const pDaniel  = pessoa('Daniel Rocha',     '045.678.901-23', 'Doador',         '',              '');
-  const pElisa   = pessoa('Elisa Martins',    '056.789.012-34', 'Imprensa',       '',              'Repórter');
-  const pFabio   = pessoa('Fábio Nunes',      '067.890.123-45', 'Fornecedor',     emp2.ID_Empresa, 'Gerente');
-  const pGabi    = pessoa('Gabriela Castro',  '078.901.234-56', 'Parceiro',       emp1.ID_Empresa, 'Assessora',  'gabi@exemplo.com');
-  const pHugo    = pessoa('Hugo Pereira',     '089.012.345-67', 'Conselheiro',    '',              '');
+  const pAna     = pessoa('Ana Souza',        '', 'Empresário',     emp1.ID_Empresa, 'Diretora',   'ana@exemplo.com');
+  const pBruno   = pessoa('Bruno Lima',       '', 'Médico',         '',              'Cardiologista');
+  const pCarla   = pessoa('Carla Dias',       '', 'Deputado',       '',              'Deputada Estadual');
+  const pDaniel  = pessoa('Daniel Rocha',     '', 'Doador',         '',              '');
+  const pElisa   = pessoa('Elisa Martins',    '', 'Imprensa',       '',              'Repórter');
+  const pFabio   = pessoa('Fábio Nunes',      '', 'Fornecedor',     emp2.ID_Empresa, 'Gerente');
+  const pGabi    = pessoa('Gabriela Castro',  '', 'Parceiro',       emp1.ID_Empresa, 'Assessora',  'gabi@exemplo.com');
+  const pHugo    = pessoa('Hugo Pereira',     '', 'Conselheiro',    '',              '');
 
   const gestor = 'Administrador';
   const cAna    = convidarPessoa_(jantar.ID_Evento, pAna, gestor, null, 'Mesa principal');
@@ -239,6 +239,9 @@ function criarDadosExemplo() {
   const cDaniel = convidarPessoa_(jantar.ID_Evento, pDaniel, gestor);
   const cElisa  = convidarPessoa_(jantar.ID_Evento, pElisa, gestor);
   const cFabio  = convidarPessoa_(jantar.ID_Evento, pFabio, gestor);
+  // Nº impresso em cada convite
+  [[cAna, '001'], [cBruno, '002'], [cCarla, '003'], [cDaniel, '004'], [cElisa, '005'], [cFabio, '006']]
+    .forEach(par => dbAtualizar_(DB.CONVITES, par[0].ID_Convite, { Numero_Convite: par[1] }));
   convidarPessoa_(congresso.ID_Evento, pBruno, gestor);
   convidarPessoa_(congresso.ID_Evento, pHugo, gestor);
 
@@ -247,15 +250,22 @@ function criarDadosExemplo() {
   responderConvite_(cDaniel.ID_Convite, 'Recusado');
   fazerCheckin_(cBruno.ID_Convite, 'Recepção Portaria · recepcao');
   dbAtualizar_(DB.CONVITES, cElisa.ID_Convite, { Status: 'Cancelado', QR_Valido: 'Não', Observacoes: 'Cancelado (EXEMPLO)' });
-  const pSubst = pessoa('Igor Teixeira', '090.123.456-78', 'Fornecedor', emp2.ID_Empresa, 'Supervisor');
+  const pSubst = pessoa('Igor Teixeira', '', 'Fornecedor', emp2.ID_Empresa, 'Supervisor');
   substituirConvidado_(cFabio.ID_Convite, pSubst, 'Titular viajando', 'Administrador');
   registrarWalkin_(jantar.ID_Evento, { dadosNovaPessoa: { Nome: 'Júlia Ramos (EXEMPLO)', Categoria: 'Pessoa Física' }, autorizadoPor: 'Administrador', checkinPor: 'Recepção Portaria · recepcao' });
 
-  // Lote público com 5 vagas e 2 inscritos
-  const lote = dbInserir_(DB.LOTES, { ID_Evento: jantar.ID_Evento, ID_Empresa: emp1.ID_Empresa, Gestor: gestor, Token: Utilities.getUuid(), Vagas_Total: 5, Status: 'Aberto', Data_Expiracao: '', Observacoes: TAG, Criado_Em: new Date() });
-  convidarPessoa_(jantar.ID_Evento, pGabi, gestor, lote.ID_Lote);
-  const pKleber = pessoa('Kléber Andrade', '001.234.567-89', 'Empresário', emp1.ID_Empresa, 'Sócio', 'kleber@exemplo.com');
-  convidarPessoa_(jantar.ID_Evento, pKleber, gestor, lote.ID_Lote);
+  // Lote (grupo) da Construtora: convites 101 a 105. As vagas entram na lista
+  // como "Convidado 1…5"; duas pessoas já se identificaram (101 e 102) e
+  // as outras três continuam como vaga reservada, prontas para as mesas.
+  const lote = dbInserir_(DB.LOTES, { ID_Evento: jantar.ID_Evento, ID_Empresa: emp1.ID_Empresa, Gestor: gestor, Token: Utilities.getUuid(), Vagas_Total: 5, Status: 'Aberto', Data_Expiracao: '', Observacoes: TAG, Criado_Em: new Date(), Numeros_Convite: '101, 102, 103, 104, 105', Reservar_Vagas: 'Sim' });
+  const vagas = [];
+  for (let i = 1; i <= 5; i++) {
+    vagas.push(dbInserir_(DB.CONVITES, { ID_Evento: jantar.ID_Evento, ID_Pessoa: '', ID_Lote: lote.ID_Lote, Gestor: gestor, Status: 'Convidado', Origem: 'Lote público',
+      QR_Token: Utilities.getUuid(), QR_Valido: 'Sim', Data_Convite: new Date(), Nome_Provisorio: 'Convidado ' + i, Numero_Convite: String(100 + i) }));
+  }
+  const pKleber = pessoa('Kléber Andrade', '', 'Empresário', emp1.ID_Empresa, 'Sócio', 'kleber@exemplo.com');
+  dbAtualizar_(DB.CONVITES, vagas[0].ID_Convite, { ID_Pessoa: pGabi, Nome_Provisorio: '' });
+  dbAtualizar_(DB.CONVITES, vagas[1].ID_Convite, { ID_Pessoa: pKleber, Nome_Provisorio: '' });
 
   let base = '';
   try { base = _urlBase_(); } catch (e) { base = ''; }
@@ -264,7 +274,7 @@ function criarDadosExemplo() {
   if (base) {
     Logger.log('Link do lote (teste como empresa): ' + base + '?pagina=convite&token=' + lote.Token);
     Logger.log('Link pessoal da Ana (confirmar + QR): ' + base + '?pagina=confirmar&token=' + cAna.QR_Token);
-    Logger.log('Na página do lote, busque por "kleber@exemplo.com" para testar confirmar/cancelar.');
+    Logger.log('Na página do lote, inscreva-se com o convite nº 103 (vaga reservada) ou busque "kleber@exemplo.com" para confirmar/cancelar.');
   } else {
     Logger.log('O app ainda não foi implantado: implante (Implantar → Nova implantação → App da Web) para ver os links.');
   }

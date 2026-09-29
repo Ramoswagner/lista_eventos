@@ -312,12 +312,16 @@ function _contextoEvento_(idEvento) {
   dbListar_(DB.PESSOAS).forEach(p => pessoas[p.ID_Pessoa] = p);
   dbListar_(DB.EMPRESAS).forEach(e => empresas[e.ID_Empresa] = e);
   const mesas = _rotulosMesas_(idEvento);
+  const empresaDoLote = {};
+  dbListar_(DB.LOTES, l => l.ID_Evento === idEvento).forEach(l => empresaDoLote[l.ID_Lote] = l.ID_Empresa);
+  // CPF nunca entra nos relatórios.
   const convites = dbListar_(DB.CONVITES, c => c.ID_Evento === idEvento).map(c => {
+    const prov = _ehProvisorio_(c);
     const p = pessoas[c.ID_Pessoa] || {};
     return {
-      c: c, p: p,
-      nome: _s_(p.Nome) || '(sem nome)', cargo: _s_(p.Cargo), categoria: _s_(p.Categoria) || 'Outro',
-      empresa: _s_((empresas[p.ID_Empresa] || {}).Nome), documento: _s_(p.Documento),
+      c: c, p: p, provisorio: prov, numero: _normNumero_(c.Numero_Convite),
+      nome: prov ? _s_(c.Nome_Provisorio) : (_s_(p.Nome) || '(sem nome)'), cargo: _s_(p.Cargo), categoria: prov ? 'A identificar' : (_s_(p.Categoria) || 'Outro'),
+      empresa: _s_((empresas[prov ? empresaDoLote[c.ID_Lote] : p.ID_Empresa] || {}).Nome),
       contato: [_s_(p.Telefone), _s_(p.Email)].filter(Boolean).join(' · '),
       gestor: _s_(c.Gestor), status: _s_(c.Status), origem: _s_(c.Origem),
       mesa: _ocupaLugar_(c) ? _s_(mesas[c.ID_Mesa]) : ''
@@ -348,7 +352,7 @@ function _descricaoEvento_(ctx, extra) {
 
 // ------------------------------------------------------------
 // 1) LISTA DE CONVIDADOS (por gestor)
-// opcoes: { incluirInativos, documento, contato, gestor, somente: 'todos'|'confirmados'|'presentes' }
+// opcoes: { incluirInativos, contato, gestor, somente: 'todos'|'confirmados'|'presentes' }
 // ------------------------------------------------------------
 function _relLista_(idEvento, op, sessao) {
   const ctx = _contextoEvento_(idEvento);
@@ -367,19 +371,18 @@ function _relLista_(idEvento, op, sessao) {
   lista.forEach(x => { const g = x.gestor || ''; (porGestor[g] = porGestor[g] || []).push(x); });
   const nomesGestores = Object.keys(porGestor).sort((a, b) => (a ? 0 : 1) - (b ? 0 : 1) || a.localeCompare(b, 'pt-BR'));
 
-  const cols = [{ t: 'Nº', cls: 'num' }, { t: 'Convidado' }, { t: 'Empresa' }, { t: 'Categoria' }];
-  if (op.documento) cols.push({ t: 'Documento' });
+  const cols = [{ t: '#', cls: 'num' }, { t: 'Convite', w: '48px' }, { t: 'Convidado' }, { t: 'Empresa' }, { t: 'Categoria' }];
   if (op.contato) cols.push({ t: 'Contato' });
   cols.push({ t: 'Mesa' }, { t: 'Status', cls: 'n' });
 
   const grupos = nomesGestores.map(g => {
-    const itens = porGestor[g].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    const itens = porGestor[g].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true }));
     const conf = itens.filter(x => x.status === 'Confirmado' || x.status === 'Presente').length;
     const linhas = itens.map((x, i) => '<tr><td class="num">' + (i + 1) + '</td>' +
-      '<td><b>' + _h_(x.nome) + '</b>' + (x.cargo ? '<span class="sub">' + _h_(x.cargo) + '</span>' : '') + '</td>' +
+      '<td><b>' + (x.numero ? 'Nº ' + _h_(x.numero) : '<span style="color:#CBD5E1">—</span>') + '</b></td>' +
+      '<td><b' + (x.provisorio ? ' style="color:#64748B;font-style:italic"' : '') + '>' + _h_(x.nome) + '</b>' + (x.cargo ? '<span class="sub">' + _h_(x.cargo) + '</span>' : '') + '</td>' +
       '<td>' + (_h_(x.empresa) || '<span style="color:#CBD5E1">—</span>') + '</td>' +
       '<td>' + _h_(x.categoria) + '</td>' +
-      (op.documento ? '<td style="white-space:nowrap">' + (_h_(x.documento) || '—') + '</td>' : '') +
       (op.contato ? '<td>' + (_h_(x.contato) || '—') + '</td>' : '') +
       '<td>' + (_h_(x.mesa) || '<span style="color:#CBD5E1">—</span>') + '</td>' +
       '<td class="n">' + _stTxt_(x.status) + '</td></tr>');
@@ -461,15 +464,15 @@ function _relPresenca_(idEvento, op, sessao) {
   ctx.convites.forEach(x => { nomeOriginal[x.c.ID_Convite] = x.nome; });
 
   const tabPresentes = presentes.length ? _tabela_(
-    [{ t: 'Hora', cls: 'num', w: '42px' }, { t: 'Convidado' }, { t: 'Empresa' }, { t: 'Gestor' }, { t: 'Mesa' }, { t: 'Origem' }, { t: 'Registrado por' }],
-    presentes.map(x => '<tr><td class="num" style="color:#0F172A">' + _h_(_fmtData_(x.c.Checkin_DataHora, 'HH:mm')) + '</td><td><b>' + _h_(x.nome) + '</b>' + (x.cargo ? '<span class="sub">' + _h_(x.cargo) + '</span>' : '') + '</td>' +
+    [{ t: 'Hora', cls: 'num', w: '42px' }, { t: 'Convite', w: '48px' }, { t: 'Convidado' }, { t: 'Empresa' }, { t: 'Gestor' }, { t: 'Mesa' }, { t: 'Origem' }, { t: 'Registrado por' }],
+    presentes.map(x => '<tr><td class="num" style="color:#0F172A">' + _h_(_fmtData_(x.c.Checkin_DataHora, 'HH:mm')) + '</td><td>' + (x.numero ? 'Nº ' + _h_(x.numero) : '—') + '</td><td><b>' + _h_(x.nome) + '</b>' + (x.cargo ? '<span class="sub">' + _h_(x.cargo) + '</span>' : '') + '</td>' +
       '<td>' + (_h_(x.empresa) || '—') + '</td><td>' + (_h_(x.gestor) || '—') + '</td><td>' + (_h_(x.mesa) || '—') + '</td><td>' + _h_(x.origem) + '</td>' +
       '<td><span class="sub" style="font-size:7.3pt">' + _h_(_s_(x.c.Checkin_Por).split(' · ')[0]) + '</span></td></tr>')) : '<div class="vazio">Ninguém fez check-in neste evento ainda.</div>';
 
   const ausentes = ausConf.concat(ausSemResp);
   const tabAusentes = ausentes.length ? _tabela_(
-    [{ t: 'Nº', cls: 'num' }, { t: 'Convidado' }, { t: 'Empresa' }, { t: 'Gestor' }, { t: 'Situação', cls: 'n' }],
-    ausentes.map((x, i) => '<tr><td class="num">' + (i + 1) + '</td><td><b>' + _h_(x.nome) + '</b></td><td>' + (_h_(x.empresa) || '—') + '</td><td>' + (_h_(x.gestor) || '—') + '</td>' +
+    [{ t: '#', cls: 'num' }, { t: 'Convite', w: '48px' }, { t: 'Convidado' }, { t: 'Empresa' }, { t: 'Gestor' }, { t: 'Situação', cls: 'n' }],
+    ausentes.map((x, i) => '<tr><td class="num">' + (i + 1) + '</td><td>' + (x.numero ? 'Nº ' + _h_(x.numero) : '—') + '</td><td><b>' + _h_(x.nome) + '</b></td><td>' + (_h_(x.empresa) || '—') + '</td><td>' + (_h_(x.gestor) || '—') + '</td>' +
       '<td class="n"><span class="st" style="color:' + (x.status === 'Confirmado' ? '#EF4444' : '#64748B') + '">' + (x.status === 'Confirmado' ? 'Confirmou e não veio' : 'Não respondeu') + '</span></td></tr>')) : '<div class="vazio">Nenhuma ausência entre os convidados esperados.</div>';
 
   const ocorrencias = [];
@@ -559,7 +562,7 @@ function _relMesas_(idEvento, op, sessao) {
   const blocos = mesas.map(m => {
     const pessoas = (porMesa[m.ID_Mesa] || []).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
     return '<div class="mesa-bloco' + (m.VIP === 'Sim' ? ' vip' : '') + '"><div class="mt"><span>' + _h_(_rotuloMesa_(m)) + (m.VIP === 'Sim' ? ' · VIP' : '') + '</span><span>' + pessoas.length + '/' + (Number(m.Capacidade) || 0) + '</span></div>' +
-      (pessoas.length ? '<ol>' + pessoas.map(x => '<li>' + _h_(x.nome) + (x.empresa ? ' <small>· ' + _h_(x.empresa) + '</small>' : '') + (x.gestor ? ' <small>· por ' + _h_(x.gestor) + '</small>' : '') + (x.status === 'Convidado' ? ' <small>(sem resposta)</small>' : '') + '</li>').join('') + '</ol>'
+      (pessoas.length ? '<ol>' + pessoas.map(x => '<li>' + (x.numero ? '<small>Nº ' + _h_(x.numero) + '</small> ' : '') + _h_(x.nome) + (x.empresa ? ' <small>· ' + _h_(x.empresa) + '</small>' : '') + (x.gestor ? ' <small>· por ' + _h_(x.gestor) + '</small>' : '') + (x.status === 'Convidado' ? ' <small>(sem resposta)</small>' : '') + '</li>').join('') + '</ol>'
         : '<div class="vazio" style="padding:6px 8px">Mesa vazia.</div>') + '</div>';
   });
 
@@ -686,7 +689,7 @@ function _relPanorama_(op, sessao) {
 // 5) BASE DE CONTATOS POR GESTOR (pessoas no banco)
 // Uma pessoa pertence ao gestor que a cadastrou (Gestor_Responsavel)
 // e a todo gestor que já a convidou — por isso pode aparecer em mais de
-// uma tabela. opcoes: { gestor, documento, contato }
+// uma tabela. opcoes: { gestor, contato }
 // ------------------------------------------------------------
 function _baseContatos_() {
   const empresas = {}, eventos = {};
@@ -707,7 +710,7 @@ function _baseContatos_() {
     if (_s_(p.Gestor_Responsavel)) gestores[_s_(p.Gestor_Responsavel)] = true;
     return {
       p: p, nome: _s_(p.Nome) || '(sem nome)', cargo: _s_(p.Cargo), categoria: _s_(p.Categoria) || 'Outro',
-      empresa: _s_(empresas[p.ID_Empresa]), documento: _s_(p.Documento),
+      empresa: _s_(empresas[p.ID_Empresa]),
       contato: [_s_(p.Telefone), _s_(p.Email)].filter(Boolean).join(' · '),
       gestores: Object.keys(gestores), listas: x.listas, presencas: x.presencas,
       ultimo: x.ultimo ? _s_(x.ultimo.Nome) + (x.ultimo.Data ? ' (' + _fmtData_(x.ultimo.Data) + ')' : '') : ''
@@ -731,7 +734,6 @@ function _relBase_(op, sessao) {
   const participaram = universo.filter(x => x.presencas).length;
 
   const cols = [{ t: 'Nº', cls: 'num' }, { t: 'Pessoa' }, { t: 'Empresa' }, { t: 'Categoria' }];
-  if (op.documento) cols.push({ t: 'Documento' });
   if (op.contato) cols.push({ t: 'Contato' });
   cols.push({ t: 'Listas', cls: 'n' }, { t: 'Presenças', cls: 'n' }, { t: 'Último evento' });
 
@@ -740,7 +742,6 @@ function _relBase_(op, sessao) {
     const linhas = itens.map((x, i) => '<tr><td class="num">' + (i + 1) + '</td>' +
       '<td><b>' + _h_(x.nome) + '</b>' + (x.cargo ? '<span class="sub">' + _h_(x.cargo) + '</span>' : '') + '</td>' +
       '<td>' + (_h_(x.empresa) || '<span style="color:#CBD5E1">—</span>') + '</td><td>' + _h_(x.categoria) + '</td>' +
-      (op.documento ? '<td style="white-space:nowrap">' + (_h_(x.documento) || '—') + '</td>' : '') +
       (op.contato ? '<td>' + (_h_(x.contato) || '—') + '</td>' : '') +
       '<td class="n">' + x.listas + '</td><td class="n">' + (x.presencas ? '<b style="color:#16A34A">' + x.presencas + '</b>' : '0') + '</td>' +
       '<td><span class="sub" style="font-size:7.4pt">' + (_h_(x.ultimo) || 'nunca convidada') + '</span></td></tr>');
@@ -823,10 +824,10 @@ function apiCsvRelatorio(token, tipo, opcoes) {
     let cab, linhas, nome;
     if (tipo === 'base') {
       const filtro = _s_(opcoes.gestor);
-      cab = ['Gestor(es)', 'Nome', 'Cargo', 'Empresa', 'Categoria', 'Documento', 'Telefone', 'E-mail', 'Listas', 'Presenças', 'Último evento'];
+      cab = ['Gestor(es)', 'Nome', 'Cargo', 'Empresa', 'Categoria', 'Telefone', 'E-mail', 'Listas', 'Presenças', 'Último evento'];
       linhas = _baseContatos_().pessoas.filter(x => !filtro || x.gestores.indexOf(filtro) !== -1)
         .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
-        .map(x => [x.gestores.join(', '), x.nome, x.cargo, x.empresa, x.categoria, x.documento, _s_(x.p.Telefone), _s_(x.p.Email), x.listas, x.presencas, x.ultimo]);
+        .map(x => [x.gestores.join(', '), x.nome, x.cargo, x.empresa, x.categoria, _s_(x.p.Telefone), _s_(x.p.Email), x.listas, x.presencas, x.ultimo]);
       nome = 'base-contatos' + (filtro ? '-' + filtro.toLowerCase().replace(/[^a-z0-9]+/gi, '-').slice(0, 30) : '');
     } else if (tipo === 'panorama') {
       const ids = (opcoes.eventos || []).map(_s_);
@@ -843,9 +844,9 @@ function apiCsvRelatorio(token, tipo, opcoes) {
     } else {
       const ctx = _contextoEvento_(opcoes.idEvento);
       const base = opcoes.incluirInativos ? ctx.convites : ctx.convites.filter(x => _conviteAtivo_(x.c));
-      cab = ['Gestor', 'Nome', 'Cargo', 'Empresa', 'Categoria', 'Documento', 'Telefone', 'E-mail', 'Status', 'Origem', 'Mesa', 'Check-in'];
+      cab = ['Gestor', 'Nº convite', 'Nome', 'Cargo', 'Empresa', 'Categoria', 'Telefone', 'E-mail', 'Status', 'Origem', 'Mesa', 'Check-in'];
       linhas = base.sort((a, b) => a.gestor.localeCompare(b.gestor, 'pt-BR') || a.nome.localeCompare(b.nome, 'pt-BR')).map(x => [
-        x.gestor, x.nome, x.cargo, x.empresa, x.categoria, x.documento, _s_(x.p.Telefone), _s_(x.p.Email),
+        x.gestor, x.numero, x.nome, x.cargo, x.empresa, x.categoria, _s_(x.p.Telefone), _s_(x.p.Email),
         x.status, x.origem, x.mesa, _fmtData_(x.c.Checkin_DataHora, 'dd/MM/yyyy HH:mm')]);
       nome = tipo + '-' + _s_(ctx.evento.Nome).toLowerCase().replace(/[^a-z0-9]+/gi, '-').slice(0, 40);
     }

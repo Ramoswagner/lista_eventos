@@ -85,7 +85,9 @@ const DB = {
       'Data_Convite', 'Data_Resposta',
       'Checkin_DataHora', 'Checkin_Por',
       'Observacoes', 'Cadastrado_Por',
-      'ID_Mesa'                     // mesa onde o convidado vai sentar (vazio = sem mesa)
+      'ID_Mesa',                    // mesa onde o convidado vai sentar (vazio = sem mesa)
+      'Numero_Convite',             // nº impresso no convite (único no evento)
+      'Nome_Provisorio'             // vaga reservada de lote ainda sem nome: "Convidado 3"
     ],
     validacoes: {
       Status: [
@@ -103,7 +105,9 @@ const DB = {
     colunas: [
       'ID_Lote', 'ID_Evento', 'ID_Empresa', 'Gestor',
       'Token', 'Vagas_Total', 'Status',
-      'Data_Expiracao', 'Observacoes', 'Criado_Em'
+      'Data_Expiracao', 'Observacoes', 'Criado_Em',
+      'Numeros_Convite',            // nºs dos convites entregues ao grupo (ex.: "101-110")
+      'Reservar_Vagas'              // 'Sim' = vagas aparecem na lista como "Convidado 1, 2…"
     ],
     validacoes: {
       Status: ['Aberto', 'Encerrado', 'Expirado']

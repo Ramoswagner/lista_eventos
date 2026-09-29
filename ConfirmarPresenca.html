@@ -76,10 +76,7 @@
         <div class="aviso-privacidade mb-3"><i class="fas fa-lock"></i><span>Preencha só o que quiser atualizar. Campos em branco continuam como estão. Por segurança, seus dados atuais não são mostrados aqui.</span></div>
         <div class="mb-2"><label class="form-label" for="dNome">Nome completo</label><input class="form-control" id="dNome" autocomplete="name" maxlength="120"></div>
         <div class="mb-2"><label class="form-label" for="dEmail">E-mail</label><input class="form-control" id="dEmail" type="email" autocomplete="email" autocapitalize="off" maxlength="120"></div>
-        <div class="row g-2 mb-2">
-          <div class="col-6"><label class="form-label" for="dDoc">CPF / Documento</label><input class="form-control" id="dDoc" inputmode="numeric" autocomplete="off" maxlength="30"></div>
-          <div class="col-6"><label class="form-label" for="dTel">Telefone</label><input class="form-control" id="dTel" type="tel" autocomplete="tel" placeholder="(31) 9...." maxlength="25"></div>
-        </div>
+        <div class="mb-2"><label class="form-label" for="dTel">Telefone</label><input class="form-control" id="dTel" type="tel" autocomplete="tel" placeholder="(31) 9...." maxlength="25"></div>
         <div class="mb-2"><label class="form-label" for="dCargo">Cargo / Função</label><input class="form-control" id="dCargo" autocomplete="organization-title" maxlength="80"></div>
         <div class="mb-3"><label class="form-label" for="dCategoria">Quem é você?</label><select class="form-select" id="dCategoria"><option value="">— não alterar —</option></select></div>
         <button type="submit" class="btn-salvar" id="btnSalvarDados"><i class="fas fa-check me-1"></i> Salvar meus dados</button>
@@ -139,6 +136,7 @@
       '<div class="meta-evento">' +
         '<span class="chip"><i class="fas fa-calendar-days"></i>' + esc(d.dataEvento || 'Data a definir') + '</span>' +
         (d.local ? '<span class="chip"><i class="fas fa-location-dot"></i>' + esc(d.local) + '</span>' : '') +
+        (d.numero ? '<span class="chip"><i class="fas fa-hashtag"></i>Convite nº ' + esc(d.numero) + '</span>' : '') +
       '</div>';
   }
 
@@ -229,7 +227,6 @@
     var dados = {
       Nome: document.getElementById('dNome').value.trim(),
       Email: document.getElementById('dEmail').value.trim(),
-      Documento: document.getElementById('dDoc').value.trim(),
       Telefone: document.getElementById('dTel').value.trim(),
       Cargo: document.getElementById('dCargo').value.trim(),
       Categoria: document.getElementById('dCategoria').value

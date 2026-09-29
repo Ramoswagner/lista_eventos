@@ -68,7 +68,7 @@ Em **Configurações → Marca dos relatórios** o Admin envia a logo do cabeça
 
 ## Página pessoal do convidado
 
-Além de confirmar/recusar e mostrar o QR Code, tem **Atualizar meus dados (opcional)**: o convidado informa só o que mudou (nome, e-mail, documento, telefone, cargo, "quem é você"). Os dados atuais nunca aparecem na página.
+Além de confirmar/recusar e mostrar o QR Code, tem **Atualizar meus dados (opcional)**: o convidado informa só o que mudou (nome, e-mail, telefone, cargo, "quem é você"). Os dados atuais nunca aparecem na página. A página mostra o **nº do convite**.
 
 ## Organizadores e gestores
 
@@ -83,8 +83,34 @@ Pessoas e empresas podem ser **editadas** (botão do lápis). Empresa tem **CNPJ
 - **Adicionar**: busque alguém que já está no diretório (evita duplicar) ou cadastre uma pessoa nova.
 - **Cancelar** (ícone proibido): mantém o registro, com status Cancelado.
 - **Excluir** (lixeira): tira o convite da lista, para a lista ficar limpa. Só até a véspera do evento (o Admin pode corrigir depois). Quem já fez check-in ou faz parte de uma troca não é excluído.
+- **Nº do convite** (ícone #): edita o número impresso no convite e a descrição. O número é único por evento.
+- **Identificar** (ícone de pessoa): dá nome a uma vaga de grupo ("Convidado 3").
 - **Trocar** (setas): quando a pessoa avisa que outra irá no lugar. O original fica como Substituído; quem entra recebe link próprio, a mesma mesa e o mesmo gestor. Excluir o substituto devolve o lugar ao original.
 
 ## Relatório da base de contatos
 
 Menu **Relatórios → Base de contatos**: quantidade e pessoas no banco em tabelas por gestor, com listas, presenças e último evento de cada pessoa. Filtre por um gestor ("meus contatos") ou veja a base geral. Também em planilha.
+
+## CPF
+
+O CPF **não é pedido e não é obrigatório** em nenhum formulário (lote, página pessoal, lista).
+Se um cadastro antigo tiver CPF, ele fica guardado, mas **nunca aparece** em tela, busca, relatório ou planilha. No Diretório, ao editar, o campo aparece vazio com o aviso "Registrado — em branco mantém"; dá para apagá-lo marcando "Apagar o CPF registrado".
+
+## Nº do convite e vagas de grupo ("Convidado 1, 2, 3…")
+
+- Quem cadastra informa o **nº do convite** (o número impresso). Em grupo, cada pessoa declara o seu.
+- **Criar lote**: informe os números do grupo (ex.: `101-110, 115`). Com "Reservar vagas" marcado, o lote já nasce com **Convidado 1, Convidado 2…** da empresa, cada um com seu número — eles aparecem em **Mesas** para distribuir mesmo sem nome.
+- Na página do lote, a pessoa se inscreve com nome + nº do convite (e-mail opcional) e ocupa a vaga daquele número. Para confirmar/cancelar depois: e-mail, **ou** nº do convite + primeiro nome. Cancelar devolve a vaga como "Convidado N" com o mesmo número e mesa.
+- Se a empresa não mandar os nomes, as vagas continuam como "Convidado N" e entram assim mesmo no check-in.
+
+## Check-in (recepção)
+
+Painel ao vivo (atualiza sozinho a cada 15 s):
+
+- **Números no topo**: chegaram / esperados, aguardando, mesas cheias e lugares livres, walk-ins.
+- **Buscar**: por nome (sem acento), **nº do convite** (`101`, `nº 101`), **empresa**, cargo ou **mesa** (`mesa 3`). O número exato aparece primeiro. Filtros: Todos / Aguardando / Chegaram.
+- **Ler QR**: câmera lê o QR Code do link pessoal.
+- **Mesas**: cada mesa com lugares reservados, quem chegou e quantos lugares livres (verde = livre, amarelo = quase cheia, vermelho = cheia). Toque para ver quem senta nela e dar entrada.
+- **Chegadas**: últimas entradas com horário e progresso de chegada por empresa.
+- Vaga "Convidado N": ao dar entrada, a recepção pode digitar o nome (opcional).
+- **Walk-in**: pode receber nº do convite e uma mesa (só aparecem mesas com lugar livre).

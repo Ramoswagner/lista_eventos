@@ -1,175 +1,519 @@
-<!-- CheckinScanner.html — check-in do evento (QR + busca manual + walk-in + substituição) -->
+<!-- CheckinScanner.html — painel da recepção: busca (nome, nº do convite, empresa, mesa),
+     QR Code, mesas em tempo real, chegadas, walk-in e substituição -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
 <style>
-  /* Celular: cada convidado vira um bloco com o botão de entrada largo (fácil de tocar na porta). */
+  .ck-kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+  .ck-kpi { background:#fff; border:1px solid var(--border); border-radius:14px; padding:12px 14px; min-width:0; }
+  .ck-kpi .rot { font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--text-muted); }
+  .ck-kpi .val { font-size:1.45rem; font-weight:800; color:var(--ink-900); line-height:1.2; font-variant-numeric:tabular-nums; }
+  .ck-kpi .val small { font-size:.8rem; font-weight:600; color:var(--text-muted); }
+  .ck-barra { height:6px; border-radius:6px; background:var(--bg); overflow:hidden; margin-top:6px; }
+  .ck-barra > span { display:block; height:100%; background:var(--success); border-radius:6px; transition:width .4s; }
+  .ck-ao-vivo { display:inline-flex; align-items:center; gap:6px; font-size:.72rem; color:var(--text-muted); }
+  .ck-ao-vivo .dot { width:8px; height:8px; border-radius:50%; background:var(--success); box-shadow:0 0 0 0 rgba(16,185,129,.6); animation:ckPulso 2s infinite; }
+  .ck-ao-vivo.parado .dot { background:#CBD5E1; animation:none; }
+  @keyframes ckPulso { 0% { box-shadow:0 0 0 0 rgba(16,185,129,.55); } 70% { box-shadow:0 0 0 7px rgba(16,185,129,0); } 100% { box-shadow:0 0 0 0 rgba(16,185,129,0); } }
+  .ck-tabs { display:flex; gap:6px; flex-wrap:wrap; margin:14px 0 12px; }
+  .ck-tab { border:1.5px solid var(--border); background:#fff; border-radius:10px; padding:8px 14px; font-size:.82rem; font-weight:600; color:var(--text-muted); cursor:pointer; display:inline-flex; align-items:center; gap:7px; }
+  .ck-tab.active { background:var(--ink-900); border-color:var(--ink-900); color:#fff; }
+  .ck-tab .n { font-size:.7rem; background:rgba(0,0,0,.08); border-radius:20px; padding:1px 7px; }
+  .ck-tab.active .n { background:rgba(255,255,255,.2); }
+  .ck-busca { position:relative; }
+  .ck-busca i { position:absolute; left:14px; top:50%; transform:translateY(-50%); color:var(--text-muted); }
+  .ck-busca input { padding-left:40px; min-height:48px; font-size:1rem; border-radius:12px; }
+  .ck-chips { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0; }
+  .ck-chip { border:1px solid var(--border); background:#fff; border-radius:20px; padding:4px 12px; font-size:.76rem; font-weight:600; color:var(--text-muted); cursor:pointer; }
+  .ck-chip.active { background:var(--blue-50); border-color:var(--blue-500); color:var(--blue-600); }
+  .ck-lista { background:#fff; border:1px solid var(--border); border-radius:14px; overflow:hidden; }
+  .ck-item { display:flex; align-items:center; gap:12px; padding:11px 14px; border-bottom:1px solid var(--border); }
+  .ck-item:last-child { border-bottom:none; }
+  .ck-item.presente { background:#F6FEF9; }
+  .ck-item.inativo { opacity:.6; }
+  .ck-num { min-width:52px; text-align:center; font-weight:800; font-size:.85rem; color:var(--ink-900); background:var(--bg); border-radius:9px; padding:6px 4px; font-variant-numeric:tabular-nums; }
+  .ck-num.vazio { color:#CBD5E1; font-weight:600; }
+  .ck-info { flex:1; min-width:0; }
+  .ck-info .nome { font-weight:700; color:var(--ink-900); }
+  .ck-info .nome em { font-weight:600; color:var(--text-muted); }
+  .ck-info .sub { font-size:.76rem; color:var(--text-muted); }
+  .ck-info .tags { display:flex; gap:5px; flex-wrap:wrap; margin-top:4px; }
+  .ck-acoes { display:flex; gap:6px; align-items:center; flex-shrink:0; }
+  .ck-mesas { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }
+  .ck-mesa { background:#fff; border:1.5px solid var(--border); border-radius:14px; padding:12px; cursor:pointer; text-align:left; transition:transform .1s, box-shadow .15s; }
+  .ck-mesa:hover { transform:translateY(-1px); box-shadow:0 6px 16px rgba(10,43,78,.08); }
+  .ck-mesa .tit { font-weight:800; color:var(--ink-900); display:flex; justify-content:space-between; align-items:center; gap:6px; }
+  .ck-mesa .tit span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ck-mesa .lug { font-size:.74rem; color:var(--text-muted); margin-top:6px; }
+  .ck-mesa .st { display:inline-block; margin-top:8px; font-size:.72rem; font-weight:700; border-radius:20px; padding:2px 9px; }
+  .ck-mesa.livre { border-color:#A7F3D0; } .ck-mesa.livre .st { background:var(--success-bg); color:var(--success); }
+  .ck-mesa.quase { border-color:#FCD34D; } .ck-mesa.quase .st { background:var(--warning-bg); color:#B4790A; }
+  .ck-mesa.cheia { border-color:#FCA5A5; background:#FFFBFB; } .ck-mesa.cheia .st { background:var(--danger-bg); color:var(--danger); }
+  .ck-seg { display:flex; gap:2px; margin-top:8px; }
+  .ck-seg i { flex:1; height:7px; border-radius:3px; background:#E2E8F0; }
+  .ck-seg i.s { background:#93C5FD; } .ck-seg i.c { background:var(--success); }
+  .ck-legenda { display:flex; gap:14px; flex-wrap:wrap; font-size:.72rem; color:var(--text-muted); margin-bottom:10px; }
+  .ck-legenda b { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
+  .ck-emp { display:flex; align-items:center; gap:10px; padding:9px 14px; border-bottom:1px solid var(--border); font-size:.84rem; }
+  .ck-emp:last-child { border-bottom:none; }
+  .ck-emp .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; color:var(--ink-900); }
+  .ck-emp .bar { width:90px; }
+  .ck-hora { font-variant-numeric:tabular-nums; font-weight:700; color:var(--ink-900); min-width:46px; }
   @media (max-width:640px) {
-    .checkin-lista tr { display:block; padding:10px 12px; border-bottom:1px solid var(--border); }
-    .checkin-lista tr:last-child { border-bottom:none; }
-    .checkin-lista td { display:block; border:none !important; padding:2px 0 !important; text-align:left !important; white-space:normal !important; }
-    .checkin-lista td:last-child { display:flex; gap:8px; justify-content:flex-end; padding-top:8px !important; }
-    .checkin-lista td:last-child .btn-hb { flex:1; justify-content:center; min-height:44px; font-size:.9rem !important; }
-    #buscaCheckin { font-size:16px; min-height:46px; }
+    .ck-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .ck-item { flex-wrap:wrap; }
+    .ck-acoes { width:100%; justify-content:flex-end; }
+    .ck-acoes .btn-hb { flex:1; justify-content:center; min-height:44px; }
+    .ck-tabs { display:grid; grid-template-columns:repeat(auto-fit,minmax(0,1fr)); gap:5px; }
+    .ck-tab { justify-content:center; padding:9px 4px; font-size:.74rem; gap:5px; min-width:0; }
+    .ck-tab .n { display:none; }
+    .ck-mesas { grid-template-columns:repeat(2,minmax(0,1fr)); }
   }
 </style>
 
 <div id="checkinWrap">
-  <div class="skel" style="height:60px;margin-bottom:14px;"></div>
+  <div class="skel" style="height:90px;margin-bottom:14px;"></div>
   <div class="skel" style="height:300px;"></div>
 </div>
 
 <!-- Modal: walk-in -->
 <div class="modal fade" id="modalWalkin" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down"><div class="modal-content" style="border-radius:16px;border:none;">
-  <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold"><i class="fas fa-door-open me-2 text-primary"></i>Entrada sem convite (walk-in)</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold"><i class="fas fa-door-open me-2 text-primary"></i>Entrada sem convite (walk-in)</h6><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
   <div class="modal-body">
-    <div class="mb-3"><label class="form-label">Nome completo *</label><input class="form-control" id="wkNome"></div>
-    <div class="mb-3"><label class="form-label">Categoria</label><select class="form-select" id="wkCategoria"></select></div>
-    <div class="mb-1"><label class="form-label">Autorizado por *</label><input class="form-control" id="wkAutorizado" placeholder="Quem liberou a entrada"></div>
+    <div class="mb-3"><label class="form-label" for="wkNome">Nome completo *</label><input class="form-control" id="wkNome" autocomplete="off"></div>
+    <div class="row g-2 mb-3">
+      <div class="col-6"><label class="form-label" for="wkCategoria">Categoria</label><select class="form-select" id="wkCategoria"></select></div>
+      <div class="col-6"><label class="form-label" for="wkNumero">Nº do convite</label><input class="form-control" id="wkNumero" inputmode="numeric" placeholder="Se tiver" autocomplete="off"></div>
+    </div>
+    <div class="mb-3"><label class="form-label" for="wkMesa">Mesa</label><select class="form-select" id="wkMesa"></select><div class="form-text">Só aparecem mesas com lugar livre.</div></div>
+    <div class="mb-1"><label class="form-label" for="wkAutorizado">Autorizado por *</label><input class="form-control" id="wkAutorizado" placeholder="Quem liberou a entrada"></div>
   </div>
   <div class="modal-footer" style="border-top:1px solid var(--border);"><button class="btn-hb-outline" data-bs-dismiss="modal">Cancelar</button><button class="btn-hb" id="btnWalkin" onclick="confirmarWalkin()"><i class="fas fa-check"></i> Registrar entrada</button></div>
 </div></div></div>
 
 <!-- Modal: substituição -->
 <div class="modal fade" id="modalSub" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down"><div class="modal-content" style="border-radius:16px;border:none;">
-  <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold"><i class="fas fa-right-left me-2 text-primary"></i>Substituir convidado</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold"><i class="fas fa-right-left me-2 text-primary"></i>Substituir convidado</h6><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
   <div class="modal-body">
-    <p class="small text-muted mb-2">Substituindo: <strong id="subOriginalNome"></strong></p>
-    <div class="mb-3"><label class="form-label">Nome de quem vai entrar *</label><input class="form-control" id="subNome"></div>
-    <div class="mb-3"><label class="form-label">Categoria</label><select class="form-select" id="subCategoria"></select></div>
+    <p class="small text-muted mb-2">Substituindo: <strong id="subOriginalNome"></strong> <span class="small">(o substituto herda o nº do convite e a mesa)</span></p>
+    <div class="mb-3"><label class="form-label" for="subNome">Nome de quem vai entrar *</label><input class="form-control" id="subNome"></div>
+    <div class="mb-3"><label class="form-label" for="subCategoria">Categoria</label><select class="form-select" id="subCategoria"></select></div>
     <div class="row g-2">
-      <div class="col-6"><label class="form-label">Motivo</label><input class="form-control" id="subMotivo"></div>
-      <div class="col-6"><label class="form-label">Autorizado por *</label><input class="form-control" id="subAutorizado"></div>
+      <div class="col-6"><label class="form-label" for="subMotivo">Motivo</label><input class="form-control" id="subMotivo"></div>
+      <div class="col-6"><label class="form-label" for="subAutorizado">Autorizado por *</label><input class="form-control" id="subAutorizado"></div>
     </div>
   </div>
   <div class="modal-footer" style="border-top:1px solid var(--border);"><button class="btn-hb-outline" data-bs-dismiss="modal">Cancelar</button><button class="btn-hb" id="btnSub" onclick="confirmarSubstituicao()"><i class="fas fa-check"></i> Substituir e liberar entrada</button></div>
 </div></div></div>
 
+<!-- Modal: entrada de vaga de grupo ainda sem nome ("Convidado 3") -->
+<div class="modal fade" id="modalProv" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down"><div class="modal-content" style="border-radius:16px;border:none;">
+  <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold"><i class="fas fa-user-check me-2 text-primary"></i>Entrada de convidado do grupo</h6><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+  <div class="modal-body">
+    <p class="small text-muted mb-3" id="provDescricao"></p>
+    <label class="form-label" for="provNome">Nome de quem está entrando <span class="text-muted fw-normal">(opcional)</span></label>
+    <input class="form-control" id="provNome" autocomplete="off" placeholder="Deixe em branco se não quiser informar">
+    <div class="form-text">Com o nome, a pessoa entra no cadastro e aparece nos relatórios.</div>
+  </div>
+  <div class="modal-footer" style="border-top:1px solid var(--border);"><button class="btn-hb-outline" data-bs-dismiss="modal">Cancelar</button><button class="btn-hb" id="btnProv" onclick="confirmarProvisorio()"><i class="fas fa-check"></i> Confirmar entrada</button></div>
+</div></div></div>
+
+<!-- Modal: quem está na mesa -->
+<div class="modal fade" id="modalMesaCk" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down"><div class="modal-content" style="border-radius:16px;border:none;">
+  <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold" id="mesaCkTitulo"></h6><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+  <div class="modal-body p-0" id="mesaCkCorpo"></div>
+</div></div></div>
+
 <script>
 (function() {
   var idEvento = window.EventoAtual && window.EventoAtual.id;
-  if (!idEvento) { document.getElementById('checkinWrap').innerHTML = '<div class="empty-state"><i class="fas fa-triangle-exclamation"></i><p>Nenhum evento selecionado.</p></div>'; return; }
+  var wrap = document.getElementById('checkinWrap');
+  if (!idEvento) { wrap.innerHTML = '<div class="empty-state"><i class="fas fa-triangle-exclamation"></i><p>Nenhum evento selecionado.</p></div>'; return; }
 
   var CATEGORIAS = ['Pessoa Física','Empresário','Deputado','Senador','Vereador','Prefeito','Secretário','Político','Médico','Corpo Clínico','Fornecedor','Parceiro','Patrocinador','Imprensa','Doador','Conselheiro','Instituição','Outro'];
-  var convidados = [];
-  var info = null;
-  var subOriginalId = null;
+  var INATIVOS = ['Cancelado', 'Substituído', 'Recusado', 'Ausente'];
+  var ATUALIZA_MS = 15000;
+
+  var convidados = [], mesas = [], info = null, agoraServidor = 0;
+  var aba = 'busca', filtro = 'todos', filtroMesas = 'todas', mesaAberta = null;
+  var subOriginalId = null, provId = null;
   var scanning = false, scanLock = false, stream = null;
+  var ultimaAtualizacao = 0, carregando = false, primeiraCarga = true;
 
-  document.getElementById('wkCategoria').innerHTML = CATEGORIAS.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('');
-  document.getElementById('subCategoria').innerHTML = CATEGORIAS.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('');
+  document.getElementById('wkCategoria').innerHTML = CATEGORIAS.map(function(c){ return '<option value="' + c + '">' + c + '</option>'; }).join('');
+  document.getElementById('subCategoria').innerHTML = document.getElementById('wkCategoria').innerHTML;
 
-  carregar(true);
+  // Um único relógio por tela: se a view for recarregada, o anterior é desligado.
+  if (window.__checkinTimer) clearInterval(window.__checkinTimer);
+  window.__checkinTimer = setInterval(function() {
+    if (!document.body.contains(wrap)) { clearInterval(window.__checkinTimer); window.__checkinTimer = null; pararCamera(); return; }
+    atualizarRelogio();
+    if (!document.hidden && Date.now() - ultimaAtualizacao >= ATUALIZA_MS) carregar();
+  }, 5000);
 
-  function msgErro(texto) {
-    document.getElementById('checkinWrap').innerHTML = '<div class="empty-state"><i class="fas fa-triangle-exclamation"></i><p>' + esc(texto) + '</p></div>';
-  }
+  carregar();
 
-  // primeira = monta a tela. Nas recargas seguintes só atualiza os dados
-  // (contador e resultados), sem recriar o vídeo — a câmera continua ligada.
-  function carregar(primeira) {
+  // ---------------------------------------------------------- dados
+  function carregar() {
+    if (carregando) return;
+    carregando = true;
     google.script.run.withSuccessHandler(function(resp) {
+      carregando = false;
       if (resp && resp.auth === false) { pararCamera(); forcarLogout('Sessão expirada.'); return; }
-      if (!resp.ok) { if (primeira) msgErro(resp.mensagem); else toast(resp.mensagem, 'err'); return; }
+      if (!resp.ok) { if (primeiraCarga) msgErro(resp.mensagem); return; }
       convidados = resp.dados.convidados || [];
+      mesas = (resp.dados.mesas || []).slice().sort(function(a, b){ return a.numero - b.numero; });
       info = resp.dados.info;
-      if (primeira || !document.getElementById('buscaCheckin')) render(); else atualizarContagem();
-      renderResultados();
+      agoraServidor = resp.dados.agora || Date.now();
+      ultimaAtualizacao = Date.now();
+      if (primeiraCarga || !document.getElementById('ckConteudo')) { primeiraCarga = false; montar(); }
+      else atualizarTudo();
     }).withFailureHandler(function(err) {
-      if (primeira) msgErro(err.message); else toast(err.message, 'err');
+      carregando = false;
+      if (primeiraCarga) msgErro(err.message);
+      marcarAoVivo(false);
     }).apiDadosCheckin(window.TOKEN, idEvento);
   }
+  window.recarregarCheckin = function() { carregar(); };
 
-  function contagemTexto() {
-    var ativos = convidados.filter(function(c){ return c.status !== 'Cancelado' && c.status !== 'Substituído'; });
-    var presentes = ativos.filter(function(c){ return c.status === 'Presente'; }).length;
-    return presentes + ' de ' + ativos.length + ' presentes';
-  }
-  function atualizarContagem() {
-    var el = document.getElementById('contagemCheckin');
-    if (el) el.textContent = contagemTexto();
+  function msgErro(texto) { wrap.innerHTML = '<div class="empty-state"><i class="fas fa-triangle-exclamation"></i><p>' + esc(texto) + '</p></div>'; }
+
+  function ativo(c) { return INATIVOS.indexOf(c.status) === -1; }
+  function mesaPorId(id) { for (var i = 0; i < mesas.length; i++) if (mesas[i].id === id) return mesas[i]; return null; }
+  function semAcento(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+  function normNum(s) { var d = String(s || '').replace(/^\s*(n[º°o.]?|#)\s*/i, '').trim(); return /^\d+$/.test(d) ? String(Number(d)) : d.toLowerCase(); }
+
+  function estadoMesa(m) {
+    var livres = Math.max(0, m.capacidade - m.sentados);
+    if (m.capacidade && m.sentados >= m.capacidade) return { cls: 'cheia', texto: m.chegaram >= m.capacidade ? 'Cheia · todos chegaram' : 'Cheia', livres: 0 };
+    if (livres <= 2) return { cls: 'quase', texto: livres + (livres === 1 ? ' lugar livre' : ' lugares livres'), livres: livres };
+    return { cls: 'livre', texto: livres + ' lugares livres', livres: livres };
   }
 
-  function render() {
+  function numeros() {
+    var ativos = convidados.filter(ativo);
+    var chegaram = ativos.filter(function(c){ return c.status === 'Presente'; });
+    return {
+      esperados: ativos.length,
+      chegaram: chegaram.length,
+      aguardando: ativos.length - chegaram.length,
+      confirmadosAguardando: ativos.filter(function(c){ return c.status === 'Confirmado'; }).length,
+      walkins: chegaram.filter(function(c){ return c.origem === 'Walk-in'; }).length,
+      mesasCheias: mesas.filter(function(m){ return m.capacidade && m.sentados >= m.capacidade; }).length,
+      livres: mesas.reduce(function(t, m){ return t + Math.max(0, m.capacidade - m.sentados); }, 0)
+    };
+  }
+
+  // ---------------------------------------------------------- estrutura
+  function montar() {
     var janelaPill = info.janela === 'aberto' ? 'pill-green' : (info.janela === 'sem-data' ? 'pill-blue' : 'pill-amber');
     var aviso = '';
-    if (!info.podeCheckin) aviso = '<div class="alert alert-warning small mb-3"><i class="fas fa-eye me-1"></i>Seu perfil pode apenas consultar a lista — o check-in fica com a recepção.</div>';
+    if (!info.podeCheckin) aviso = '<div class="alert alert-warning small mb-3"><i class="fas fa-eye me-1"></i>Seu perfil pode apenas consultar — o check-in fica com a recepção.</div>';
     else if (info.janela !== 'aberto' && info.janela !== 'sem-data') aviso = '<div class="alert alert-warning small mb-3">' + esc(info.mensagem) + (info.admin ? ' Como administrador, você ainda pode registrar entradas para correção.' : '') + '</div>';
-    document.getElementById('checkinWrap').innerHTML =
-      aviso +
-      '<div class="card-hb card-hb-body mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">' +
-        '<div><span class="pill ' + janelaPill + '">' + (info.janela === 'aberto' ? 'Check-in aberto' : esc(info.mensagem)) + '</span> <span class="text-muted small ms-2" id="contagemCheckin">' + contagemTexto() + '</span></div>' +
+    wrap.innerHTML = aviso +
+      '<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">' +
+        '<div class="d-flex align-items-center gap-2 flex-wrap"><span class="pill ' + janelaPill + '">' + (info.janela === 'aberto' ? 'Check-in aberto' : esc(info.mensagem)) + '</span>' +
+        '<span class="ck-ao-vivo" id="ckAoVivo" title="Atualiza sozinho a cada 15 segundos"><span class="dot"></span><span id="ckRelogio">ao vivo</span></span>' +
+        '<button class="btn btn-sm btn-link text-decoration-none p-0 ms-1" onclick="recarregarCheckin()" title="Atualizar agora"><i class="fas fa-rotate"></i></button></div>' +
         (info.podeCheckin ? '<button class="btn-hb-outline" onclick="abrirWalkin()"><i class="fas fa-door-open"></i> Walk-in</button>' : '') +
       '</div>' +
-      '<div class="d-flex gap-2 mb-3">' +
-        '<div class="evt-tab active" id="tabBusca" onclick="mudarModo(\'busca\')" style="background:var(--ink-900);color:#fff;"><i class="fas fa-magnifying-glass"></i> Buscar</div>' +
-        (info.podeCheckin ? '<div class="evt-tab" id="tabScan" onclick="mudarModo(\'scan\')"><i class="fas fa-qrcode"></i> Ler QR Code</div>' : '') +
-      '</div>' +
-      '<div id="modoBusca"><input class="form-control mb-3" id="buscaCheckin" placeholder="Buscar por nome ou documento..."><div id="resultadosBusca"></div></div>' +
-      '<div id="modoScan" style="display:none;">' +
-        '<div class="card-hb card-hb-body text-center">' +
-          '<video id="video" playsinline muted style="width:100%;max-width:380px;border-radius:14px;background:#000;margin:0 auto;display:block;"></video>' +
-          '<canvas id="canvas" style="display:none;"></canvas>' +
-          '<div id="scanResult" class="mt-3"></div>' +
-          '<p class="small text-muted mt-2 mb-0">Aponte a câmera para o QR Code da página de confirmação do convidado.</p>' +
-        '</div>' +
-      '</div>';
-    document.getElementById('buscaCheckin').addEventListener('input', renderResultados);
+      '<div class="ck-kpis" id="ckKpis"></div>' +
+      '<div class="ck-tabs" id="ckTabs"></div>' +
+      '<div id="ckConteudo"></div>';
+    var a = aba; aba = ''; mudarAbaCk(a);   // monta o conteúdo da aba atual
+    atualizarTudo();
   }
 
-  window.mudarModo = function(modo) {
-    ['busca','scan'].forEach(function(m) {
-      var tab = document.getElementById(m === 'busca' ? 'tabBusca' : 'tabScan');
-      if (!tab) return;
-      tab.classList.toggle('active', modo === m);
-      tab.style.background = modo === m ? 'var(--ink-900)' : '';
-      tab.style.color = modo === m ? '#fff' : '';
-    });
-    document.getElementById('modoBusca').style.display = modo === 'busca' ? '' : 'none';
-    document.getElementById('modoScan').style.display = modo === 'scan' ? '' : 'none';
-    if (modo === 'scan') iniciarCamera(); else pararCamera();
+  function atualizarTudo() {
+    renderKpis();
+    renderTabs();
+    if (aba === 'busca') atualizarBusca();
+    else if (aba === 'mesas') renderMesas();
+    else if (aba === 'chegadas') renderChegadas();
+    if (mesaAberta && document.getElementById('modalMesaCk').classList.contains('show')) renderMesaModal();
+    marcarAoVivo(true);
+  }
+
+  function marcarAoVivo(ok) {
+    var el = document.getElementById('ckAoVivo');
+    if (el) el.classList.toggle('parado', !ok);
+    atualizarRelogio();
+  }
+  function atualizarRelogio() {
+    var el = document.getElementById('ckRelogio');
+    if (!el || !ultimaAtualizacao) return;
+    var seg = Math.round((Date.now() - ultimaAtualizacao) / 1000);
+    el.textContent = seg < 10 ? 'ao vivo · agora' : 'ao vivo · há ' + (seg < 60 ? seg + 's' : Math.floor(seg / 60) + ' min');
+  }
+
+  function renderKpis() {
+    var n = numeros();
+    var pct = n.esperados ? Math.round(n.chegaram * 100 / n.esperados) : 0;
+    document.getElementById('ckKpis').innerHTML =
+      '<div class="ck-kpi"><div class="rot">Chegaram</div><div class="val">' + n.chegaram + ' <small>de ' + n.esperados + ' · ' + pct + '%</small></div><div class="ck-barra"><span style="width:' + pct + '%"></span></div></div>' +
+      '<div class="ck-kpi"><div class="rot">Aguardando</div><div class="val">' + n.aguardando + '</div><div class="small text-muted">' + n.confirmadosAguardando + ' confirmado(s)</div></div>' +
+      '<div class="ck-kpi"><div class="rot">Mesas cheias</div><div class="val">' + n.mesasCheias + ' <small>de ' + mesas.length + '</small></div><div class="small text-muted">' + n.livres + ' lugar(es) livre(s)</div></div>' +
+      '<div class="ck-kpi"><div class="rot">Walk-ins</div><div class="val">' + n.walkins + '</div><div class="small text-muted">sem convite</div></div>';
+  }
+
+  function renderTabs() {
+    var n = numeros();
+    var tabs = [
+      ['busca', 'fa-magnifying-glass', 'Buscar', ''],
+      info.podeCheckin ? ['qr', 'fa-qrcode', 'Ler QR', ''] : null,
+      ['mesas', 'fa-chair', 'Mesas', mesas.length ? n.mesasCheias + '/' + mesas.length : ''],
+      ['chegadas', 'fa-clock-rotate-left', 'Chegadas', String(n.chegaram)]
+    ].filter(Boolean);
+    document.getElementById('ckTabs').innerHTML = tabs.map(function(t) {
+      return '<button type="button" class="ck-tab' + (aba === t[0] ? ' active' : '') + '" onclick="mudarAbaCk(\'' + t[0] + '\')"><i class="fas ' + t[1] + '"></i>' + t[2] + (t[3] ? ' <span class="n">' + esc(t[3]) + '</span>' : '') + '</button>';
+    }).join('');
+  }
+
+  window.mudarAbaCk = function(nova) {
+    if (nova === aba) return;
+    aba = nova;
+    renderTabs();
+    var box = document.getElementById('ckConteudo');
+    if (aba !== 'qr') pararCamera();
+    if (aba === 'busca') {
+      box.innerHTML =
+        '<div class="ck-busca"><i class="fas fa-magnifying-glass"></i><input class="form-control" id="buscaCheckin" placeholder="Nome, nº do convite, empresa ou mesa…" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Buscar convidado"></div>' +
+        '<div class="ck-chips" id="ckChips"></div><div id="resultadosBusca"></div>';
+      document.getElementById('buscaCheckin').addEventListener('input', atualizarBusca);
+      atualizarBusca();
+    } else if (aba === 'qr') {
+      box.innerHTML = '<div class="card-hb card-hb-body text-center">' +
+        '<video id="video" playsinline muted style="width:100%;max-width:380px;border-radius:14px;background:#000;margin:0 auto;display:block;"></video>' +
+        '<canvas id="canvas" style="display:none;"></canvas><div id="scanResult" class="mt-3"></div>' +
+        '<p class="small text-muted mt-2 mb-0">Aponte a câmera para o QR Code do link pessoal do convidado.</p></div>';
+      iniciarCamera();
+    } else if (aba === 'mesas') renderMesas();
+    else renderChegadas();
   };
 
-  function renderResultados() {
-    var input = document.getElementById('buscaCheckin');
-    var wrap = document.getElementById('resultadosBusca');
-    if (!input || !wrap) return;
-    var q = (input.value || '').toLowerCase().trim();
-    if (!q) { wrap.innerHTML = '<p class="text-muted small">Digite para buscar um convidado.</p>'; return; }
-    var qDig = q.replace(/\D/g, '');
-    var achados = convidados.filter(function(c) {
-      if ((c.nome + ' ' + c.documento).toLowerCase().indexOf(q) !== -1) return true;
-      return qDig.length >= 3 && String(c.documento).replace(/\D/g, '').indexOf(qDig) !== -1;
-    }).slice(0, 25);
-    if (!achados.length) { wrap.innerHTML = '<p class="text-muted small">Nenhum convidado encontrado com "' + esc(q) + '".</p>'; return; }
-    wrap.innerHTML = '<div class="card-hb"><table class="table-hb checkin-lista" style="min-width:0;"><tbody>' + achados.map(function(c) {
-      return '<tr><td><strong>' + esc(c.nome) + '</strong><div class="small text-muted">' + esc(c.empresa) + (c.documento ? ' · ' + esc(c.documento) : '') + (c.status === 'Recusado' ? ' · <span class="text-warning">tinha recusado</span>' : '') + '</div>' +
-        (c.mesa ? '<div class="small mt-1"><span class="pill pill-violet"><i class="fas fa-chair"></i> ' + esc(c.mesa) + '</span></div>' : '') + '</td>' +
-        '<td class="text-end text-nowrap">' + linhaAcoes(c) + '</td></tr>';
-    }).join('') + '</tbody></table></div>';
+  // ---------------------------------------------------------- busca
+  // Aceita: nome (sem acento, qualquer parte), nº do convite ("101", "nº 101", "#101"),
+  // empresa, cargo, gestor e mesa ("mesa 3" ou o nome da mesa).
+  function pontuar(c, q) {
+    if (!q.texto) return 5;
+    var num = normNum(q.bruto);
+    if (q.mesaNum !== null) { var m = mesaPorId(c.idMesa); return m && m.numero === q.mesaNum ? 1 : -1; }
+    if (q.soNumero) {
+      if (c.numero && normNum(c.numero) === num) return 0;
+      if (c.numero && String(c.numero).indexOf(num) === 0) return 2;
+      return -1;
+    }
+    if (c.numero && semAcento(c.numero) === q.texto.replace(/^(n[º°o.]?\s*|#)/, '')) return 0;   // nº com letras (ex.: A12)
+    var nome = semAcento(c.nome), resto = semAcento([c.empresa, c.cargo, c.gestor, c.mesa, c.categoria, c.numero].join(' '));
+    var palavras = q.texto.split(/\s+/);
+    var tudo = nome + ' ' + resto;
+    if (!palavras.every(function(p){ return tudo.indexOf(p) !== -1; })) return -1;
+    if (nome.indexOf(q.texto) === 0) return 1;
+    if ((' ' + nome).indexOf(' ' + palavras[0]) !== -1) return 2;
+    if (nome.indexOf(palavras[0]) !== -1) return 3;
+    return 4;   // achou pela empresa, cargo, mesa…
   }
 
-  function linhaAcoes(c) {
-    if (c.status === 'Presente') return '<span class="pill pill-green">Presente ' + esc(c.checkinHora) + '</span>';
+  function atualizarBusca() {
+    var input = document.getElementById('buscaCheckin'), out = document.getElementById('resultadosBusca');
+    if (!input || !out) return;
+    var bruto = input.value.trim();
+    var texto = semAcento(bruto);
+    var mm = texto.match(/^mesa\s*(\d+)$/);
+    var q = { bruto: bruto, texto: texto, mesaNum: mm ? Number(mm[1]) : null, soNumero: /^(n[º°o.]?\s*|#)?\d+$/i.test(bruto) };
+
+    var base = convidados.map(function(c){ return { c: c, p: pontuar(c, q) }; }).filter(function(x){ return x.p >= 0; });
+    // Sem busca: esconde cancelados/substituídos. Com busca: mostra no fim (ajuda a explicar "por que não entra").
+    if (!texto) base = base.filter(function(x){ return ativo(x.c); });
+    var cont = { todos: base.length, aguardando: 0, chegaram: 0 };
+    base.forEach(function(x){ if (x.c.status === 'Presente') cont.chegaram++; else if (ativo(x.c)) cont.aguardando++; });
+    document.getElementById('ckChips').innerHTML = [['todos','Todos'],['aguardando','Aguardando'],['chegaram','Chegaram']].map(function(f) {
+      return '<button type="button" class="ck-chip' + (filtro === f[0] ? ' active' : '') + '" onclick="filtrarCk(\'' + f[0] + '\')">' + f[1] + ' · ' + cont[f[0]] + '</button>';
+    }).join('');
+    if (filtro === 'aguardando') base = base.filter(function(x){ return ativo(x.c) && x.c.status !== 'Presente'; });
+    if (filtro === 'chegaram') base = base.filter(function(x){ return x.c.status === 'Presente'; });
+
+    base.sort(function(a, b) {
+      return (ativo(b.c) - ativo(a.c)) || (a.p - b.p) ||
+        (Number(normNum(a.c.numero)) || 1e9) - (Number(normNum(b.c.numero)) || 1e9) || a.c.nome.localeCompare(b.c.nome, 'pt-BR');
+    });
+    if (!base.length) {
+      out.innerHTML = '<div class="card-hb"><div class="empty-state"><i class="fas fa-user-slash"></i><p>' + (texto ? 'Ninguém encontrado com "' + esc(bruto) + '".' : 'Ninguém nesta situação.') + '</p>' +
+        (texto && info.podeCheckin ? '<button class="btn-hb-outline mt-2" onclick="abrirWalkin(true)"><i class="fas fa-door-open"></i> Registrar como walk-in</button>' : '') + '</div></div>';
+      return;
+    }
+    var LIM = 60;
+    out.innerHTML = '<div class="ck-lista">' + base.slice(0, LIM).map(function(x){ return itemConvidado(x.c, true); }).join('') + '</div>' +
+      (base.length > LIM ? '<p class="small text-muted mt-2 mb-0">Mostrando ' + LIM + ' de ' + base.length + '. Digite para refinar.</p>' : '');
+  }
+  window.filtrarCk = function(f) { filtro = f; atualizarBusca(); };
+
+  function itemConvidado(c, comMesa) {
+    var classe = c.status === 'Presente' ? ' presente' : (ativo(c) ? '' : ' inativo');
+    var nome = c.provisorio ? '<em>' + esc(c.nome) + '</em>' : esc(c.nome);
+    var sub = [c.empresa, c.cargo].filter(Boolean).join(' · ');
+    var tags = [];
+    if (comMesa && c.mesa) {
+      var m = mesaPorId(c.idMesa);
+      tags.push('<span class="pill pill-violet"><i class="fas fa-chair"></i> ' + esc(c.mesa) + (m ? ' · ' + m.chegaram + '/' + m.capacidade : '') + '</span>');
+    } else if (comMesa && ativo(c) && mesas.length) tags.push('<span class="pill pill-gray">sem mesa</span>');
+    if (c.provisorio) tags.push('<span class="pill pill-amber">a identificar</span>');
+    if (c.status === 'Confirmado') tags.push('<span class="pill pill-blue">confirmado</span>');
+    if (c.status === 'Recusado') tags.push('<span class="pill pill-amber">tinha recusado</span>');
+    if (c.origem === 'Walk-in') tags.push('<span class="pill pill-gray">walk-in</span>');
+    return '<div class="ck-item' + classe + '">' +
+      '<div class="ck-num' + (c.numero ? '' : ' vazio') + '" title="Nº do convite">' + (c.numero ? esc(c.numero) : '—') + '</div>' +
+      '<div class="ck-info"><div class="nome">' + nome + '</div>' + (sub ? '<div class="sub text-truncate">' + esc(sub) + '</div>' : '') +
+        (tags.length ? '<div class="tags">' + tags.join('') + '</div>' : '') + '</div>' +
+      '<div class="ck-acoes">' + acoes(c) + '</div></div>';
+  }
+
+  function acoes(c) {
+    if (c.status === 'Presente') return '<span class="pill pill-green"><i class="fas fa-circle-check"></i> ' + esc(c.checkinHora || 'Presente') + '</span>';
     if (c.status === 'Cancelado') return '<span class="pill pill-red">Cancelado</span>';
-    if (c.status === 'Substituído') return '<span class="pill pill-gray">Substituído</span>';
+    if (c.status === 'Substituído') return '<span class="pill pill-gray">Substituído' + (c.substituidoPor ? ' por ' + esc(c.substituidoPor) : '') + '</span>';
+    if (c.status === 'Ausente') return '<span class="pill pill-gray">Ausente</span>';
     if (!info || !info.podeCheckin) return '<span class="pill pill-blue">' + esc(c.status) + '</span>';
     var id = esc(c.idConvite);
-    return '<button class="btn btn-sm btn-outline-secondary me-1" onclick="abrirSubstituicao(\'' + id + '\')" title="Substituir"><i class="fas fa-right-left"></i></button>' +
-           '<button class="btn-hb" style="padding:6px 12px;font-size:.78rem;" onclick="fazerCheckinManual(\'' + id + '\', this)"><i class="fas fa-check"></i> Confirmar entrada</button>';
+    return (c.provisorio ? '' : '<button class="btn btn-sm btn-outline-secondary" onclick="abrirSubstituicao(\'' + id + '\')" title="Substituir" aria-label="Substituir"><i class="fas fa-right-left"></i></button>') +
+      '<button class="btn-hb" style="padding:8px 14px;font-size:.8rem;" onclick="' + (c.provisorio ? 'abrirProvisorio' : 'fazerCheckinManual') + '(\'' + id + '\', this)"><i class="fas fa-check"></i> Entrada</button>';
+  }
+
+  function aposCheckin(resp) {
+    if (resp && resp.auth === false) { forcarLogout('Sessão expirada.'); return false; }
+    if (!resp.ok) { toast(resp.mensagem, 'err'); return false; }
+    toast(resp.mensagem, 'ok');
+    if (navigator.vibrate) navigator.vibrate(80);
+    ultimaAtualizacao = 0; carregar();
+    return true;
   }
 
   window.fazerCheckinManual = function(idConvite, btn) {
     if (btn) btn.disabled = true;
     google.script.run.withSuccessHandler(function(resp) {
       if (btn) btn.disabled = false;
-      if (resp && resp.auth === false) { forcarLogout('Sessão expirada.'); return; }
-      if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
-      toast(resp.mensagem, 'ok'); carregar(false);
-    }).withFailureHandler(function(err){ if (btn) btn.disabled = false; toast(err.message,'err'); }).apiCheckin(window.TOKEN, idConvite);
+      aposCheckin(resp);
+    }).withFailureHandler(function(err){ if (btn) btn.disabled = false; toast(err.message, 'err'); }).apiCheckin(window.TOKEN, idConvite);
   };
 
-  // ---------- walk-in ----------
-  window.abrirWalkin = function() {
-    document.getElementById('wkNome').value = ''; document.getElementById('wkAutorizado').value = ''; document.getElementById('wkCategoria').value = 'Outro';
+  // ---------- vaga de grupo sem nome ----------
+  window.abrirProvisorio = function(idConvite) {
+    var c = convidados.filter(function(x){ return x.idConvite === idConvite; })[0];
+    if (!c) return;
+    provId = idConvite;
+    document.getElementById('provDescricao').textContent = [c.nome, c.empresa, c.numero ? 'convite nº ' + c.numero : '', c.mesa].filter(Boolean).join(' · ');
+    document.getElementById('provNome').value = '';
+    new bootstrap.Modal(document.getElementById('modalProv')).show();
+  };
+  window.confirmarProvisorio = function() {
+    var btn = document.getElementById('btnProv'); btn.disabled = true;
+    google.script.run.withSuccessHandler(function(resp) {
+      btn.disabled = false;
+      if (aposCheckin(resp)) bootstrap.Modal.getInstance(document.getElementById('modalProv')).hide();
+    }).withFailureHandler(function(err){ btn.disabled = false; toast(err.message, 'err'); })
+      .apiCheckin(window.TOKEN, provId, document.getElementById('provNome').value.trim());
+  };
+
+  // ---------------------------------------------------------- mesas
+  function renderMesas() {
+    var box = document.getElementById('ckConteudo');
+    if (!box) return;
+    if (!mesas.length) { box.innerHTML = '<div class="card-hb"><div class="empty-state"><i class="fas fa-chair"></i><p>Este evento ainda não tem mesas montadas.</p></div></div>'; return; }
+    var cont = { todas: mesas.length, livres: 0, cheias: 0 };
+    mesas.forEach(function(m){ if (estadoMesa(m).cls === 'cheia') cont.cheias++; else cont.livres++; });
+    var lista = mesas.filter(function(m) {
+      var e = estadoMesa(m).cls;
+      return filtroMesas === 'todas' || (filtroMesas === 'cheias' ? e === 'cheia' : e !== 'cheia');
+    });
+    var semMesa = convidados.filter(function(c){ return ativo(c) && !c.idMesa; });
+    var semMesaCheg = semMesa.filter(function(c){ return c.status === 'Presente'; }).length;
+    box.innerHTML =
+      '<div class="ck-chips">' + [['todas','Todas'],['livres','Com lugar'],['cheias','Cheias']].map(function(f) {
+        return '<button type="button" class="ck-chip' + (filtroMesas === f[0] ? ' active' : '') + '" onclick="filtrarMesasCk(\'' + f[0] + '\')">' + f[1] + ' · ' + cont[f[0]] + '</button>';
+      }).join('') + '</div>' +
+      '<div class="ck-legenda"><span><b style="background:var(--success)"></b>chegou</span><span><b style="background:#93C5FD"></b>reservado, aguardando</span><span><b style="background:#E2E8F0"></b>livre</span></div>' +
+      (lista.length ? '<div class="ck-mesas">' + lista.map(cartaoMesa).join('') + '</div>' : '<p class="text-muted small">Nenhuma mesa nesta situação.</p>') +
+      (semMesa.length ? '<p class="small text-muted mt-3 mb-0"><i class="fas fa-circle-info me-1"></i>' + semMesa.length + ' convidado(s) sem mesa definida · ' + semMesaCheg + ' já chegaram.</p>' : '');
+  }
+  window.filtrarMesasCk = function(f) { filtroMesas = f; renderMesas(); };
+
+  function cartaoMesa(m) {
+    var e = estadoMesa(m);
+    var seg = '';
+    for (var i = 0; i < m.capacidade; i++) seg += '<i class="' + (i < m.chegaram ? 'c' : (i < m.sentados ? 's' : '')) + '"></i>';
+    return '<button type="button" class="ck-mesa ' + e.cls + '" onclick="abrirMesaCk(\'' + esc(m.id) + '\')">' +
+      '<div class="tit"><span>' + esc(m.rotulo) + '</span>' + (m.vip ? '<span class="pill pill-amber" style="font-size:.62rem;">VIP</span>' : '') + '</div>' +
+      '<div class="ck-seg">' + seg + '</div>' +
+      '<div class="lug">' + m.sentados + '/' + m.capacidade + ' reservados · ' + m.chegaram + ' chegaram</div>' +
+      '<span class="st">' + esc(e.texto) + '</span></button>';
+  }
+
+  window.abrirMesaCk = function(id) {
+    mesaAberta = id;
+    renderMesaModal();
+    new bootstrap.Modal(document.getElementById('modalMesaCk')).show();
+  };
+  function renderMesaModal() {
+    var m = mesaPorId(mesaAberta);
+    if (!m) return;
+    var e = estadoMesa(m);
+    document.getElementById('mesaCkTitulo').innerHTML = '<i class="fas fa-chair me-2 text-primary"></i>' + esc(m.rotulo) + ' <span class="small text-muted fw-normal">· ' + m.chegaram + '/' + m.capacidade + ' chegaram · ' + esc(e.texto) + '</span>';
+    var gente = convidados.filter(function(c){ return c.idMesa === m.id && ativo(c); })
+      .sort(function(a, b){ return (a.status === 'Presente') - (b.status === 'Presente') || a.nome.localeCompare(b.nome, 'pt-BR'); });
+    document.getElementById('mesaCkCorpo').innerHTML = gente.length
+      ? '<div>' + gente.map(function(c){ return itemConvidado(c, false); }).join('') + '</div>'
+      : '<div class="empty-state"><i class="fas fa-chair"></i><p>Ninguém reservado nesta mesa.</p></div>';
+  }
+
+  // ---------------------------------------------------------- chegadas
+  function renderChegadas() {
+    var box = document.getElementById('ckConteudo');
+    if (!box) return;
+    var chegaram = convidados.filter(function(c){ return c.status === 'Presente'; })
+      .sort(function(a, b){ return (b.chegadaTs || 0) - (a.chegadaTs || 0); });
+    // Ritmo: chegadas nos últimos 15 minutos (pelo relógio do servidor).
+    var ult15 = chegaram.filter(function(c){ return c.chegadaTs && agoraServidor - c.chegadaTs <= 15 * 60000; }).length;
+
+    var emp = {};
+    convidados.filter(ativo).forEach(function(c) {
+      var k = c.empresa || '(sem empresa)';
+      var e = emp[k] = emp[k] || { nome: k, total: 0, cheg: 0 };
+      e.total++; if (c.status === 'Presente') e.cheg++;
+    });
+    var empresas = Object.keys(emp).map(function(k){ return emp[k]; })
+      .filter(function(e){ return e.nome !== '(sem empresa)' || e.total > 0; })
+      .sort(function(a, b){ return b.total - a.total || a.nome.localeCompare(b.nome, 'pt-BR'); });
+
+    box.innerHTML = '<div class="row g-3">' +
+      '<div class="col-lg-7"><div class="d-flex justify-content-between align-items-baseline mb-2"><div class="fw-bold" style="color:var(--ink-900);">Últimas chegadas</div>' +
+        (chegaram.length ? '<div class="small text-muted">' + ult15 + ' nos últimos 15 min</div>' : '') + '</div>' +
+        (chegaram.length ? '<div class="ck-lista">' + chegaram.slice(0, 40).map(function(c) {
+          return '<div class="ck-item"><div class="ck-hora">' + esc(c.checkinHora || '--:--') + '</div>' +
+            '<div class="ck-info"><div class="nome">' + (c.provisorio ? '<em>' + esc(c.nome) + '</em>' : esc(c.nome)) + (c.numero ? ' <span class="text-muted fw-normal small">· nº ' + esc(c.numero) + '</span>' : '') + '</div>' +
+            '<div class="sub text-truncate">' + esc([c.empresa, c.mesa].filter(Boolean).join(' · ')) + '</div></div>' +
+            (c.origem === 'Walk-in' ? '<span class="pill pill-gray">walk-in</span>' : (c.origem === 'Substituição' ? '<span class="pill pill-violet">substituto</span>' : '')) + '</div>';
+        }).join('') + '</div>' : '<div class="card-hb"><div class="empty-state"><i class="fas fa-hourglass-start"></i><p>Ninguém chegou ainda.</p></div></div>') +
+      '</div>' +
+      '<div class="col-lg-5"><div class="fw-bold mb-2" style="color:var(--ink-900);">Chegada por empresa</div>' +
+        (empresas.length ? '<div class="ck-lista">' + empresas.slice(0, 40).map(function(e) {
+          var pct = e.total ? Math.round(e.cheg * 100 / e.total) : 0;
+          return '<div class="ck-emp"><span class="nm" title="' + esc(e.nome) + '">' + esc(e.nome) + '</span>' +
+            '<span class="bar"><span class="ck-barra" style="display:block;margin:0;"><span style="width:' + pct + '%"></span></span></span>' +
+            '<span class="text-muted small text-nowrap" style="min-width:48px;text-align:right;">' + e.cheg + '/' + e.total + '</span></div>';
+        }).join('') + '</div>' : '<p class="small text-muted">Sem convidados.</p>') +
+      '</div></div>';
+  }
+
+  // ---------------------------------------------------------- walk-in
+  window.abrirWalkin = function(usarBusca) {
+    var b = document.getElementById('buscaCheckin');
+    var sugestao = usarBusca && b && !/^\s*(n[º°o.]?\s*|#)?\d+\s*$/i.test(b.value) ? b.value.trim() : '';
+    document.getElementById('wkNome').value = sugestao;
+    document.getElementById('wkAutorizado').value = ''; document.getElementById('wkNumero').value = '';
+    document.getElementById('wkCategoria').value = 'Outro';
+    var livres = mesas.filter(function(m){ return estadoMesa(m).livres > 0; });
+    document.getElementById('wkMesa').innerHTML = '<option value="">Sem mesa</option>' + livres.map(function(m) {
+      var l = estadoMesa(m).livres;
+      return '<option value="' + esc(m.id) + '">' + esc(m.rotulo) + ' — ' + l + (l === 1 ? ' lugar livre' : ' lugares livres') + '</option>';
+    }).join('');
     new bootstrap.Modal(document.getElementById('modalWalkin')).show();
   };
   window.confirmarWalkin = function() {
@@ -180,19 +524,18 @@
     var btn = document.getElementById('btnWalkin'); btn.disabled = true;
     google.script.run.withSuccessHandler(function(resp) {
       btn.disabled = false;
-      if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
-      bootstrap.Modal.getInstance(document.getElementById('modalWalkin')).hide();
-      toast(resp.mensagem, 'ok'); carregar(false);
-    }).withFailureHandler(function(err){ btn.disabled=false; toast(err.message,'err'); })
-      .apiWalkin(window.TOKEN, idEvento, nome, document.getElementById('wkCategoria').value, autorizado);
+      if (aposCheckin(resp)) bootstrap.Modal.getInstance(document.getElementById('modalWalkin')).hide();
+    }).withFailureHandler(function(err){ btn.disabled = false; toast(err.message, 'err'); })
+      .apiWalkin(window.TOKEN, idEvento, nome, document.getElementById('wkCategoria').value, autorizado,
+        { idMesa: document.getElementById('wkMesa').value, numero: document.getElementById('wkNumero').value.trim() });
   };
 
-  // ---------- substituição ----------
+  // ---------------------------------------------------------- substituição
   window.abrirSubstituicao = function(idConvite) {
     var c = convidados.filter(function(x){ return x.idConvite === idConvite; })[0];
     if (!c) return;
     subOriginalId = idConvite;
-    document.getElementById('subOriginalNome').innerText = c.nome;
+    document.getElementById('subOriginalNome').textContent = c.nome + (c.numero ? ' (nº ' + c.numero + ')' : '');
     document.getElementById('subNome').value = ''; document.getElementById('subMotivo').value = ''; document.getElementById('subAutorizado').value = ''; document.getElementById('subCategoria').value = 'Outro';
     new bootstrap.Modal(document.getElementById('modalSub')).show();
   };
@@ -204,39 +547,34 @@
     var btn = document.getElementById('btnSub'); btn.disabled = true;
     google.script.run.withSuccessHandler(function(resp) {
       btn.disabled = false;
-      if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
-      bootstrap.Modal.getInstance(document.getElementById('modalSub')).hide();
-      toast(resp.mensagem, 'ok'); carregar(false);
-    }).withFailureHandler(function(err){ btn.disabled=false; toast(err.message,'err'); })
+      if (aposCheckin(resp)) bootstrap.Modal.getInstance(document.getElementById('modalSub')).hide();
+    }).withFailureHandler(function(err){ btn.disabled = false; toast(err.message, 'err'); })
       .apiSubstituirEEntrar(window.TOKEN, subOriginalId, nome, document.getElementById('subCategoria').value, document.getElementById('subMotivo').value, autorizado);
   };
 
-  // ---------- scanner QR (jsQR) ----------
+  // ---------------------------------------------------------- QR (jsQR)
   function iniciarCamera() {
     if (scanning) return;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      document.getElementById('scanResult').innerHTML = '<p class="text-danger small">Este navegador não libera a câmera aqui. Use a busca manual.</p>';
+      mostrarScan('<p class="text-danger small">Este navegador não libera a câmera aqui. Use a busca.</p>');
       return;
     }
     navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(function(s) {
-      stream = s;
       var video = document.getElementById('video');
-      if (!video) { pararCamera(); return; }
+      stream = s;
+      if (!video || aba !== 'qr') { pararCamera(); return; }
       video.srcObject = s; video.play();
       scanning = true;
       requestAnimationFrame(tickScan);
     }).catch(function() {
-      var box = document.getElementById('scanResult');
-      if (box) box.innerHTML = '<p class="text-danger small">Não foi possível acessar a câmera (permita o acesso no navegador). Use a busca manual.</p>';
+      mostrarScan('<p class="text-danger small">Não foi possível acessar a câmera (permita o acesso no navegador). Use a busca.</p>');
     });
   }
   function pararCamera() {
     scanning = false;
     if (stream) { stream.getTracks().forEach(function(t){ t.stop(); }); stream = null; }
   }
-  // Ler o quadro ~6x/seg é suficiente para QR parado na frente da câmera
-  // e evita esquentar o celular decodificando a 60fps sem necessidade.
-  // Se a pessoa saiu desta aba (o vídeo sumiu da página), desliga a câmera.
+  // ~6 leituras por segundo bastam para um QR parado e poupam a bateria.
   function tickScan() {
     if (!scanning) return;
     var video = document.getElementById('video'), canvas = document.getElementById('canvas');
@@ -255,14 +593,13 @@
   function processarQR(conteudo) {
     google.script.run.withSuccessHandler(function(resp) {
       if (resp && resp.auth === false) { pararCamera(); forcarLogout('Sessão expirada.'); return; }
-      if (!resp.ok) {
-        mostrarScan('<div class="pill pill-red" style="font-size:.8rem;padding:8px 14px;">' + esc(resp.mensagem) + '</div>');
-      } else {
-        mostrarScan('<div class="pill pill-green" style="font-size:.8rem;padding:8px 14px;"><i class="fas fa-circle-check"></i> ' + esc(resp.mensagem) + '</div>');
+      if (!resp.ok) mostrarScan('<div class="pill pill-red" style="font-size:.85rem;padding:8px 14px;">' + esc(resp.mensagem) + '</div>');
+      else {
+        mostrarScan('<div class="pill pill-green" style="font-size:.9rem;padding:10px 16px;"><i class="fas fa-circle-check"></i> ' + esc(resp.mensagem) + '</div>');
         if (navigator.vibrate) navigator.vibrate(120);
-        carregar(false);
+        ultimaAtualizacao = 0; carregar();
       }
-      setTimeout(function() { scanLock = false; mostrarScan(''); }, 2200);
+      setTimeout(function() { scanLock = false; mostrarScan(''); }, 2400);
     }).withFailureHandler(function(err) {
       mostrarScan('<div class="pill pill-red">' + esc(err.message) + '</div>');
       setTimeout(function(){ scanLock = false; }, 2000);

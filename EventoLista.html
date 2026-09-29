@@ -14,9 +14,11 @@
       </div>
       <div class="modal-body">
         <div id="pGestorBox"></div>
+        <div class="mb-3"><label class="form-label"><i class="fas fa-hashtag me-1 text-primary"></i>Nº do convite</label>
+          <input class="form-control" id="pNumero" placeholder="Número impresso no convite (ex: 105)" autocomplete="off" style="max-width:260px;"></div>
         <div class="mb-3" id="pBuscaBox">
           <label class="form-label"><i class="fas fa-magnifying-glass me-1 text-primary"></i>Já está no diretório?</label>
-          <input class="form-control" id="pBusca" placeholder="Buscar por nome ou documento" autocomplete="off">
+          <input class="form-control" id="pBusca" placeholder="Buscar por nome" autocomplete="off">
           <div id="pBuscaRes" class="mt-1"></div>
         </div>
         <div id="pEscolhido" class="mb-3" style="display:none;"></div>
@@ -24,17 +26,14 @@
         <div class="small fw-bold text-uppercase mb-2" style="color:var(--text-muted);font-size:.68rem;letter-spacing:.4px;">Ou cadastre uma pessoa nova</div>
         <div class="mb-3"><label class="form-label">Nome completo *</label><input class="form-control" id="pNome"></div>
         <div class="row g-2 mb-3">
-          <div class="col-6"><label class="form-label">Documento</label><input class="form-control" id="pDocumento" placeholder="CPF"></div>
+          <div class="col-6"><label class="form-label">Telefone</label><input class="form-control" id="pTelefone" type="tel"></div>
           <div class="col-6"><label class="form-label">Cargo/função</label><input class="form-control" id="pCargo"></div>
         </div>
         <div class="row g-2 mb-3">
           <div class="col-7"><label class="form-label">Categoria</label><select class="form-select" id="pCategoria"></select></div>
           <div class="col-5"><label class="form-label">Empresa</label><select class="form-select" id="pEmpresa"><option value="">—</option></select></div>
         </div>
-        <div class="row g-2 mb-3">
-          <div class="col-6"><label class="form-label">Telefone</label><input class="form-control" id="pTelefone" type="tel"></div>
-          <div class="col-6"><label class="form-label">E-mail</label><input class="form-control" id="pEmail" type="email" autocapitalize="off"></div>
-        </div>
+        <div class="mb-3"><label class="form-label">E-mail</label><input class="form-control" id="pEmail" type="email" autocapitalize="off"></div>
         </div>
         <div class="mb-1"><label class="form-label">Descrição <span class="text-muted fw-normal">(opcional)</span></label><textarea class="form-control" id="pDescricao" rows="2" placeholder="Anotação sobre este convidado — não é o gestor, é só uma nota"></textarea></div>
       </div>
@@ -62,6 +61,11 @@
           <div class="col-6"><label class="form-label">Vagas *</label><input type="number" min="1" class="form-control" id="lVagas" placeholder="Ex: 10"><div class="small text-muted mt-1" id="lVagasHint"></div></div>
           <div class="col-6"><label class="form-label">Expira em</label><input type="date" class="form-control" id="lExpira"></div>
         </div>
+        <div class="mb-3"><label class="form-label"><i class="fas fa-hashtag me-1 text-primary"></i>Nºs dos convites do grupo <span class="text-muted fw-normal">(opcional)</span></label>
+          <input class="form-control" id="lNumeros" placeholder="Ex: 101-110  ou  101, 102, 105">
+          <div class="small text-muted mt-1">Se informar, cada pessoa do grupo se inscreve com o nº do próprio convite.</div></div>
+        <div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="lReservar" checked>
+          <label class="form-check-label small" for="lReservar"><strong>Reservar as vagas na lista</strong> como "Convidado 1, 2, 3…" da empresa — assim o grupo já aparece na lista, nas mesas e no check-in mesmo se a empresa não mandar os nomes.</label></div>
         <div class="mb-1"><label class="form-label">Observações</label><input class="form-control" id="lObs" placeholder="opcional"></div>
       </div>
       <div class="modal-footer" style="border-top:1px solid var(--border);">
@@ -77,34 +81,47 @@
   <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down">
     <div class="modal-content" style="border-radius:16px;border:none;">
       <div class="modal-header" style="border-bottom:1px solid var(--border);">
-        <h6 class="modal-title fw-bold"><i class="fas fa-right-left me-2 text-primary"></i>Trocar convidado</h6>
+        <h6 class="modal-title fw-bold" id="tTitulo"><i class="fas fa-right-left me-2 text-primary"></i>Trocar convidado</h6>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <div class="small mb-3 p-2 rounded" style="background:var(--bg);"><i class="fas fa-circle-info me-1 text-primary"></i>
-          <strong id="tNomeOriginal"></strong> avisou que outra pessoa vai no lugar. O convite original fica registrado como substituído e quem entra recebe <strong>link próprio</strong>, a mesma mesa e o mesmo gestor.</div>
+        <div class="small mb-3 p-2 rounded" style="background:var(--bg);" id="tExplica"></div>
         <label class="form-label"><i class="fas fa-magnifying-glass me-1 text-primary"></i>Quem vai no lugar — buscar no diretório</label>
-        <input class="form-control" id="tBusca" placeholder="Buscar por nome ou documento" autocomplete="off">
+        <input class="form-control" id="tBusca" placeholder="Buscar por nome" autocomplete="off">
         <div id="tBuscaRes" class="mt-1 mb-3"></div>
         <div id="tEscolhido" class="mb-3" style="display:none;"></div>
         <div id="tNova">
           <div class="small fw-bold text-uppercase mb-2" style="color:var(--text-muted);font-size:.68rem;letter-spacing:.4px;">Ou cadastre quem vai</div>
           <div class="mb-2"><label class="form-label">Nome completo *</label><input class="form-control" id="tNome"></div>
           <div class="row g-2 mb-2">
-            <div class="col-6"><label class="form-label">Documento</label><input class="form-control" id="tDoc"></div>
             <div class="col-6"><label class="form-label">Cargo/função</label><input class="form-control" id="tCargo"></div>
+            <div class="col-6"><label class="form-label">E-mail</label><input class="form-control" id="tEmail" type="email" autocapitalize="off"></div>
           </div>
           <div class="row g-2 mb-2">
             <div class="col-6"><label class="form-label">Telefone</label><input class="form-control" id="tTel" type="tel"></div>
             <div class="col-6"><label class="form-label">Categoria</label><select class="form-select" id="tCategoria"></select></div>
           </div>
         </div>
-        <div class="mb-1"><label class="form-label">Motivo <span class="text-muted fw-normal">(opcional)</span></label><input class="form-control" id="tMotivo" placeholder="Ex: titular em viagem"></div>
+        <div class="mb-1" id="tMotivoBox"><label class="form-label">Motivo <span class="text-muted fw-normal">(opcional)</span></label><input class="form-control" id="tMotivo" placeholder="Ex: titular em viagem"></div>
       </div>
       <div class="modal-footer" style="border-top:1px solid var(--border);">
         <button class="btn-hb-outline" data-bs-dismiss="modal">Cancelar</button>
         <button class="btn-hb" id="btnTroca" onclick="confirmarTroca()"><i class="fas fa-check"></i> Trocar</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: editar convite (nº e descrição) -->
+<div class="modal fade" id="modalConvite" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
+    <div class="modal-content" style="border-radius:16px;border:none;">
+      <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold"><i class="fas fa-hashtag me-2 text-primary"></i>Convite de <span id="ecNome"></span></h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-3"><label class="form-label">Nº do convite</label><input class="form-control" id="ecNumero" placeholder="Ex: 105" style="max-width:220px;" autocomplete="off"></div>
+        <div class="mb-1"><label class="form-label">Descrição <span class="text-muted fw-normal">(opcional)</span></label><textarea class="form-control" id="ecDescricao" rows="2"></textarea></div>
+      </div>
+      <div class="modal-footer" style="border-top:1px solid var(--border);"><button class="btn-hb-outline" data-bs-dismiss="modal">Cancelar</button><button class="btn-hb" id="btnSalvarConvite" onclick="salvarConvite()"><i class="fas fa-check"></i> Salvar</button></div>
     </div>
   </div>
 </div>
@@ -215,7 +232,7 @@
     wrap.innerHTML =
       toolbarHtml(opts) +
       (lotes.length ? lotesStripHtml() : '') +
-      '<div class="card-hb"><div id="tabelaConvidados"></div></div>';
+      '<div class="card-hb"><div id="tabelaConvidados" style="overflow-x:auto;"></div></div>';
 
     bindToolbar();
     renderTabela();
@@ -248,7 +265,7 @@
         (meuNome ? '<span class="pill pill-blue" style="cursor:pointer;" onclick="filtrarMeusConvidados()"><i class="fas fa-user"></i> Meus convidados</span>' : '') +
       '</div>' +
       '<div class="row g-2">' +
-        '<div class="col-12 col-md-3"><input class="form-control" id="fBusca" placeholder="Buscar por nome ou documento..."></div>' +
+        '<div class="col-12 col-md-3"><input class="form-control" id="fBusca" placeholder="Nome, nº do convite, empresa ou mesa"></div>' +
         selectFilter('fEmpresa', 'Empresa', opts.empresas) +
         selectFilter('fCategoria', 'Categoria', opts.categorias) +
         selectFilter('fGestor', 'Gestor', opts.gestores) +
@@ -285,7 +302,8 @@
       return '<div class="card-hb" style="min-width:250px;padding:13px 15px;flex:none;">' +
         '<div class="d-flex justify-content-between align-items-center"><strong style="font-size:.83rem;">' + esc(l.empresa || 'Grupo avulso') + '</strong>' +
         '<span class="pill ' + pillCls + '">' + (lotado ? 'Lotado' : esc(l.status)) + '</span></div>' +
-        '<div class="small text-muted mt-1">' + l.vagasUsadas + ' / ' + l.vagasTotal + ' vagas' + (l.expiracao ? ' · expira ' + esc(l.expiracao) : '') + '</div>' +
+        '<div class="small text-muted mt-1">' + l.vagasUsadas + ' / ' + l.vagasTotal + ' com nome' + (l.semNome ? ' · <span style="color:#B4790A">' + l.semNome + ' a identificar</span>' : '') + (l.expiracao ? ' · expira ' + esc(l.expiracao) : '') + '</div>' +
+        (l.numeros ? '<div class="small text-muted"><i class="fas fa-hashtag me-1"></i>' + esc(l.numeros.length > 38 ? l.numeros.slice(0, 36) + '…' : l.numeros) + '</div>' : '') +
         '<div style="height:5px;background:var(--bg);border-radius:20px;overflow:hidden;margin:6px 0 8px;"><div style="height:100%;width:' + Math.min(100, pct) + '%;background:' + barColor + ';"></div></div>' +
         '<div class="d-flex gap-1 flex-wrap">' +
           '<button class="btn btn-sm btn-outline-primary py-0 px-2 text-nowrap" style="font-size:.7rem;" onclick="copiarLinkLote(' + i + ')"><i class="fas fa-copy"></i> Copiar link</button>' +
@@ -321,7 +339,11 @@
     var fStatus = val('fStatus'), fOrigem = val('fOrigem'), fPresenca = val('fPresenca');
 
     var filtrados = convidados.filter(function(c) {
-      if (busca && (c.nome + ' ' + c.documento).toLowerCase().indexOf(busca) === -1) return false;
+      if (busca) {
+        var bn = busca.replace(/^n[ºo°]?\s*/, '').replace(/^0+(?=\d)/, '');
+        var alvo = (c.nome + ' ' + c.empresa + ' ' + c.mesa + ' ' + c.cargo).toLowerCase();
+        if (alvo.indexOf(busca) === -1 && !(c.numero && c.numero.toLowerCase() === bn)) return false;
+      }
       if (fEmpresa && c.empresa !== fEmpresa) return false;
       if (fCategoria && c.categoria !== fCategoria) return false;
       if (fGestor && c.gestor !== fGestor) return false;
@@ -337,20 +359,26 @@
     if (!filtrados.length) { tbl.innerHTML = '<div class="empty-state"><i class="fas fa-filter-circle-xmark"></i><p>Nenhum convidado bate com esses filtros.</p></div>'; return; }
 
     var traco = '<span class="text-muted">—</span>';
-    tbl.innerHTML = '<table class="table-hb resp"><thead><tr><th>Nome</th><th>Empresa</th><th>Cargo/Doc.</th><th>Categoria</th><th>Cidade/UF</th><th>Origem</th><th>Gestor</th><th>Mesa</th><th>Status</th><th></th></tr></thead><tbody>' +
+    filtrados.sort(function(a, b) {
+      var na = Number(a.numero), nb = Number(b.numero);
+      if (a.numero && b.numero && !isNaN(na) && !isNaN(nb)) return na - nb;
+      if (a.numero && !b.numero) return -1; if (!a.numero && b.numero) return 1;
+      return a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true });
+    });
+    tbl.innerHTML = '<table class="table-hb resp"><thead><tr><th>Nº</th><th>Nome</th><th>Empresa</th><th>Cargo / categoria</th><th>Origem</th><th>Gestor</th><th>Mesa</th><th>Status</th><th></th></tr></thead><tbody>' +
       filtrados.map(function(c) {
         return '<tr>' +
-          '<td class="td-titulo"><strong>' + esc(c.nome) + '</strong>' +
+          '<td data-label="Nº convite">' + (c.numero ? '<span class="pill pill-blue" style="font-size:.78rem;">' + esc(c.numero) + '</span>' : '<span class="text-muted small text-nowrap">sem nº</span>') + '</td>' +
+          '<td class="td-titulo" style="min-width:140px;"><strong' + (c.provisorio ? ' style="color:var(--text-muted);font-style:italic;"' : '') + '>' + esc(c.nome) + '</strong>' +
+            (c.provisorio ? ' <span class="pill pill-amber text-nowrap" title="Vaga do grupo ainda sem nome">a identificar</span>' : '') +
             (c.substituidoPor ? '<div class="small text-muted">substituído por ' + esc(c.substituidoPor) + '</div>' : '') +
             (c.descricao ? '<div class="small text-muted" title="Descrição"><i class="fas fa-note-sticky me-1"></i>' + esc(c.descricao) + '</div>' : '') +
           '</td>' +
           '<td data-label="Empresa">' + (c.empresa ? esc(c.empresa) : traco) + '</td>' +
-          '<td data-label="Cargo/Doc."><div><div>' + esc(c.cargo || '—') + '</div><div class="small text-muted">' + esc(c.documento) + '</div></div></td>' +
-          '<td data-label="Categoria">' + esc(c.categoria || '—') + '</td>' +
-          '<td data-label="Cidade/UF">' + (c.cidade && c.cidade !== '/' ? esc(c.cidade) : traco) + '</td>' +
-          '<td data-label="Origem"><span class="pill ' + (ORIGIN_PILL[c.origem] || 'pill-gray') + '">' + esc(origemLabel(c)) + '</span></td>' +
+          '<td data-label="Cargo">' + (c.cargo || c.categoria ? esc(c.cargo || '') + (c.categoria ? '<div class="small text-muted">' + esc(c.categoria) + '</div>' : '') : traco) + '</td>' +
+          '<td data-label="Origem"><span class="pill text-nowrap ' + (ORIGIN_PILL[c.origem] || 'pill-gray') + '" title="' + esc(origemLabel(c)) + '">' + esc(c.origem === 'Lote público' ? 'Lote' : origemLabel(c)) + '</span></td>' +
           '<td data-label="Convidado por">' + (c.gestor ? esc(c.gestor) : traco) + '</td>' +
-          '<td data-label="Mesa">' + (c.mesa ? '<span class="pill pill-violet"><i class="fas fa-chair"></i> ' + esc(c.mesa) + '</span>' : traco) + '</td>' +
+          '<td data-label="Mesa">' + (c.mesa ? '<span class="pill pill-violet text-nowrap"><i class="fas fa-chair"></i> ' + esc(c.mesa) + '</span>' : traco) + '</td>' +
           '<td data-label="Status"><span class="pill ' + (STATUS_PILL[c.status] || 'pill-gray') + '">' + esc(c.status) + '</span>' + (c.checkinHora ? ' <span class="small text-muted">' + esc(c.checkinHora) + '</span>' : '') + '</td>' +
           '<td class="text-end text-nowrap td-acoes">' + linhaAcoesConvidado(c) + '</td>' +
         '</tr>';
@@ -368,7 +396,10 @@
       botoes += '<button class="btn btn-sm btn-outline-secondary me-1" title="Copiar link pessoal (confirmação + QR Code)" onclick="copiarLinkConvidado(\'' + id + '\')"><i class="fas fa-link"></i></button>';
     }
     if (ativos.indexOf(c.status) !== -1 && pode('convites.criar')) {
-      botoes += '<button class="btn btn-sm btn-outline-secondary me-1" title="Trocar: outra pessoa vai no lugar" onclick="abrirTroca(\'' + id + '\')"><i class="fas fa-right-left"></i></button>';
+      botoes += '<button class="btn btn-sm btn-outline-secondary me-1" title="Nº do convite e descrição" onclick="abrirConvite(\'' + id + '\')"><i class="fas fa-hashtag"></i></button>';
+      botoes += c.provisorio
+        ? '<button class="btn btn-sm btn-outline-primary me-1" title="Identificar: dar nome a esta vaga" onclick="abrirTroca(\'' + id + '\', true)"><i class="fas fa-user-pen"></i></button>'
+        : '<button class="btn btn-sm btn-outline-secondary me-1" title="Trocar: outra pessoa vai no lugar" onclick="abrirTroca(\'' + id + '\')"><i class="fas fa-right-left"></i></button>';
     }
     if (ativos.indexOf(c.status) !== -1 && pode('convites.excluir')) {
       botoes += '<button class="btn btn-sm btn-outline-warning me-1" title="Cancelar convite (fica no histórico)" onclick="cancelarConvite(\'' + id + '\')"><i class="fas fa-ban"></i></button>';
@@ -389,33 +420,64 @@
     }).withFailureHandler(erro).apiExcluirConvite(window.TOKEN, idConvite);
   };
 
-  window.abrirTroca = function(idConvite) {
+  var modoIdentificar = false;
+  window.abrirTroca = function(idConvite, identificar) {
     var c = convidados.filter(function(x){ return x.idConvite === idConvite; })[0];
     if (!c) return;
-    trocaConvite = c; trocaEscolhida = null;
+    trocaConvite = c; trocaEscolhida = null; modoIdentificar = !!identificar;
     mostrarEscolhido('tEscolhido', 'tNova', null);
-    document.getElementById('tNomeOriginal').innerText = c.nome;
-    ['tBusca','tNome','tDoc','tCargo','tTel','tMotivo'].forEach(function(id){ document.getElementById(id).value = ''; });
+    document.getElementById('tTitulo').innerHTML = identificar
+      ? '<i class="fas fa-user-pen me-2 text-primary"></i>Identificar ' + esc(c.nome) + (c.numero ? ' · nº ' + esc(c.numero) : '')
+      : '<i class="fas fa-right-left me-2 text-primary"></i>Trocar convidado';
+    document.getElementById('tExplica').innerHTML = '<i class="fas fa-circle-info me-1 text-primary"></i>' + (identificar
+      ? 'Vaga do grupo <strong>' + esc(c.empresa || 'sem empresa') + '</strong>. Informe quem é esta pessoa — ela fica com o nº do convite, a mesa e o gestor desta vaga.'
+      : '<strong>' + esc(c.nome) + '</strong> avisou que outra pessoa vai no lugar. O convite original fica registrado como substituído e quem entra recebe <strong>link próprio</strong>, o mesmo nº de convite, a mesma mesa e o mesmo gestor.');
+    document.getElementById('tMotivoBox').style.display = identificar ? 'none' : '';
+    document.getElementById('btnTroca').innerHTML = '<i class="fas fa-check"></i> ' + (identificar ? 'Salvar' : 'Trocar');
+    ['tBusca','tNome','tEmail','tCargo','tTel','tMotivo'].forEach(function(id){ document.getElementById(id).value = ''; });
     document.getElementById('tBuscaRes').innerHTML = '';
     document.getElementById('tCategoria').value = 'Outro';
     new bootstrap.Modal(document.getElementById('modalTroca')).show();
   };
   window.confirmarTroca = function() {
     var novo = trocaEscolhida ? { idPessoa: trocaEscolhida.id } : { dados: {
-      Nome: document.getElementById('tNome').value.trim(), Documento: document.getElementById('tDoc').value.trim(),
+      Nome: document.getElementById('tNome').value.trim(), Email: document.getElementById('tEmail').value.trim(),
       Cargo: document.getElementById('tCargo').value.trim(), Telefone: document.getElementById('tTel').value.trim(),
       Categoria: document.getElementById('tCategoria').value } };
     if (!trocaEscolhida && !novo.dados.Nome) { toast('Busque no diretório ou informe o nome de quem vai.', 'err'); return; }
     var btn = document.getElementById('btnTroca'); btn.disabled = true;
-    google.script.run.withSuccessHandler(function(resp) {
+    var run = google.script.run.withSuccessHandler(function(resp) {
       btn.disabled = false;
       if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
       bootstrap.Modal.getInstance(document.getElementById('modalTroca')).hide();
       toast(resp.mensagem, 'ok');
-      mostrarLinkGerado('Troca registrada', 'Envie este link pessoal para ' + resp.dados.nome + ' (confirmação e QR Code da entrada):', resp.dados.linkConfirmacao);
+      mostrarLinkGerado(modoIdentificar ? 'Convidado identificado' : 'Troca registrada', 'Envie este link pessoal para ' + resp.dados.nome + ' (confirmação e QR Code da entrada):', resp.dados.linkConfirmacao);
       carregarTudo();
+    }).withFailureHandler(function(e){ btn.disabled = false; erro(e); });
+    if (modoIdentificar) run.apiIdentificarConvidado(window.TOKEN, trocaConvite.idConvite, novo);
+    else run.apiTrocarConvidado(window.TOKEN, trocaConvite.idConvite, novo, document.getElementById('tMotivo').value.trim());
+  };
+
+  // ---------- editar convite (nº / descrição) ----------
+  var conviteEditando = null;
+  window.abrirConvite = function(idConvite) {
+    var c = convidados.filter(function(x){ return x.idConvite === idConvite; })[0];
+    if (!c) return;
+    conviteEditando = c;
+    document.getElementById('ecNome').innerText = c.nome;
+    document.getElementById('ecNumero').value = c.numero || '';
+    document.getElementById('ecDescricao').value = c.descricao || '';
+    new bootstrap.Modal(document.getElementById('modalConvite')).show();
+  };
+  window.salvarConvite = function() {
+    var btn = document.getElementById('btnSalvarConvite'); btn.disabled = true;
+    google.script.run.withSuccessHandler(function(resp) {
+      btn.disabled = false;
+      if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
+      bootstrap.Modal.getInstance(document.getElementById('modalConvite')).hide();
+      toast(resp.mensagem, 'ok'); carregarTudo();
     }).withFailureHandler(function(e){ btn.disabled = false; erro(e); })
-      .apiTrocarConvidado(window.TOKEN, trocaConvite.idConvite, novo, document.getElementById('tMotivo').value.trim());
+      .apiEditarConvite(window.TOKEN, conviteEditando.idConvite, { numero: document.getElementById('ecNumero').value.trim(), descricao: document.getElementById('ecDescricao').value.trim() });
   };
   window.copiarLinkConvidado = function(idConvite) {
     var c = convidados.filter(function(x){ return x.idConvite === idConvite; })[0];
@@ -433,7 +495,7 @@
   // ---------- modal: adicionar pessoa ----------
   // O gestor é sempre quem está logado — não se digita mais.
   window.abrirModalPessoa = function() {
-    ['pNome','pDocumento','pCargo','pDescricao','pBusca','pTelefone','pEmail'].forEach(function(id){ document.getElementById(id).value=''; });
+    ['pNome','pNumero','pCargo','pDescricao','pBusca','pTelefone','pEmail'].forEach(function(id){ document.getElementById(id).value=''; });
     document.getElementById('pEmpresa').value = '';
     document.getElementById('pCategoria').value = 'Outro';
     document.getElementById('pBuscaRes').innerHTML = '';
@@ -459,7 +521,8 @@
     }).withFailureHandler(function(err){ btn.disabled=false; erro(err); }).apiAdicionarNaLista(window.TOKEN, valorSeletorGestor('pGestorSel'), {
       idEvento: idEvento,
       idPessoa: pessoaEscolhida ? pessoaEscolhida.id : '',
-      dados: pessoaEscolhida ? null : { Nome: nome, Documento: document.getElementById('pDocumento').value, Categoria: document.getElementById('pCategoria').value, ID_Empresa: document.getElementById('pEmpresa').value, Cargo: document.getElementById('pCargo').value, Telefone: document.getElementById('pTelefone').value, Email: document.getElementById('pEmail').value },
+      numero: document.getElementById('pNumero').value.trim(),
+      dados: pessoaEscolhida ? null : { Nome: nome, Categoria: document.getElementById('pCategoria').value, ID_Empresa: document.getElementById('pEmpresa').value, Cargo: document.getElementById('pCargo').value, Telefone: document.getElementById('pTelefone').value, Email: document.getElementById('pEmail').value },
       descricao: document.getElementById('pDescricao').value.trim()
     });
   };
@@ -468,6 +531,7 @@
   window.abrirModalLote = function() {
     document.getElementById('lEmpresa').value = ''; document.getElementById('lVagas').value = ''; document.getElementById('lExpira').value = ''; document.getElementById('lObs').value = '';
     document.getElementById('lGestorBox').innerHTML = htmlSeletorGestor('lGestorSel', 'Gestor responsável pelo lote');
+    document.getElementById('lNumeros').value = ''; document.getElementById('lReservar').checked = true;
     var hint = document.getElementById('lVagasHint');
     var vagasInput = document.getElementById('lVagas');
     if (vagas.disponiveis !== null) {
@@ -491,6 +555,7 @@
       carregarTudo();
     }).withFailureHandler(function(err){ btn.disabled=false; erro(err); }).apiCriarLote(window.TOKEN, {
       ID_Evento: idEvento, ID_Empresa: document.getElementById('lEmpresa').value, Vagas_Total: vagas, Gestor: valorSeletorGestor('lGestorSel'),
+      Numeros: document.getElementById('lNumeros').value.trim(), Reservar: document.getElementById('lReservar').checked,
       Data_Expiracao: document.getElementById('lExpira').value, Observacoes: document.getElementById('lObs').value
     });
   };

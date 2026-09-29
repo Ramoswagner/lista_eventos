@@ -294,7 +294,7 @@ function apiListarPessoas(token) {
   return { ok: true, dados: dbListar_(DB.PESSOAS).map(p => ({
     id:         p.ID_Pessoa,
     nome:       _s_(p.Nome),
-    documento:  _s_(p.Documento),
+    temDocumento: !!_soDigitos_(p.Documento),   // o CPF em si não é enviado para a tela
     telefone:   _s_(p.Telefone),
     email:      _s_(p.Email),
     cargo:      _s_(p.Cargo),
@@ -323,13 +323,15 @@ function apiEditarPessoa(token, idPessoa, dados) {
     return _comLock_(function() {
       const p = dbBuscarPorId_(DB.PESSOAS, idPessoa);
       if (!p) throw new Error('Pessoa não encontrada.');
-      const outro = _pessoaPorDocumento_(dados.Documento);
-      if (outro && outro.ID_Pessoa !== idPessoa) throw new Error('Este documento já pertence a ' + outro.Nome + '.');
+      // Documento em branco = mantém o que já existe (o CPF não volta para a tela).
+      const docNovo = _s_(dados.Documento) ? _s_(dados.Documento) : _s_(p.Documento);
+      const outro = _pessoaPorDocumento_(docNovo);
+      if (outro && outro.ID_Pessoa !== idPessoa) throw new Error('Este documento já pertence a outro cadastro.');
       const email = _s_(dados.Email).toLowerCase();
       if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new Error('E-mail inválido.');
       if (dados.ID_Empresa && !dbBuscarPorId_(DB.EMPRESAS, dados.ID_Empresa)) throw new Error('Empresa não encontrada.');
       const novos = {
-        Nome: _s_(dados.Nome), Documento: _s_(dados.Documento), Telefone: _s_(dados.Telefone), Email: email,
+        Nome: _s_(dados.Nome), Documento: dados.RemoverDocumento ? '' : docNovo, Telefone: _s_(dados.Telefone), Email: email,
         ID_Empresa: _s_(dados.ID_Empresa), Cargo: _s_(dados.Cargo), Cidade: _s_(dados.Cidade),
         UF: _s_(dados.UF).toUpperCase().slice(0, 2), Categoria: _categoriaValida_(_s_(dados.Categoria)),
         Observacoes: _s_(dados.Observacoes).slice(0, 300)
@@ -390,7 +392,7 @@ function apiCadastrarPessoa(token, dados) {
     if (!dados || !_s_(dados.Nome)) throw new Error('Nome é obrigatório.');
     return _comLock_(function() {
       const existente = _pessoaPorDocumento_(dados.Documento);
-      if (existente) throw new Error('Já existe uma pessoa com este documento: ' + existente.Nome + '.');
+      if (existente) throw new Error('Já existe uma pessoa com este documento: ' + existente.Nome + '. Use o cadastro existente.');
       const p = dbInserir_(DB.PESSOAS, {
         Nome: _s_(dados.Nome), Documento: _s_(dados.Documento),
         Gestor_Responsavel: _gestorResponsavel_(s, dados.Gestor),
@@ -539,17 +541,22 @@ function apiListaConvidados(token, idEvento) {
   const substitutoDe = {};
   convites.forEach(c => { if (c.ID_Convite_Original) substitutoDe[c.ID_Convite_Original] = c; });
   const mesas = _rotulosMesas_(idEvento);
+  const empresaDoLote = {};
+  dbListar_(DB.LOTES, l => l.ID_Evento === idEvento).forEach(l => empresaDoLote[l.ID_Lote] = l.ID_Empresa);
 
   const urlBase = _urlBase_();
+  // O documento (CPF) NUNCA sai daqui: fica só no cadastro.
   return { ok: true, dados: convites.map(c => {
+    const provisorio = _ehProvisorio_(c);
     const p    = pessoas[c.ID_Pessoa]   || {};
-    const emp  = empresas[p.ID_Empresa] || {};
+    const emp  = empresas[provisorio ? empresaDoLote[c.ID_Lote] : p.ID_Empresa] || {};
     const sub  = substitutoDe[c.ID_Convite];
     const pSub = sub ? (pessoas[sub.ID_Pessoa] || {}) : null;
     return {
       idConvite:        c.ID_Convite,
-      nome:             _s_(p.Nome) || '(pessoa não encontrada)',
-      documento:        _s_(p.Documento),
+      numero:           _normNumero_(c.Numero_Convite),
+      provisorio:       provisorio,
+      nome:             provisorio ? _s_(c.Nome_Provisorio) : (_s_(p.Nome) || '(pessoa não encontrada)'),
       categoria:        _s_(p.Categoria),
       empresa:          _s_(emp.Nome),
       cargo:            _s_(p.Cargo),
@@ -562,9 +569,76 @@ function apiListaConvidados(token, idEvento) {
       substituidoPor:   pSub ? _s_(pSub.Nome) : '',
       idLote:           _s_(c.ID_Lote),
       descricao:        _s_(c.Observacoes),
-      mesa:             _ocupaLugar_(c) ? _s_(mesas[c.ID_Mesa]) : ''
+      mesa:             _ocupaLugar_(c) ? _s_(mesas[c.ID_Mesa]) : '',
+      idMesa:           _ocupaLugar_(c) && mesas[c.ID_Mesa] ? c.ID_Mesa : '',
+      chegadaTs:        c.Checkin_DataHora ? new Date(c.Checkin_DataHora).getTime() : 0
     };
   }) };
+}
+
+// Editar dados do convite: nº do convite e descrição.
+function apiEditarConvite(token, idConvite, dados) {
+  const s = validarSessao_(token);
+  if (!s) return NEGADO;
+  try {
+    if (!temPermissao_(s.perfil, 'convites', 'criar') && !temPermissao_(s.perfil, 'checkin', 'criar')) {
+      throw new Error('Seu perfil (' + s.perfil + ') não tem permissão para esta ação.');
+    }
+    dados = dados || {};
+    return _comLock_(function() {
+      const c = dbBuscarPorId_(DB.CONVITES, idConvite);
+      if (!c) throw new Error('Convite não encontrado.');
+      if (!_conviteAtivo_(c)) throw new Error('Convite cancelado ou substituído não pode ser editado.');
+      const novos = { Numero_Convite: _validarNumeroConvite_(c.ID_Evento, dados.numero, idConvite) };
+      if (dados.descricao !== undefined) novos.Observacoes = _s_(dados.descricao).slice(0, 300);
+      dbAtualizar_(DB.CONVITES, idConvite, novos);
+      return { ok: true, mensagem: novos.Numero_Convite ? 'Convite nº ' + novos.Numero_Convite + ' salvo.' : 'Convite atualizado (sem nº).' };
+    });
+  } catch (e) { return { ok: false, mensagem: e.message }; }
+}
+
+// Dá nome a uma vaga provisória de lote ("Convidado 3"): pessoa do
+// diretório ou cadastro novo. Pode ser feito antes do evento (gestor)
+// ou na portaria (recepção). novo: { idPessoa } ou { dados: { Nome, ... } }
+function _identificarProvisorio_(c, novo, sessao) {
+  let idPessoa = _s_(novo.idPessoa);
+  const lote = c.ID_Lote ? dbBuscarPorId_(DB.LOTES, c.ID_Lote) : null;
+  if (idPessoa) {
+    if (!dbBuscarPorId_(DB.PESSOAS, idPessoa)) throw new Error('Pessoa não encontrada no diretório.');
+  } else {
+    const d = novo.dados || {};
+    if (!_s_(d.Nome)) throw new Error('Informe o nome do convidado.');
+    const email = _s_(d.Email).toLowerCase();
+    const mesmoEmail = email ? dbListar_(DB.PESSOAS, p => _s_(p.Email).toLowerCase() === email)[0] : null;
+    idPessoa = mesmoEmail ? mesmoEmail.ID_Pessoa : dbInserir_(DB.PESSOAS, {
+      Nome: _s_(d.Nome), Cargo: _s_(d.Cargo), Telefone: _s_(d.Telefone), Email: email,
+      Categoria: _categoriaValida_(_s_(d.Categoria)), ID_Empresa: lote ? _s_(lote.ID_Empresa) : '',
+      Data_Cadastro: new Date(), Ativo: 'Sim', Gestor_Responsavel: _s_(c.Gestor),
+      Observacoes: 'Identificado por ' + rotuloSessao_(sessao)
+    }).ID_Pessoa;
+  }
+  const jaNaLista = dbListar_(DB.CONVITES, x => x.ID_Evento === c.ID_Evento && x.ID_Pessoa === idPessoa && _conviteAtivo_(x) && x.ID_Convite !== c.ID_Convite);
+  if (jaNaLista.length) throw new Error('Esta pessoa já está na lista deste evento.');
+  dbAtualizar_(DB.CONVITES, c.ID_Convite, { ID_Pessoa: idPessoa, Nome_Provisorio: '', Cadastrado_Por: rotuloSessao_(sessao) });
+  return dbBuscarPorId_(DB.PESSOAS, idPessoa);
+}
+
+function apiIdentificarConvidado(token, idConvite, novo) {
+  const s = validarSessao_(token);
+  if (!s) return NEGADO;
+  try {
+    if (!temPermissao_(s.perfil, 'convites', 'criar') && !temPermissao_(s.perfil, 'checkin', 'criar')) {
+      throw new Error('Seu perfil (' + s.perfil + ') não tem permissão para esta ação.');
+    }
+    return _comLock_(function() {
+      const c = dbBuscarPorId_(DB.CONVITES, idConvite);
+      if (!c) throw new Error('Convite não encontrado.');
+      if (!_ehProvisorio_(c)) throw new Error('Este convite já tem nome. Para outra pessoa, use "Trocar".');
+      if (!_conviteAtivo_(c)) throw new Error('Esta vaga foi cancelada.');
+      const p = _identificarProvisorio_(c, novo || {}, s);
+      return { ok: true, mensagem: _s_(c.Nome_Provisorio) + ' agora é ' + _s_(p.Nome) + '.', dados: { nome: _s_(p.Nome), linkConfirmacao: _linkConfirmacao_(c.QR_Token) } };
+    });
+  } catch (e) { return { ok: false, mensagem: e.message }; }
 }
 
 function apiAdicionarNaLista(token, gestor, pessoa) {
@@ -604,8 +678,9 @@ function apiAdicionarNaLista(token, gestor, pessoa) {
       }
 
       // Descrição/observação vai na coluna própria (Observacoes) do convite.
+      const numero = _validarNumeroConvite_(idEvento, pessoa.numero, null);
       const c = convidarPessoa_(idEvento, idPessoa, gestorFinal, null, _s_(pessoa.descricao));
-      dbAtualizar_(DB.CONVITES, c.ID_Convite, { Cadastrado_Por: rotuloSessao_(s) });
+      dbAtualizar_(DB.CONVITES, c.ID_Convite, { Cadastrado_Por: rotuloSessao_(s), Numero_Convite: numero });
 
       const msg = reaproveitada
         ? 'Documento já cadastrado como "' + reaproveitada + '": pessoa reaproveitada.'
@@ -719,8 +794,6 @@ function apiBuscarPessoas(token, termo, idEvento) {
   ).slice(0, 12);
   return { ok: true, dados: achados.map(p => ({
     id: p.ID_Pessoa, nome: _s_(p.Nome), empresa: _s_(empresas[p.ID_Empresa]), cargo: _s_(p.Cargo),
-    // documento parcialmente oculto: só para diferenciar homônimos
-    doc: _soDigitos_(p.Documento) ? '•••' + _soDigitos_(p.Documento).slice(-4) : '',
     naLista: !!naLista[p.ID_Pessoa]
   })) };
 }
@@ -750,7 +823,9 @@ function apiCancelarConvite(token, idConvite) {
 // ------------------------------------------------------------
 // CHECK-IN
 // ------------------------------------------------------------
-function apiCheckin(token, idConvite) {
+// nomeNaPorta: para vaga provisória ("Convidado 3"), o nome dito na
+// entrada (opcional) — cria o cadastro e já registra a presença.
+function apiCheckin(token, idConvite, nomeNaPorta) {
   const s = validarSessao_(token);
   if (!s) return NEGADO;
   try {
@@ -759,6 +834,7 @@ function apiCheckin(token, idConvite) {
       const convite = dbBuscarPorId_(DB.CONVITES, idConvite);
       if (!convite) throw new Error('Convite não encontrado.');
       _validarJanela_(convite.ID_Evento, s);
+      if (_ehProvisorio_(convite) && _s_(nomeNaPorta)) _identificarProvisorio_(convite, { dados: { Nome: nomeNaPorta } }, s);
       fazerCheckin_(idConvite, rotuloSessao_(s));
       const mesa = _s_(_rotulosMesas_(convite.ID_Evento)[convite.ID_Mesa]);
       return { ok: true, mensagem: 'Entrada confirmada.' + (mesa ? ' ' + mesa + '.' : ''), dados: { mesa: mesa } };
@@ -775,14 +851,14 @@ function apiCheckinQR(token, qrToken, idEvento) {
     return _comLock_(function() {
       const convite = fazerCheckinPorQR_(qrToken, rotuloSessao_(s), idEvento, s);
       const pessoa  = dbBuscarPorId_(DB.PESSOAS, convite.ID_Pessoa);
-      const nome    = pessoa ? _s_(pessoa.Nome) : '';
+      const nome    = pessoa ? _s_(pessoa.Nome) : _s_(convite.Nome_Provisorio);
       const mesa    = _s_(_rotulosMesas_(convite.ID_Evento)[convite.ID_Mesa]);
       return { ok: true, mensagem: 'Bem-vindo(a), ' + nome + '!' + (mesa ? ' ' + mesa + '.' : ''), dados: { nome: nome, mesa: mesa } };
     });
   } catch (e) { return { ok: false, mensagem: e.message }; }
 }
 
-function apiWalkin(token, idEvento, nome, categoria, autorizadoPor) {
+function apiWalkin(token, idEvento, nome, categoria, autorizadoPor, extras) {
   const s = validarSessao_(token);
   if (!s) return NEGADO;
   try {
@@ -791,12 +867,22 @@ function apiWalkin(token, idEvento, nome, categoria, autorizadoPor) {
     if (!_s_(autorizadoPor)) throw new Error('Informe quem autorizou.');
     return _comLock_(function() {
       _validarJanela_(idEvento, s);
-      registrarWalkin_(idEvento, {
+      extras = extras || {};
+      const numero = _validarNumeroConvite_(idEvento, extras.numero, null);
+      let mesa = null;
+      if (extras.idMesa) {
+        mesa = dbBuscarPorId_(DB.MESAS, extras.idMesa);
+        if (!mesa || mesa.ID_Evento !== idEvento) throw new Error('Mesa não encontrada neste evento.');
+        const ocupados = _ocupacaoMesas_(idEvento)[mesa.ID_Mesa] || 0;
+        if (ocupados >= (Number(mesa.Capacidade) || 0)) throw new Error(_rotuloMesa_(mesa) + ' está cheia. Escolha outra mesa.');
+      }
+      const c = registrarWalkin_(idEvento, {
         dadosNovaPessoa: { Nome: _s_(nome), Categoria: _categoriaValida_(_s_(categoria)) },
         autorizadoPor:   _s_(autorizadoPor),
         checkinPor:      rotuloSessao_(s)
       });
-      return { ok: true, mensagem: 'Walk-in registrado. ' + _s_(nome) + ' está presente.' };
+      if (numero || mesa) dbAtualizar_(DB.CONVITES, c.ID_Convite, { Numero_Convite: numero, ID_Mesa: mesa ? mesa.ID_Mesa : '' });
+      return { ok: true, mensagem: 'Walk-in registrado. ' + _s_(nome) + ' está presente' + (mesa ? ' · ' + _rotuloMesa_(mesa) : '') + '.' };
     });
   } catch (e) { return { ok: false, mensagem: e.message }; }
 }
@@ -885,7 +971,18 @@ function apiDadosCheckin(token, idEvento) {
   const lista = apiListaConvidados(token, idEvento);
   if (!info.ok)  return info;
   if (!lista.ok) return lista;
-  return { ok: true, dados: { info: info.dados, convidados: lista.dados } };
+  // Mesas em tempo real: lugares, quem está sentado e quem já chegou.
+  const porMesa = {};
+  dbListar_(DB.CONVITES, c => c.ID_Evento === idEvento && c.ID_Mesa && _ocupaLugar_(c)).forEach(c => {
+    const m = porMesa[c.ID_Mesa] = porMesa[c.ID_Mesa] || { sentados: 0, chegaram: 0 };
+    m.sentados++; if (c.Status === 'Presente') m.chegaram++;
+  });
+  const mesas = _mesasDoEvento_(idEvento).map(m => {
+    const x = porMesa[m.ID_Mesa] || { sentados: 0, chegaram: 0 };
+    return { id: m.ID_Mesa, numero: Number(m.Numero) || 0, rotulo: _rotuloMesa_(m), vip: m.VIP === 'Sim',
+             capacidade: Number(m.Capacidade) || 0, sentados: x.sentados, chegaram: x.chegaram };
+  });
+  return { ok: true, dados: { info: info.dados, convidados: lista.dados, mesas: mesas, agora: Date.now() } };
 }
 
 // ------------------------------------------------------------

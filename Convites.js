@@ -18,6 +18,48 @@ const STATUS_INATIVOS = ['Cancelado', 'Substituído'];
 function _conviteAtivo_(c) { return STATUS_INATIVOS.indexOf(c.Status) === -1; }
 
 // ------------------------------------------------------------
+// Nº DO CONVITE (impresso no convite físico)
+// Comparação ignora zeros à esquerda e espaços ("0105" = "105").
+// Único entre os convites ATIVOS do evento; o substituto herda o nº.
+// ------------------------------------------------------------
+function _normNumero_(v) {
+  const t = _s_(v).toUpperCase().replace(/\s+/g, '');
+  return /^\d+$/.test(t) ? String(Number(t)) : t;
+}
+
+function _validarNumeroConvite_(idEvento, numero, idConviteAtual) {
+  const n = _normNumero_(numero);
+  if (!n) return '';
+  if (n.length > 20 || !/^[0-9A-Z./-]+$/.test(n)) throw new Error('Nº do convite inválido (use números ou letras, sem espaços).');
+  const repetido = dbListar_(DB.CONVITES, c => c.ID_Evento === idEvento && _conviteAtivo_(c) &&
+    c.ID_Convite !== idConviteAtual && _normNumero_(c.Numero_Convite) === n)[0];
+  if (repetido) {
+    const p = dbBuscarPorId_(DB.PESSOAS, repetido.ID_Pessoa);
+    throw new Error('O convite nº ' + n + ' já está com ' + (p ? _s_(p.Nome) : _s_(repetido.Nome_Provisorio) || 'outro convidado') + ' neste evento.');
+  }
+  return n;
+}
+
+// "101-110, 115, 120A" → ['101', ..., '110', '115', '120A']
+function _parseNumeros_(texto) {
+  const lista = [];
+  _s_(texto).split(/[,;\n]+/).map(x => x.trim()).filter(Boolean).forEach(parte => {
+    const faixa = parte.match(/^(\d+)\s*(?:-|a|até)\s*(\d+)$/i);
+    if (faixa) {
+      const ini = Number(faixa[1]), fim = Number(faixa[2]);
+      if (fim < ini || fim - ini > 500) throw new Error('Faixa de números inválida: ' + parte);
+      for (let i = ini; i <= fim; i++) lista.push(String(i));
+    } else lista.push(_normNumero_(parte));
+  });
+  const vistos = {};
+  lista.forEach(n => { if (vistos[n]) throw new Error('Nº repetido na lista: ' + n); vistos[n] = true; });
+  return lista;
+}
+
+// Vaga reservada de lote ainda sem pessoa ("Convidado 3").
+function _ehProvisorio_(c) { return !_s_(c.ID_Pessoa) && !!_s_(c.Nome_Provisorio); }
+
+// ------------------------------------------------------------
 // JANELA DE CHECK-IN
 // Abre no dia do evento; fecha no fim do dia seguinte (+1 dia).
 // Admin pode operar fora da janela para correções.
@@ -133,12 +175,13 @@ function apiInfoConvitePublico(qrToken) {
     const pessoa  = dbBuscarPorId_(DB.PESSOAS, convite.ID_Pessoa) || {};
     const empresa = pessoa.ID_Empresa ? dbBuscarPorId_(DB.EMPRESAS, pessoa.ID_Empresa) : null;
     return { ok: true, dados: {
-      nome:       _s_(pessoa.Nome),
+      nome:       _s_(pessoa.Nome) || _s_(convite.Nome_Provisorio),
       empresa:    empresa ? _s_(empresa.Nome) : '',
       evento:     _s_(evento.Nome),
       dataEvento: _fmtData_(evento.Data),
       local:      _s_(evento.Local),
       status:     _s_(convite.Status),
+      numero:     _normNumero_(convite.Numero_Convite),
       categorias: DB.PESSOAS.validacoes.Categoria
     } };
   } catch (e) { return { ok: false, mensagem: e.message }; }
@@ -166,7 +209,8 @@ function apiResponderConvitePublico(qrToken, resposta) {
 // de telefone). Os dados atuais NUNCA são enviados para a página — ele
 // vê apenas o próprio nome. Campo vazio = não mexe no que já existe.
 // ------------------------------------------------------------
-const CAMPOS_ATUALIZAVEIS = ['Nome', 'Email', 'Documento', 'Telefone', 'Cargo', 'Categoria'];
+// CPF/documento não é pedido ao convidado (política: CPF não é obrigatório nem solicitado).
+const CAMPOS_ATUALIZAVEIS = ['Nome', 'Email', 'Telefone', 'Cargo', 'Categoria'];
 
 function apiAtualizarMeusDados(qrToken, dados) {
   try {
@@ -191,12 +235,6 @@ function apiAtualizarMeusDados(qrToken, dados) {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || email.length > 120) throw new Error('E-mail inválido.');
       novos.Email = email;
     }
-    const doc = _s_(dados.Documento);
-    if (doc) {
-      const digitos = _soDigitos_(doc);
-      if (digitos.length < 5 || digitos.length > 20) throw new Error('Documento inválido.');
-      novos.Documento = doc.slice(0, 30);
-    }
     const tel = _s_(dados.Telefone);
     if (tel) {
       const digitos = _soDigitos_(tel);
@@ -219,13 +257,6 @@ function apiAtualizarMeusDados(qrToken, dados) {
       }
       const pessoa = dbBuscarPorId_(DB.PESSOAS, convite.ID_Pessoa);
       if (!pessoa) return { ok: false, mensagem: 'Cadastro não encontrado. Fale com a organização.' };
-
-      if (novos.Documento) {
-        const outro = _pessoaPorDocumento_(novos.Documento);
-        if (outro && outro.ID_Pessoa !== pessoa.ID_Pessoa) {
-          return { ok: false, mensagem: 'Este documento já está em outro cadastro. Fale com a organização do evento.' };
-        }
-      }
 
       dbAtualizar_(DB.PESSOAS, pessoa.ID_Pessoa, novos);
       cache.put(chaveLimite, String(usos + 1), 3600);
@@ -275,7 +306,8 @@ function substituirConvidado_(idConviteOriginal, idNovaPessoa, motivo, autorizad
       QR_Token:            Utilities.getUuid(),
       QR_Valido:           'Sim',
       Data_Convite:        new Date(),
-      ID_Mesa:             original.ID_Mesa || ''   // o substituto senta no lugar do original
+      ID_Mesa:             original.ID_Mesa || '',  // o substituto senta no lugar do original
+      Numero_Convite:      original.Numero_Convite || ''   // e usa o mesmo convite físico
     });
   });
 }

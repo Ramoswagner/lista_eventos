@@ -18,7 +18,7 @@
     <div id="dpGestorBox"></div>
     <div class="mb-3"><label class="form-label">Nome completo *</label><input class="form-control" id="dpNome"></div>
     <div class="row g-2 mb-3">
-      <div class="col-6"><label class="form-label">Documento (CPF)</label><input class="form-control" id="dpDocumento" inputmode="numeric"></div>
+      <div class="col-6"><label class="form-label" for="dpDocumento">CPF <span class="text-muted fw-normal">(opcional, nunca exibido)</span></label><input class="form-control" id="dpDocumento" inputmode="numeric" autocomplete="off"><div class="form-check mt-1" id="dpRemoverDocBox" style="display:none;"><input class="form-check-input" type="checkbox" id="dpRemoverDoc"><label class="form-check-label small" for="dpRemoverDoc">Apagar o CPF registrado</label></div></div>
       <div class="col-6"><label class="form-label">Telefone</label><input class="form-control" id="dpTelefone" type="tel"></div>
     </div>
     <div class="mb-3"><label class="form-label">E-mail</label><input class="form-control" id="dpEmail" type="email" autocapitalize="off"></div>
@@ -121,7 +121,7 @@
       pessoas.forEach(function(p){ if (p.gestor) gestores[p.gestor] = true; });
       var filtro = Object.keys(gestores).length ? '<select class="form-select" id="dirGestor" style="max-width:220px;flex:none;"><option value="">Todos os gestores</option>' +
         Object.keys(gestores).sort().map(function(g){ return '<option value="' + esc(g) + '"' + (g === filtroGestor ? ' selected' : '') + '>' + esc(g) + '</option>'; }).join('') + '</select>' : '';
-      wrap.innerHTML = toolbar('Buscar por nome, documento ou e-mail...', pode('pessoas.criar') ? 'Nova pessoa' : '', 'abrirModalDirPessoa()', filtro) +
+      wrap.innerHTML = toolbar('Buscar por nome, e-mail ou empresa...', pode('pessoas.criar') ? 'Nova pessoa' : '', 'abrirModalDirPessoa()', filtro) +
         '<div class="small text-muted mb-2" id="dirContagem"></div><div id="tblPessoas"></div>';
       document.getElementById('dirBusca').addEventListener('input', renderPessoas);
       var sel = document.getElementById('dirGestor');
@@ -140,12 +140,11 @@
   }
 
   function renderPessoas() {
-    var q = (document.getElementById('dirBusca').value || '').toLowerCase(), qd = q.replace(/\D/g, '');
+    var q = (document.getElementById('dirBusca').value || '').toLowerCase();
     var lista = pessoas.filter(function(p) {
       if (filtroGestor && p.gestor !== filtroGestor) return false;
       if (!q) return true;
-      return (p.nome + ' ' + p.documento + ' ' + p.email + ' ' + p.empresa).toLowerCase().indexOf(q) !== -1 ||
-        (qd.length >= 3 && String(p.documento).replace(/\D/g, '').indexOf(qd) !== -1);
+      return (p.nome + ' ' + p.email + ' ' + p.empresa + ' ' + p.cargo).toLowerCase().indexOf(q) !== -1;
     }).sort(function(a,b){ return a.nome.localeCompare(b.nome); });
     document.getElementById('dirContagem').innerText = lista.length + ' de ' + pessoas.length + ' pessoa(s)';
     var tbl = document.getElementById('tblPessoas');
@@ -154,7 +153,7 @@
     var mostra = lista.slice(0, 300);
     tbl.innerHTML = '<div class="card-hb"><table class="table-hb resp"><thead><tr><th>Nome</th><th>Empresa</th><th>Cargo</th><th>Categoria</th><th>Gestor</th><th>Eventos</th><th>Contato</th><th></th></tr></thead><tbody>' +
       mostra.map(function(p) {
-        return '<tr><td class="td-titulo"><strong>' + esc(p.nome) + '</strong>' + (p.documento ? '<div class="small text-muted">' + esc(p.documento) + '</div>' : '') + '</td>' +
+        return '<tr><td class="td-titulo"><strong>' + esc(p.nome) + '</strong></td>' +
           '<td data-label="Empresa">' + (p.empresa ? esc(p.empresa) : traco) + '</td><td data-label="Cargo">' + esc(p.cargo || '—') + '</td>' +
           '<td data-label="Categoria"><span class="pill pill-blue">' + esc(p.categoria || 'Outro') + '</span></td>' +
           '<td data-label="Gestor">' + (p.gestor ? esc(p.gestor) : traco) + '</td>' +
@@ -166,7 +165,7 @@
   }
 
   function renderEmpresas() {
-    var q = (document.getElementById('dirBusca').value || '').toLowerCase(), qd = q.replace(/\D/g, '');
+    var q = (document.getElementById('dirBusca').value || '').toLowerCase();
     var lista = empresas.filter(function(e) {
       return !q || (e.nome + ' ' + e.cidade + ' ' + e.segmento).toLowerCase().indexOf(q) !== -1 || (qd.length >= 3 && e.cnpj.replace(/\D/g, '').indexOf(qd) !== -1);
     }).sort(function(a,b){ return a.nome.localeCompare(b.nome); });
@@ -192,8 +191,14 @@
   function preencherPessoa(p) {
     document.getElementById('dpId').value = p ? p.id : '';
     document.getElementById('dpTitulo').innerHTML = p ? '<i class="fas fa-user-pen me-2 text-primary"></i>Editar pessoa' : '<i class="fas fa-user-plus me-2 text-primary"></i>Nova pessoa';
-    var campos = { dpNome: 'nome', dpDocumento: 'documento', dpTelefone: 'telefone', dpEmail: 'email', dpCargo: 'cargo', dpCidade: 'cidadeNome', dpUF: 'uf', dpObs: 'obs' };
+    var campos = { dpNome: 'nome', dpTelefone: 'telefone', dpEmail: 'email', dpCargo: 'cargo', dpCidade: 'cidadeNome', dpUF: 'uf', dpObs: 'obs' };
     Object.keys(campos).forEach(function(id){ document.getElementById(id).value = p ? (p[campos[id]] || '') : ''; });
+    // O CPF nunca volta para a tela: só indicamos que existe. Em branco = mantém.
+    var docEl = document.getElementById('dpDocumento');
+    docEl.value = '';
+    docEl.placeholder = p && p.temDocumento ? 'Registrado — em branco mantém' : 'Não é obrigatório';
+    document.getElementById('dpRemoverDoc').checked = false;
+    document.getElementById('dpRemoverDocBox').style.display = p && p.temDocumento ? '' : 'none';
     document.getElementById('dpEmpresa').value = p ? (p.idEmpresa || '') : '';
     document.getElementById('dpCategoria').value = p ? (p.categoria || 'Outro') : 'Outro';
     var o = window.OPCOES_GESTOR || {};
@@ -228,6 +233,7 @@
       Cidade: document.getElementById('dpCidade').value, UF: document.getElementById('dpUF').value, Categoria: document.getElementById('dpCategoria').value,
       Observacoes: document.getElementById('dpObs').value
     };
+    if (id && document.getElementById('dpRemoverDoc').checked) dados.RemoverDocumento = true;
     if (selGestor) dados.Gestor = selGestor.value;
     var btn = document.getElementById('btnSalvarDirPessoa'); btn.disabled = true;
     var run = google.script.run.withSuccessHandler(function(resp) {

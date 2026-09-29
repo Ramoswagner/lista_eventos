@@ -134,6 +134,11 @@
 
   function erro(err) { toast((err && (err.message || err.mensagem)) || 'Erro inesperado.', 'err'); }
   function mesaPorId(id) { return D.mesas.filter(function(m){ return m.id === id; })[0]; }
+  // Nº do convite + nome; vaga de grupo ainda sem nome ("Convidado 3") em itálico.
+  function nomeHtml(c) {
+    return (c.numero ? '<span class="text-muted" style="font-variant-numeric:tabular-nums;">' + esc(c.numero) + ' · </span>' : '') +
+      (c.provisorio ? '<em class="text-muted">' + esc(c.nome) + '</em>' : esc(c.nome));
+  }
   function sentadosNa(id) { return D.convidados.filter(function(c){ return c.idMesa === id; }); }
   function semMesa() { return D.convidados.filter(function(c){ return !c.idMesa; }); }
   function qtdSelecionados() { return Object.keys(selecionados).length; }
@@ -378,7 +383,7 @@
           '<span class="small fw-bold" style="color:' + (m.ocupados > m.capacidade ? 'var(--danger)' : 'var(--ink-900)') + '">' + m.ocupados + '/' + m.capacidade + '</span>' +
         '</div>' + barra(m) +
         (nomes.length ? '<ul class="mz-lista-nomes">' + nomes.map(function(c) {
-          return '<li><span><i class="fas fa-circle me-1" style="font-size:.5rem;vertical-align:middle;color:' + (corGestor[c.gestor || '—'] || '#CBD5E1') + '" title="' + esc(c.gestor || 'sem gestor') + '"></i>' + esc(c.nome) + '<span class="d-block text-muted" style="font-size:.7rem;padding-left:12px;">' + esc([c.empresa, c.gestor ? 'por ' + c.gestor : ''].filter(Boolean).join(' · ')) + '</span></span>' +
+          return '<li><span><i class="fas fa-circle me-1" style="font-size:.5rem;vertical-align:middle;color:' + (corGestor[c.gestor || '—'] || '#CBD5E1') + '" title="' + esc(c.gestor || 'sem gestor') + '"></i>' + nomeHtml(c) + '<span class="d-block text-muted" style="font-size:.7rem;padding-left:12px;">' + esc([c.empresa, c.gestor ? 'por ' + c.gestor : ''].filter(Boolean).join(' · ')) + '</span></span>' +
             (D.podeEditar ? '<button class="mz-x" title="Tirar da mesa" onclick="tirarDaMesa(\'' + esc(c.idConvite) + '\')"><i class="fas fa-xmark"></i></button>' : '') + '</li>';
         }).join('') + '</ul>' : '<div class="small text-muted">Mesa vazia.</div>') +
         '<div class="d-flex gap-2 mt-auto pt-1">' +
@@ -393,7 +398,7 @@
   function semMesaHtml() {
     var lista = semMesa();
     var q = buscaSemMesa.toLowerCase();
-    var filtrada = lista.filter(function(c) { return !q || (c.nome + ' ' + c.empresa + ' ' + c.gestor).toLowerCase().indexOf(q) !== -1; });
+    var filtrada = lista.filter(function(c) { return !q || (c.nome + ' ' + c.empresa + ' ' + c.gestor + ' ' + (c.numero || '')).toLowerCase().indexOf(q) !== -1; });
     return '<div class="card-hb"><div class="card-hb-body">' +
       '<div class="d-flex justify-content-between align-items-center mb-2"><strong style="color:var(--ink-900);font-size:.88rem;"><i class="fas fa-user-clock me-1 text-primary"></i> Sem mesa (' + lista.length + ')</strong>' +
         (D.podeEditar && lista.length ? '<button class="btn btn-sm btn-link p-0" onclick="selecionarTodosSemMesa()">' + (qtdSelecionados() ? 'Limpar' : 'Marcar visíveis') + '</button>' : '') + '</div>' +
@@ -401,7 +406,7 @@
       (lista.length ? '<input class="form-control form-control-sm mb-2" id="mzBusca" placeholder="Buscar nome, empresa ou gestor" value="' + esc(buscaSemMesa) + '">' : '') +
       '<div class="mz-semmesa-lista">' + (filtrada.length ? filtrada.map(function(c) {
         return '<label class="mz-pessoa">' + (D.podeEditar ? '<input type="checkbox" class="form-check-input m-0" data-id="' + esc(c.idConvite) + '"' + (selecionados[c.idConvite] ? ' checked' : '') + '>' : '') +
-          '<span style="min-width:0;"><span class="d-block text-truncate">' + esc(c.nome) + '</span><span class="sub d-block text-truncate">' + esc([c.empresa, c.categoria].filter(Boolean).join(' · ') || c.gestor || '') + '</span></span></label>';
+          '<span style="min-width:0;"><span class="d-block text-truncate">' + nomeHtml(c) + '</span><span class="sub d-block text-truncate">' + esc([c.empresa, c.categoria].filter(Boolean).join(' · ') || c.gestor || '') + '</span></span></label>';
       }).join('') : '<div class="small text-muted py-2">' + (lista.length ? 'Ninguém encontrado.' : 'Todos os convidados ativos já têm mesa.') + '</div>') + '</div>' +
     '</div></div>';
   }
@@ -507,7 +512,7 @@
     document.getElementById('mmSentados').innerHTML =
       '<div class="small fw-bold text-uppercase mb-2" style="color:var(--text-muted);font-size:.68rem;letter-spacing:.4px;">Sentados</div>' +
       (nomes.length ? '<ul class="mz-lista-nomes">' + nomes.map(function(c) {
-        return '<li><span>' + esc(c.nome) + '<span class="d-block text-muted" style="font-size:.72rem;">' + esc([c.empresa, c.categoria, c.gestor ? 'convidado por ' + c.gestor : '', c.status].filter(Boolean).join(' · ')) + '</span></span>' +
+        return '<li><span>' + nomeHtml(c) + '<span class="d-block text-muted" style="font-size:.72rem;">' + esc([c.empresa, c.categoria, c.gestor ? 'convidado por ' + c.gestor : '', c.status].filter(Boolean).join(' · ')) + '</span></span>' +
           (ed ? '<button class="mz-x" title="Tirar da mesa" onclick="tirarDaMesa(\'' + esc(c.idConvite) + '\', \'' + esc(m.id) + '\')"><i class="fas fa-xmark"></i></button>' : '') + '</li>';
       }).join('') + '</ul>' : '<div class="small text-muted">Ninguém nesta mesa ainda.</div>');
     var livres = m.capacidade - m.ocupados, sem = semMesa();
@@ -515,7 +520,7 @@
       '<div class="small fw-bold text-uppercase mb-2" style="color:var(--text-muted);font-size:.68rem;letter-spacing:.4px;">Adicionar (' + livres + ' lugar(es) livre(s))</div>' +
       '<input class="form-control form-control-sm mb-2" id="mmBusca" placeholder="Buscar quem está sem mesa">' +
       '<div class="mz-semmesa-lista" id="mmLista" style="max-height:210px;">' + sem.map(function(c) {
-        return '<label class="mz-pessoa" data-busca="' + esc((c.nome + ' ' + c.empresa + ' ' + c.gestor).toLowerCase()) + '"><input type="checkbox" class="form-check-input m-0 mm-add" value="' + esc(c.idConvite) + '"><span><span class="d-block">' + esc(c.nome) + '</span><span class="sub">' + esc([c.empresa, c.categoria].filter(Boolean).join(' · ')) + '</span></span></label>';
+        return '<label class="mz-pessoa" data-busca="' + esc((c.nome + ' ' + c.empresa + ' ' + c.gestor + ' ' + (c.numero || '')).toLowerCase()) + '"><input type="checkbox" class="form-check-input m-0 mm-add" value="' + esc(c.idConvite) + '"><span><span class="d-block">' + nomeHtml(c) + '</span><span class="sub">' + esc([c.empresa, c.categoria].filter(Boolean).join(' · ')) + '</span></span></label>';
       }).join('') + '</div>' +
       '<button class="btn btn-sm btn-success w-100 mt-2" onclick="adicionarNaMesaAberta()"><i class="fas fa-chair"></i> Sentar selecionados</button>' : '';
     var busca = document.getElementById('mmBusca');

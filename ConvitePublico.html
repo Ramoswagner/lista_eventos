@@ -112,6 +112,7 @@
       .toast-msg { max-width: none; }
       .d-flex.gap-2.resp-col { flex-direction: column; }
     }
+    .chip-numero { display:inline-flex; align-items:center; gap:6px; background:#EEF2FF; color:#3730A3; border-radius:999px; padding:4px 12px; font-weight:600; font-size:.85rem; }
     .link-pessoal { background:#F1F5F9; border-radius:10px; padding:10px 12px; font-family:ui-monospace,Consolas,monospace; font-size:.78rem; word-break:break-all; }
     .toast-msg {
       background: #1E293B;
@@ -205,15 +206,16 @@
             <label class="form-label fw-semibold">Nome completo <span class="text-danger">*</span></label>
             <input type="text" id="inputNome" class="form-control" placeholder="Seu nome completo" autocomplete="name" required>
           </div>
-          <div class="col-12"><p class="small text-muted mb-0">Informe CPF <strong>ou</strong> e-mail — é com ele que você confirma ou cancela depois.</p></div>
           <div class="col-md-6">
-            <label class="form-label fw-semibold">CPF / Documento</label>
-            <input type="text" id="inputDocumento" class="form-control" placeholder="000.000.000-00" inputmode="numeric" autocomplete="off">
+            <label class="form-label fw-semibold" for="inputNumero">Nº do convite <span class="text-danger" id="numeroObrig" style="display:none;">*</span></label>
+            <input type="text" id="inputNumero" class="form-control" placeholder="Ex: 101" inputmode="numeric" autocomplete="off" maxlength="12">
+            <div class="form-text" id="numeroAjuda">O número impresso no seu convite.</div>
           </div>
           <div class="col-md-6">
             <label class="form-label fw-semibold">Telefone</label>
             <input type="tel" id="inputTelefone" class="form-control" placeholder="(00) 00000-0000">
           </div>
+          <div class="col-12"><p class="small text-muted mb-0" id="dicaIdent">Informe o <strong>nº do convite</strong> ou o <strong>e-mail</strong> — é com ele que você confirma ou cancela depois. Não pedimos CPF.</p></div>
           <div class="col-12">
             <label class="form-label fw-semibold">E-mail</label>
             <input type="email" id="inputEmail" class="form-control" placeholder="seu@email.com" autocomplete="email" autocapitalize="off">
@@ -236,13 +238,14 @@
     <div id="secaoSucesso" style="display:none;" class="text-center py-3">
       <div class="icone-status ok"><i class="fas fa-check"></i></div>
       <h5 class="fw-bold text-success mt-3">Inscrição realizada!</h5>
+      <div id="numeroSucesso" class="mb-2"></div>
       <p class="text-muted mb-3">Você está na lista. Guarde o seu <strong>link pessoal</strong>: nele você confirma presença e encontra o <strong>QR Code da entrada</strong>.</p>
       <div class="link-pessoal mb-2" id="linkPessoalTexto"></div>
       <div class="d-flex gap-2 justify-content-center flex-wrap resp-col">
         <a class="btn btn-success" id="linkPessoalAbrir" href="#" target="_blank" rel="noopener"><i class="fas fa-qrcode me-1"></i> Abrir meu link pessoal</a>
         <button class="btn btn-outline-secondary" type="button" onclick="copiarLinkPessoal()"><i class="fas fa-copy me-1"></i> Copiar link</button>
       </div>
-      <p class="small text-muted mt-3 mb-0">Também dá para voltar a esta página e, com seu CPF ou e-mail, confirmar ou cancelar a inscrição.</p>
+      <p class="small text-muted mt-3 mb-0">Também dá para voltar a esta página e, com seu e-mail (ou nº do convite e primeiro nome), confirmar ou cancelar a inscrição.</p>
     </div>
 
     <!-- Inscrições fechadas -->
@@ -252,12 +255,11 @@
     <div id="secaoConfirmacao" style="display:none;" class="mt-4">
       <hr>
       <div class="titulo-secao"><span class="ic"><i class="fas fa-calendar-check"></i></span>Confirmar ou cancelar presença</div>
-      <p class="text-muted small">Se você já está inscrito neste lote, informe seu e-mail ou CPF para gerenciar sua presença.</p>
-      <div class="input-group mb-3">
-        <input type="text" id="inputBusca" class="form-control" placeholder="Seu CPF ou e-mail">
-        <button class="btn btn-outline-primary" id="btnBuscar" type="button">
-          <i class="fas fa-magnifying-glass"></i> Buscar
-        </button>
+      <p class="text-muted small">Se você já está inscrito neste lote, informe seu e-mail — ou o nº do convite e o seu primeiro nome — para gerenciar sua presença.</p>
+      <div class="row g-2 mb-3">
+        <div class="col-sm-6"><input type="text" id="inputBusca" class="form-control" placeholder="E-mail ou nº do convite" autocapitalize="off" aria-label="E-mail ou nº do convite"></div>
+        <div class="col-sm-4" id="boxPrimeiroNome" style="display:none;"><input type="text" id="inputPrimeiroNome" class="form-control" placeholder="Primeiro nome" autocomplete="given-name" aria-label="Primeiro nome"></div>
+        <div class="col-sm-2 d-grid"><button class="btn btn-outline-primary" id="btnBuscar" type="button"><i class="fas fa-magnifying-glass"></i> Buscar</button></div>
       </div>
       <div id="resultadoBusca"></div>
     </div>
@@ -279,6 +281,8 @@
   const LOTE_TOKEN = <?!= JSON.stringify(loteToken) ?>;
   let loteInfo = null;
   let buscaAtual = '';
+  let primeiroNomeAtual = '';
+  let exigeNumero = false;
   let linkPessoal = '';
 
   google.script.run.withSuccessHandler(function(resp) {
@@ -362,6 +366,9 @@
       : (dados.vagasLivres <= 0 ? 'Vagas esgotadas' : 'Inscrições fechadas');
 
     const fechada = document.getElementById('secaoFechada');
+    exigeNumero = !!dados.exigeNumero;
+    document.getElementById('numeroObrig').style.display = exigeNumero ? '' : 'none';
+    if (exigeNumero) document.getElementById('dicaIdent').innerHTML = 'Informe o <strong>nº do seu convite</strong> (obrigatório). O e-mail é opcional. Não pedimos CPF.';
     if (!dados.inscricaoAberta) {
       document.getElementById('secaoFormulario').style.display = 'none';
       fechada.style.display = '';
@@ -400,10 +407,11 @@
   document.getElementById('formInscrição').addEventListener('submit', function(e) {
     e.preventDefault();
     const nome = document.getElementById('inputNome').value.trim();
-    const doc = document.getElementById('inputDocumento').value.trim();
+    const numero = document.getElementById('inputNumero').value.trim();
     const email = document.getElementById('inputEmail').value.trim();
     if (!nome) { toast('Nome é obrigatório.', 'error'); return; }
-    if (!doc && !email) { toast('Informe o CPF ou o e-mail.', 'error'); return; }
+    if (exigeNumero && !numero) { toast('Informe o nº do seu convite.', 'error'); return; }
+    if (!numero && !email) { toast('Informe o nº do convite ou o e-mail.', 'error'); return; }
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('E-mail inválido.', 'error'); return; }
 
     const btn = document.getElementById('btnInscrever');
@@ -419,12 +427,14 @@
         document.getElementById('secaoSucesso').style.display = '';
         document.getElementById('linkPessoalTexto').textContent = linkPessoal;
         document.getElementById('linkPessoalAbrir').href = linkPessoal || '#';
+        const num = res.dados && res.dados.numero;
+        document.getElementById('numeroSucesso').innerHTML = num ? '<span class="chip-numero"><i class="fas fa-hashtag"></i>Convite nº ' + esc(num) + '</span>' : '';
         document.getElementById('secaoSucesso').scrollIntoView({ behavior: 'smooth', block: 'start' });
         toast('Inscrição realizada com sucesso!');
       })
       .withFailureHandler(function() { toast('Falha de conexão. Tente novamente.', 'error'); liberar(); })
       .apiInscreverNoLote(LOTE_TOKEN, {
-        Nome: nome, Documento: doc, Email: email,
+        Nome: nome, Numero: numero, Email: email,
         Telefone: document.getElementById('inputTelefone').value.trim(),
         Cargo: document.getElementById('inputCargo').value.trim()
       });
@@ -432,14 +442,25 @@
 
   // ------------------------------------------------------------
   // BUSCAR INSCRIÇÃO PARA CONFIRMAR/CANCELAR (a busca é no servidor;
-  // a página nunca recebe e-mail/CPF de ninguém)
+  // a página nunca recebe e-mail nem nº de convite de ninguém)
   // ------------------------------------------------------------
   document.getElementById('btnBuscar').addEventListener('click', buscar);
+  document.getElementById('inputBusca').addEventListener('input', function() {
+    const v = this.value.trim();
+    document.getElementById('boxPrimeiroNome').style.display = v && v.indexOf('@') === -1 ? '' : 'none';
+  });
+  document.getElementById('inputPrimeiroNome').addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); buscar(); } });
   document.getElementById('inputBusca').addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); buscar(); } });
 
   function buscar() {
     const busca = document.getElementById('inputBusca').value.trim();
-    if (!busca) { toast('Informe seu CPF ou e-mail.', 'error'); return; }
+    const primeiroNome = document.getElementById('inputPrimeiroNome').value.trim();
+    if (!busca) { toast('Informe seu e-mail ou o nº do convite.', 'error'); return; }
+    if (busca.indexOf('@') === -1 && primeiroNome.length < 2) {
+      document.getElementById('boxPrimeiroNome').style.display = '';
+      document.getElementById('inputPrimeiroNome').focus();
+      toast('Com o nº do convite, informe também o seu primeiro nome.', 'error'); return;
+    }
     const div = document.getElementById('resultadoBusca');
     div.innerHTML = '<div class="text-center text-muted py-2"><i class="fas fa-spinner fa-spin"></i> Buscando...</div>';
     google.script.run
@@ -448,12 +469,12 @@
           div.innerHTML = '<div class="alert alert-warning"><i class="fas fa-exclamation-triangle me-2"></i>' + esc(res.mensagem) + '</div>';
           return;
         }
-        buscaAtual = busca;
+        buscaAtual = busca; primeiroNomeAtual = primeiroNome;
         const d = res.dados;
         div.innerHTML = `
           <div class="card border-0 shadow-sm rounded-3 p-3">
             <div class="fw-bold mb-1">${esc(d.nome)}</div>
-            <div class="text-muted small mb-1">${esc(d.cargo)}</div>
+            <div class="text-muted small mb-1">${esc(d.cargo)}${d.numero ? (d.cargo ? ' · ' : '') + 'Convite nº ' + esc(d.numero) : ''}</div>
             <div class="small mb-3">Situação: <span class="status-badge status-${esc(d.status)}">${esc(d.status)}</span></div>
             <div class="d-flex gap-2 resp-col">
               ${d.status !== 'Confirmado' ? '<button class="btn btn-success btn-sm flex-grow-1" onclick="responder(\'Confirmado\')"><i class="fas fa-check me-1"></i>Confirmar presença</button>' : ''}
@@ -462,7 +483,7 @@
           </div>`;
       })
       .withFailureHandler(function() { div.innerHTML = '<div class="alert alert-warning">Falha de conexão. Tente novamente.</div>'; })
-      .apiBuscarInscricaoLote(LOTE_TOKEN, busca);
+      .apiBuscarInscricaoLote(LOTE_TOKEN, busca, primeiroNome);
   }
 
   function responder(resposta) {
@@ -483,7 +504,7 @@
         }
       })
       .withFailureHandler(() => toast('Falha de conexão. Tente novamente.', 'error'))
-      .apiResponderPorLote(LOTE_TOKEN, buscaAtual, resposta);
+      .apiResponderPorLote(LOTE_TOKEN, buscaAtual, resposta, primeiroNomeAtual);
   }
 
   // Inicia

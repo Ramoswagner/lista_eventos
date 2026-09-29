@@ -78,12 +78,19 @@ function apiMesasEvento(token, idEvento) {
     const pessoas = {}, empresas = {};
     dbListar_(DB.PESSOAS).forEach(p => pessoas[p.ID_Pessoa] = p);
     dbListar_(DB.EMPRESAS).forEach(e => empresas[e.ID_Empresa] = e.Nome);
+    const empresaDoLote = {};
+    dbListar_(DB.LOTES, l => l.ID_Evento === idEvento).forEach(l => empresaDoLote[l.ID_Lote] = l.ID_Empresa);
     const convidados = dbListar_(DB.CONVITES, c => c.ID_Evento === idEvento && _ocupaLugar_(c)).map(c => {
+      const prov = _ehProvisorio_(c);
       const p = pessoas[c.ID_Pessoa] || {};
       return {
         idConvite: c.ID_Convite,
-        nome:      _s_(p.Nome) || '(sem nome)',
-        empresa:   _s_(empresas[p.ID_Empresa]),
+        // Vaga de grupo ainda sem nome aparece como "Convidado 3" da empresa,
+        // para já poder ser distribuída nas mesas.
+        nome:      prov ? _s_(c.Nome_Provisorio) : (_s_(p.Nome) || '(sem nome)'),
+        provisorio: prov,
+        numero:    _normNumero_(c.Numero_Convite),
+        empresa:   _s_(empresas[prov ? empresaDoLote[c.ID_Lote] : p.ID_Empresa]),
         categoria: _s_(p.Categoria),
         gestor:    _s_(c.Gestor),
         status:    _s_(c.Status),
