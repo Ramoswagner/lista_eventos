@@ -61,10 +61,23 @@ Aba **Mesas** dentro do evento. A planta é em **escala real (metros)**:
 - **Organizar salão**: posiciona todas as mesas em *grade*, *intercalada* (cabe ~15–30% mais com redondas) ou *dois blocos com corredor central*, sem invadir os elementos, com a numeração a partir do palco e as VIP na frente. Antes de aplicar mostra **quantas mesas cabem** e, se não couberem todas, o que fazer (corredor menor, outro arranjo ou salão de A × B m). Tem **Desfazer**.
 - **Mesas novas** nascem na área "fora do salão" e são encaixadas sozinhas nos espaços livres, sem mexer nas outras. O que não couber fica fora do salão, sem sobrepor nada ("Encaixar N de fora").
 - **Arrastar**: encaixa de 10 em 10 cm e alinha com as outras mesas (linhas-guia azuis). A área das cadeiras fica verde se o corredor está ok ou vermelha se não. Mesas com pouco espaço ficam marcadas em vermelho, e o rodapé mostra quantas.
+- **Mover várias de uma vez**:
+  - selecione com **Shift+clique**, ou ligue **Selecionar** e toque nas mesas/elementos, ou arraste no fundo para marcar uma área;
+  - arraste qualquer item selecionado para mover todos juntos;
+  - **Mover para…**: clique no ponto de destino e a seleção vai direto para lá, bom para distâncias longas;
+  - também há **Alinhar em linha/coluna** e **Espaçar** (distâncias iguais);
+  - setas do teclado movem 10 cm, e Shift+setas 1 m. Esc limpa a seleção.
+- **Resetar**: escolha o que zerar. Pode tirar todos das mesas, levar as mesas para fora do salão, apagar os elementos, voltar o salão ao padrão ou excluir todas as mesas. A lista de convidados não muda.
 - **Zoom**: roda do mouse, pinça no celular ou os botões + / − / ver tudo. Arraste o fundo para mover a vista.
 - **Sentar convidados**: marque pessoas em "Sem mesa" e toque na mesa (borda verde = cabe). A capacidade é respeitada.
 - **Ver por gestor / Destacar gestor**: cada cadeira na cor do gestor que convidou.
-- **Distribuir**: senta automaticamente quem está sem mesa, mantendo juntos empresa, gestor ou categoria; autoridades e apoiadores vão para as mesas VIP.
+- **Distribuir**:
+  - a mesma empresa senta junta, inclusive as vagas "Convidado N" do lote;
+  - grupo maior que uma mesa ocupa **mesas vizinhas** na planta;
+  - dentro do grupo e entre quem está sozinho, vale a ordem do **nº do convite**;
+  - autoridades e apoiadores vão para as mesas VIP;
+  - por padrão só senta quem está sem mesa, então o que você trocou à mão fica. "Refazer tudo" redistribui todos.
+  - **Organizar salão** também pode já sentar todos assim, marcando "Depois, sentar quem está sem mesa". Depois dá para trocar qualquer um de mesa normalmente.
 - Eventos criados antes desta versão são convertidos sozinhos para um salão de 20 × 12,8 m, mantendo o desenho. Ajuste as medidas em **Salão**.
 - O relatório **Mapa de mesas** imprime a planta em escala: contorno do salão com a medida de cada parede, elementos e mesas. Tem **barra de escala**, que vale em qualquer tamanho de papel, e a **escala aproximada 1:N para A4**, que só vale imprimindo sem "ajustar à página". Também traz as medidas usadas na conta (cadeira e corredor).
 

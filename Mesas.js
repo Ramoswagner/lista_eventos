@@ -443,13 +443,21 @@ function apiAtribuirMesa(token, idEvento, idsConvites, idMesa) {
 
 // ------------------------------------------------------------
 // DISTRIBUIÇÃO AUTOMÁTICA
-// Coloca quem está sem mesa, mantendo grupos juntos (mesma empresa,
-// mesmo gestor ou mesma categoria). Autoridades/apoiadores vão
-// primeiro para as mesas VIP. Grupo que não cabe inteiro numa mesa é
-// dividido pelas mesas com mais lugares livres. Não mexe em quem já
-// tem mesa.
-// opcoes: { agrupar: 'empresa'|'gestor'|'categoria'|'nenhum', somenteConfirmados: bool }
+// Regra: (1) a mesma empresa (ou gestor/categoria) fica junta numa mesa;
+// grupo que não cabe numa mesa vai para mesas VIZINHAS na planta;
+// (2) dentro do grupo e entre quem está sozinho, a ordem é o nº do
+// convite (convites próximos sentam juntos); (3) autoridades e
+// apoiadores vão primeiro para as mesas VIP.
+// Por padrão só senta quem está sem mesa (ajustes manuais ficam);
+// "refazer" tira todos e distribui de novo.
+// Vagas "Convidado N" usam a empresa do lote.
+// opcoes: { agrupar: 'empresa'|'gestor'|'categoria'|'nenhum', somenteConfirmados, refazer }
 // ------------------------------------------------------------
+function _numConvite_(c) {
+  const n = _normNumero_(c.Numero_Convite);
+  return /^\d+$/.test(n) ? Number(n) : (n ? 1e9 : 2e9);   // sem nº vai para o fim
+}
+
 function apiDistribuirMesas(token, idEvento, opcoes) {
   const s = validarSessao_(token);
   if (!s) return NEGADO;
@@ -457,69 +465,157 @@ function apiDistribuirMesas(token, idEvento, opcoes) {
     _exigirPermissao_(s, 'mesas', 'editar');
     opcoes = opcoes || {};
     return _comLock_(function() {
-      const mesas = _mesasDoEvento_(idEvento);
-      if (!mesas.length) throw new Error('Crie as mesas antes de distribuir.');
-      const oc = _ocupacaoMesas_(idEvento);
+      const evento = dbBuscarPorId_(DB.EVENTOS, idEvento);
+      const brutas = _mesasDoEvento_(idEvento);
+      if (!brutas.length) throw new Error('Crie as mesas antes de distribuir.');
+      const planta = _plantaDoEvento_(evento, true);
       const idsMesas = {};
-      const livres = mesas.map(m => {
-        idsMesas[m.ID_Mesa] = true;
-        return { id: m.ID_Mesa, vip: m.VIP === 'Sim', numero: Number(m.Numero) || 0, livre: Math.max(0, (Number(m.Capacidade) || 0) - (oc[m.ID_Mesa] || 0)) };
-      });
+      brutas.forEach(m => { idsMesas[m.ID_Mesa] = true; });
 
-      const pessoas = {};
+      const pessoas = {}, empresaLote = {};
       dbListar_(DB.PESSOAS).forEach(p => pessoas[p.ID_Pessoa] = p);
-      const pendentes = dbListar_(DB.CONVITES, c =>
-        c.ID_Evento === idEvento && _ocupaLugar_(c) && !idsMesas[c.ID_Mesa] &&
-        (!opcoes.somenteConfirmados || c.Status === 'Confirmado' || c.Status === 'Presente'));
-      if (!pendentes.length) return { ok: true, mensagem: 'Não há convidados sem mesa para distribuir.' };
-
-      const chave = {
-        empresa:   c => _s_((pessoas[c.ID_Pessoa] || {}).ID_Empresa) || ('sozinho-' + c.ID_Convite),
-        gestor:    c => _s_(c.Gestor) || ('sozinho-' + c.ID_Convite),
-        categoria: c => _s_((pessoas[c.ID_Pessoa] || {}).Categoria) || 'Outro',
-        nenhum:    () => 'todos'
-      }[opcoes.agrupar] || (c => 'todos');
-
-      const grupos = {};
-      pendentes.forEach(c => {
-        const vip = CATEGORIAS_VIP.indexOf(_s_((pessoas[c.ID_Pessoa] || {}).Categoria)) !== -1;
-        const k = (vip ? 'V|' : 'N|') + chave(c);
-        (grupos[k] = grupos[k] || []).push(c);
-      });
-      // VIP primeiro; depois grupos maiores (mais difíceis de encaixar).
-      const ordem = Object.keys(grupos).sort((a, b) => {
-        if (a[0] !== b[0]) return a[0] === 'V' ? -1 : 1;
-        return grupos[b].length - grupos[a].length;
-      });
+      dbListar_(DB.LOTES, l => l.ID_Evento === idEvento).forEach(l => { empresaLote[l.ID_Lote] = _s_(l.ID_Empresa); });
+      const ativos = dbListar_(DB.CONVITES, c => c.ID_Evento === idEvento && _ocupaLugar_(c));
+      const entra = c => !opcoes.somenteConfirmados || c.Status === 'Confirmado' || c.Status === 'Presente';
 
       const mudancas = {};
-      let semLugar = 0;
-      ordem.forEach(k => {
-        const vip = k[0] === 'V';
-        let fila = grupos[k].slice();
-        // Candidatas: para VIP, mesas VIP antes; para os demais, comuns antes.
-        const candidatas = () => livres.filter(m => m.livre > 0).sort((a, b) =>
-          (a.vip === vip ? 0 : 1) - (b.vip === vip ? 0 : 1) || a.numero - b.numero);
-        // 1) cabe inteiro numa mesa? usa a de menor sobra (melhor encaixe)
-        const inteira = candidatas().filter(m => m.livre >= fila.length && m.vip === vip)
-          .sort((a, b) => a.livre - b.livre)[0] ||
-          candidatas().filter(m => m.livre >= fila.length).sort((a, b) => a.livre - b.livre)[0];
-        if (inteira) {
-          fila.forEach(c => { mudancas[c.ID_Convite] = { ID_Mesa: inteira.id }; });
-          inteira.livre -= fila.length;
-          return;
-        }
-        // 2) divide: enche primeiro as mesas com mais lugares livres
-        while (fila.length) {
-          const m = candidatas().sort((a, b) => (a.vip === vip ? 0 : 1) - (b.vip === vip ? 0 : 1) || b.livre - a.livre)[0];
-          if (!m) { semLugar += fila.length; break; }
-          const parte = fila.splice(0, m.livre);
-          parte.forEach(c => { mudancas[c.ID_Convite] = { ID_Mesa: m.id }; });
-          m.livre -= parte.length;
-        }
+      if (opcoes.refazer) ativos.forEach(c => { if (idsMesas[c.ID_Mesa]) { mudancas[c.ID_Convite] = { ID_Mesa: '' }; c.ID_Mesa = ''; } });
+
+      const empresaDe = c => _s_((pessoas[c.ID_Pessoa] || {}).ID_Empresa) || empresaLote[c.ID_Lote] || '';
+      const chave = {
+        empresa:   c => empresaDe(c) || (c.ID_Lote ? 'lote-' + c.ID_Lote : ''),
+        gestor:    c => _s_(c.Gestor),
+        categoria: c => _s_((pessoas[c.ID_Pessoa] || {}).Categoria),
+        nenhum:    () => ''
+      }[opcoes.agrupar] || (() => '');
+
+      // Mesas: lugares livres, posição e quem do grupo já está nela.
+      const mesas = brutas.map(m => {
+        const p = _posMesa_(m, planta);
+        return { id: m.ID_Mesa, vip: m.VIP === 'Sim', numero: Number(m.Numero) || 0, x: p.x, y: p.y,
+                 livre: Number(m.Capacidade) || 0, grupos: {} };
       });
+      const porId = {}; mesas.forEach(m => { porId[m.id] = m; });
+      ativos.forEach(c => {
+        const m = porId[c.ID_Mesa];
+        if (!m) return;
+        m.livre--;
+        const k = chave(c); if (k) m.grupos[k] = (m.grupos[k] || 0) + 1;
+      });
+      mesas.forEach(m => { m.livre = Math.max(0, m.livre); });
+
+      const pendentes = ativos.filter(c => !porId[c.ID_Mesa] && entra(c))
+        .sort((a, b) => _numConvite_(a) - _numConvite_(b) || _s_((pessoas[a.ID_Pessoa] || {}).Nome || a.Nome_Provisorio).localeCompare(_s_((pessoas[b.ID_Pessoa] || {}).Nome || b.Nome_Provisorio), 'pt-BR'));
+      if (!pendentes.length) return { ok: true, mensagem: opcoes.refazer ? 'Nada a distribuir.' : 'Não há convidados sem mesa para distribuir.' };
+
+      const ehVip = c => CATEGORIAS_VIP.indexOf(_s_((pessoas[c.ID_Pessoa] || {}).Categoria)) !== -1;
+      const grupos = {}, sozinhos = [];
+      pendentes.forEach(c => {
+        const k = chave(c);
+        if (!k) { sozinhos.push(c); return; }
+        const kk = (ehVip(c) ? 'V|' : 'N|') + k;
+        (grupos[kk] = grupos[kk] || []).push(c);
+      });
+      // Grupo de uma pessoa só entra com os sozinhos (ordem do nº do convite).
+      Object.keys(grupos).forEach(k => { if (grupos[k].length === 1 && k[0] === 'N') { sozinhos.push(grupos[k][0]); delete grupos[k]; } });
+      sozinhos.sort((a, b) => _numConvite_(a) - _numConvite_(b));
+
+      const sentar = (c, m, k) => { mudancas[c.ID_Convite] = { ID_Mesa: m.id }; m.livre--; if (k) m.grupos[k] = (m.grupos[k] || 0) + 1; };
+      const prefer = (m, vip) => (m.vip === vip ? 0 : 1);
+      const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+      let semLugar = 0;
+
+      // VIP primeiro; depois os grupos maiores (mais difíceis de encaixar).
+      Object.keys(grupos).sort((a, b) => (a[0] === b[0] ? 0 : a[0] === 'V' ? -1 : 1) || grupos[b].length - grupos[a].length).forEach(kk => {
+        const vip = kk[0] === 'V', k = kk.slice(2), fila = grupos[kk].slice();
+        const comLugar = () => mesas.filter(m => m.livre > 0);
+        // 1) mesa onde o grupo já está e cabem todos; 2) uma mesa só (a de menor sobra; vazia de preferência)
+        let alvo = comLugar().filter(m => m.grupos[k] && m.livre >= fila.length).sort((a, b) => b.grupos[k] - a.grupos[k])[0] ||
+          comLugar().filter(m => m.livre >= fila.length).sort((a, b) =>
+            prefer(a, vip) - prefer(b, vip) || a.livre - b.livre || a.numero - b.numero)[0];
+        if (alvo) { fila.forEach(c => sentar(c, alvo, k)); return; }
+        // 3) não cabe numa mesa: começa pela mesa (do grupo ou vazia) e segue pelas vizinhas mais próximas.
+        let atual = comLugar().filter(m => m.grupos[k]).sort((a, b) => b.livre - a.livre)[0] ||
+          comLugar().sort((a, b) => prefer(a, vip) - prefer(b, vip) || b.livre - a.livre || a.numero - b.numero)[0];
+        const usadas = [];
+        while (fila.length && atual) {
+          while (fila.length && atual.livre > 0) sentar(fila.shift(), atual, k);
+          usadas.push(atual);
+          const centro = { x: usadas.reduce((t, m) => t + m.x, 0) / usadas.length, y: usadas.reduce((t, m) => t + m.y, 0) / usadas.length };
+          atual = comLugar().sort((a, b) => prefer(a, vip) - prefer(b, vip) || dist(a, centro) - dist(b, centro))[0];
+        }
+        semLugar += fila.length;
+      });
+
+      // Sozinhos, na ordem do nº do convite: completa a mesa atual e segue para a vizinha.
+      // Autoridades/apoiadores sozinhos primeiro, nas mesas VIP.
+      const encher = (lista, vip) => {
+        let atual = null;
+        lista.forEach(c => {
+          if (!atual || atual.livre <= 0) {
+            const ref = atual;
+            atual = mesas.filter(m => m.livre > 0).sort((a, b) =>
+              prefer(a, vip) - prefer(b, vip) || (ref ? dist(a, ref) - dist(b, ref) : a.numero - b.numero))[0] || null;
+          }
+          if (!atual) { semLugar++; return; }
+          sentar(c, atual, '');
+        });
+      };
+      encher(sozinhos.filter(ehVip), true);
+      encher(sozinhos.filter(c => !ehVip(c)), false);
+
       const n = dbAtualizarVarios_(DB.CONVITES, mudancas);
-      return { ok: true, mensagem: n + ' convidado(s) distribuído(s).' + (semLugar ? ' ' + semLugar + ' ficaram sem mesa: faltam lugares — crie mais mesas.' : '') };
+      const sentados = Object.keys(mudancas).filter(id => mudancas[id].ID_Mesa).length;
+      logAudit_('UPDATE', 'Mesas', idEvento, 'Distribuição automática (' + (opcoes.agrupar || 'nenhum') + (opcoes.refazer ? ', refeita' : '') + '): ' + sentados + ' sentados');
+      return { ok: true, mensagem: sentados + ' convidado(s) distribuído(s).' + (semLugar ? ' ' + semLugar + ' ficaram sem mesa: faltam lugares — crie mais mesas.' : ''), dados: { sentados: sentados, semLugar: semLugar, alterados: n } };
+    });
+  } catch (e) { return { ok: false, mensagem: e.message }; }
+}
+
+// ------------------------------------------------------------
+// RESETAR (só o que for marcado)
+// opcoes: { tirarConvidados, mesasFora, elementos, salao, excluirMesas }
+// ------------------------------------------------------------
+function apiResetarMesas(token, idEvento, opcoes) {
+  const s = validarSessao_(token);
+  if (!s) return NEGADO;
+  try {
+    _exigirPermissao_(s, 'mesas', 'editar');
+    opcoes = opcoes || {};
+    return _comLock_(function() {
+      const planta = _migrarPlanta_(idEvento);
+      const mesas = _mesasDoEvento_(idEvento);
+      const feito = [];
+      if (opcoes.tirarConvidados || opcoes.excluirMesas) {
+        const ids = {}; mesas.forEach(m => { ids[m.ID_Mesa] = true; });
+        const mud = {};
+        dbListar_(DB.CONVITES, c => c.ID_Evento === idEvento && c.ID_Mesa && ids[c.ID_Mesa]).forEach(c => { mud[c.ID_Convite] = { ID_Mesa: '' }; });
+        dbAtualizarVarios_(DB.CONVITES, mud);
+        feito.push(Object.keys(mud).length + ' convidado(s) tirados das mesas');
+      }
+      if (opcoes.excluirMesas) {
+        dbExcluirVarios_(DB.MESAS, m => m.ID_Evento === idEvento);
+        feito.push(mesas.length + ' mesa(s) excluída(s)');
+      }
+      const nova = Object.assign({}, planta);
+      if (opcoes.salao) Object.assign(nova, { w: PLANTA_PADRAO.w, h: PLANTA_PADRAO.h, corredor: PLANTA_PADRAO.corredor, margem: PLANTA_PADRAO.margem, cadeira: PLANTA_PADRAO.cadeira, forma: { tipo: 'retangulo' } });
+      if (opcoes.elementos) nova.elementos = [];
+      if (opcoes.salao || opcoes.elementos) {
+        dbAtualizar_(DB.EVENTOS, idEvento, { Planta: JSON.stringify(_validarPlanta_(nova)) });
+        if (opcoes.salao) feito.push('salão voltou ao padrão');
+        if (opcoes.elementos) feito.push('elementos removidos');
+      }
+      if (opcoes.mesasFora && !opcoes.excluirMesas && mesas.length) {
+        const p = _validarPlanta_(nova);
+        const pos = _posicoesEspera_(p, [], mesas);
+        const mud = {};
+        mesas.forEach((m, i) => { mud[m.ID_Mesa] = { Pos_X: pos[i].x, Pos_Y: pos[i].y }; });
+        dbAtualizarVarios_(DB.MESAS, mud);
+        feito.push('mesas levadas para fora do salão');
+      }
+      if (!feito.length) return { ok: false, mensagem: 'Marque o que deseja resetar.' };
+      logAudit_('UPDATE', 'Mesas', idEvento, 'Reset: ' + feito.join('; '));
+      return { ok: true, mensagem: 'Pronto: ' + feito.join('; ') + '.' };
     });
   } catch (e) { return { ok: false, mensagem: e.message }; }
 }

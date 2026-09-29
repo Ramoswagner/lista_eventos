@@ -20,6 +20,14 @@
   .mz-zoom button:hover { background:var(--blue-50); }
   .mz-status { font-size:.76rem; color:var(--text-muted); padding:8px 14px; border-top:1px solid var(--border); }
   .mz-elem.arrastavel { cursor:move; }
+  .mz-mesa.mz-sel .mz-tampo, .mz-elem.mz-sel > rect, .mz-elem.mz-sel > ellipse { stroke:#7C3AED !important; stroke-width:12 !important; }
+  .mz-mesa.mz-sel .mz-tampo { fill:#F5F3FF; }
+  .mz-mesa.arrastando, .mz-elem.arrastando { opacity:.85; }
+  .mz-planta.mz-mira, .mz-planta.mz-mira * { cursor:crosshair !important; }
+  .mz-toggle-sel.on { background:#7C3AED !important; border-color:#7C3AED !important; color:#fff !important; }
+  .mz-selbar { display:none; gap:6px; flex-wrap:wrap; align-items:center; padding:8px 12px; background:#F5F3FF; border-bottom:1px solid #DDD6FE; }
+  .mz-selbar .btn-sm { padding:4px 10px; font-size:.76rem; }
+  .mz-sel-n { font-weight:700; color:#5B21B6; font-size:.8rem; margin-right:4px; }
   .mz-arranjos { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
   .mz-arranjo { border:1.5px solid var(--border); border-radius:12px; padding:10px; cursor:pointer; text-align:center; font-size:.78rem; font-weight:600; color:var(--ink-900); margin:0; }
   .mz-arranjo input { display:none; }
@@ -132,17 +140,38 @@
 <div class="modal fade" id="modalDistribuir" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down"><div class="modal-content" style="border-radius:16px;border:none;">
   <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold"><i class="fas fa-wand-magic-sparkles me-2 text-primary"></i>Distribuir automaticamente</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
   <div class="modal-body">
-    <p class="small text-muted">Coloca quem está <strong>sem mesa</strong> nos lugares livres. Quem já tem mesa não é movido. Autoridades e apoiadores (deputados, prefeitos, patrocinadores, doadores…) vão primeiro para as mesas VIP.</p>
+    <p class="small text-muted mb-2">Como funciona:</p>
+    <ol class="small text-muted ps-3 mb-3">
+      <li>Quem é do mesmo grupo (ex.: mesma empresa, inclusive as vagas "Convidado N" do lote) senta <strong>junto na mesma mesa</strong>.</li>
+      <li>Grupo maior que uma mesa ocupa <strong>mesas vizinhas</strong> na planta.</li>
+      <li>Dentro do grupo e entre quem está sozinho, a ordem é o <strong>nº do convite</strong> (números próximos sentam juntos).</li>
+      <li>Autoridades e apoiadores vão primeiro para as mesas VIP.</li>
+    </ol>
     <label class="form-label">Manter juntos</label>
     <select class="form-select mb-3" id="dsAgrupar">
       <option value="empresa">Pessoas da mesma empresa</option>
       <option value="gestor">Convidados do mesmo gestor</option>
       <option value="categoria">Pessoas da mesma categoria</option>
-      <option value="nenhum">Não agrupar (ordem da lista)</option>
+      <option value="nenhum">Só pelo nº do convite</option>
     </select>
     <div class="form-check"><input class="form-check-input" type="checkbox" id="dsConfirmados"><label class="form-check-label small" for="dsConfirmados">Só quem já confirmou presença</label></div>
+    <div class="form-check mt-1"><input class="form-check-input" type="checkbox" id="dsRefazer"><label class="form-check-label small" for="dsRefazer"><strong>Refazer tudo</strong>: tira todos das mesas e distribui de novo. Sem marcar, só senta quem está sem mesa — quem você já trocou de mesa fica onde está.</label></div>
   </div>
   <div class="modal-footer" style="border-top:1px solid var(--border);"><button class="btn-hb-outline" data-bs-dismiss="modal">Cancelar</button><button class="btn-hb" id="btnDistribuir" onclick="distribuir()"><i class="fas fa-check"></i> Distribuir</button></div>
+</div></div></div>
+
+<!-- Modal: resetar -->
+<div class="modal fade" id="modalResetar" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down"><div class="modal-content" style="border-radius:16px;border:none;">
+  <div class="modal-header" style="border-bottom:1px solid var(--border);"><h6 class="modal-title fw-bold"><i class="fas fa-eraser me-2 text-danger"></i>Resetar mesas</h6><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+  <div class="modal-body">
+    <p class="small text-muted">Marque só o que quer começar do zero. A lista de convidados não é alterada.</p>
+    <div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="rsConvidados"><label class="form-check-label" for="rsConvidados">Tirar todos os convidados das mesas <span class="small text-muted d-block">as mesas continuam; ninguém fica sentado</span></label></div>
+    <div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="rsFora"><label class="form-check-label" for="rsFora">Levar todas as mesas para fora do salão <span class="small text-muted d-block">planta em branco para montar de novo (use "Organizar salão")</span></label></div>
+    <div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="rsElementos"><label class="form-check-label" for="rsElementos">Apagar os elementos <span class="small text-muted d-block">palco, pista, buffet, bar…</span></label></div>
+    <div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="rsSalao"><label class="form-check-label" for="rsSalao">Voltar o salão ao padrão <span class="small text-muted d-block">retângulo 25 × 18 m, cadeira 0,55 m, corredor 0,90 m</span></label></div>
+    <div class="form-check"><input class="form-check-input" type="checkbox" id="rsExcluir"><label class="form-check-label text-danger" for="rsExcluir">Excluir todas as mesas <span class="small text-muted d-block">os convidados ficam sem mesa</span></label></div>
+  </div>
+  <div class="modal-footer" style="border-top:1px solid var(--border);"><button class="btn-hb-outline" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-danger" id="btnResetar" onclick="confirmarResetar()"><i class="fas fa-eraser"></i> Resetar</button></div>
 </div></div></div>
 
 <!-- Modal: organizar salão -->
@@ -161,7 +190,8 @@
       <div class="col-6" id="orCentralBox"><label class="form-label" for="orCentral">Corredor central (m)</label><input class="form-control" id="orCentral" inputmode="decimal" value="2,00"></div>
     </div>
     <div class="form-check" id="orEncostarBox" onchange="atualizarPrevia()"><input class="form-check-input" type="checkbox" id="orEncostar"><label class="form-check-label small" for="orEncostar">Encostar as retangulares ponta com ponta (mesa imperial)</label></div>
-    <div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="orVip" checked><label class="form-check-label small" for="orVip">Mesas VIP mais perto do palco</label></div>
+    <div class="form-check"><input class="form-check-input" type="checkbox" id="orVip" checked><label class="form-check-label small" for="orVip">Mesas VIP mais perto do palco</label></div>
+    <div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="orSentar" checked><label class="form-check-label small" for="orSentar">Depois, <strong>sentar quem está sem mesa</strong>: mesma empresa junta, mesas vizinhas para grupos grandes, nº do convite em sequência</label></div>
     <div id="orPrevia"></div>
   </div>
   <div class="modal-footer" style="border-top:1px solid var(--border);"><button class="btn-hb-outline" data-bs-dismiss="modal">Cancelar</button><button class="btn-hb" onclick="aplicarOrganizar()"><i class="fas fa-check"></i> Organizar</button></div>
@@ -256,6 +286,13 @@
       if (resp && resp.auth === false) { forcarLogout('Sessão expirada.'); return; }
       if (!resp.ok) { wrap.innerHTML = '<div class="card-hb"><div class="empty-state"><i class="fas fa-triangle-exclamation"></i><p>' + esc(resp.mensagem) + '</p></div></div>'; return; }
       D = resp.dados;
+      // Mantém a seleção da planta apontando para os objetos novos.
+      var novaSel = {};
+      Object.keys(selPlanta).forEach(function(k) {
+        var id = k.slice(2), o = k[0] === 'm' ? D.mesas.filter(function(m){ return m.id === id; })[0] : D.planta.elementos.filter(function(e){ return e.id === id; })[0];
+        if (o) novaSel[k] = o;
+      });
+      selPlanta = novaSel;
       prepararCores();
       if (destaqueGestor && !corGestor[destaqueGestor]) destaqueGestor = '';
       // Limpa seleção de quem já foi sentado ou saiu da lista
@@ -385,10 +422,12 @@
         '<div class="dropdown d-inline-block"><button class="btn-hb-outline btn-sm dropdown-toggle" data-bs-toggle="dropdown"><i class="fas fa-shapes"></i> Elemento</button><ul class="dropdown-menu">' +
           Object.keys(ESTILO).map(function(t){ return '<li><a class="dropdown-item small" href="#" onclick="novoElemento(\'' + t + '\');return false;"><i class="fas fa-square me-2" style="color:' + ESTILO[t].borda + '"></i>' + ESTILO[t].rotulo + '</a></li>'; }).join('') +
         '</ul></div>' +
+        '<button class="btn-hb-outline btn-sm mz-toggle-sel' + (modoSelecao ? ' on' : '') + '" id="btnModoSel" onclick="alternarModoSel()" title="Selecionar várias mesas/elementos para mover juntos (ou Shift+clique)"><i class="fas fa-object-group"></i> Selecionar</button>' +
         '<button class="btn-hb btn-sm" onclick="abrirOrganizar()"><i class="fas fa-table-cells-large"></i> Organizar salão</button>' +
         (fora ? '<button class="btn-hb-outline btn-sm" onclick="encaixarFora()" title="Coloca as mesas de fora nos espaços livres, sem mexer nas outras"><i class="fas fa-arrow-right-to-bracket"></i> Encaixar ' + fora + ' de fora</button>' : '') +
         (desfazer ? '<button class="btn-hb-outline btn-sm" onclick="desfazerArranjo()"><i class="fas fa-rotate-left"></i> Desfazer</button>' : '') +
-      '</div>' : '') +
+        '<button class="btn btn-sm btn-outline-danger ms-auto" onclick="abrirResetar()" title="Resetar mesas, lugares ou o salão"><i class="fas fa-eraser"></i> Resetar</button>' +
+      '</div><div class="mz-selbar" id="mzSelBar"></div>' : '') +
       '<div class="mz-planta-wrap"><svg id="mzSvg" class="mz-planta" xmlns="' + NS + '"></svg>' +
         '<div class="mz-zoom"><button onclick="zoomPlanta(0.8)" title="Aproximar" aria-label="Aproximar"><i class="fas fa-plus"></i></button><button onclick="ajustarPlanta()" title="Ver tudo" aria-label="Ver tudo"><i class="fas fa-expand"></i></button><button onclick="zoomPlanta(1.25)" title="Afastar" aria-label="Afastar"><i class="fas fa-minus"></i></button></div>' +
       '</div>' +
@@ -486,21 +525,26 @@
       el('rect', { x:b.x0 - 40, y:b.y0 - 40, width:b.x1 - b.x0 + 80, height:b.y1 - b.y0 + 80, rx:30, fill:'#FFF7ED', stroke:'#F59E0B', 'stroke-width':5, 'stroke-dasharray':'30 20' }, fundo);
       var tf = el('text', { x:b.x0 - 30, y:b.y0 - 60, 'font-size':fc * 0.8, 'font-weight':700, fill:'#B45309' }, fundo); tf.textContent = 'Fora do salão · ' + fora.length + ' mesa(s)';
     }
+    gElem = {};
     var camElem = el('g', { id:'mzElem' }, svg);
     P().elementos.forEach(function(e){ desenharElemento(camElem, e); });
     el('g', { id:'mzMesas' }, svg);
-    el('g', { id:'mzGuias' }, svg);
+    el('g', { id:'mzGuias', 'pointer-events':'none' }, svg);
     desenharMesas();
     if (!view) ajustarPlanta(); else aplicarView();
     ligarVista(svg);
+    if (modoMoverPara) svg.classList.add('mz-mira');
+    marcarSel();
   }
 
   function desenharMesas() {
     var cam = document.getElementById('mzMesas');
     if (!cam) return;
     cam.innerHTML = '';
+    gMesa = {};
     var conf = calcularConflitos();
     D.mesas.forEach(function(m) { desenharMesa(cam, m, conf[m.id]); });
+    itensSel().forEach(function(it){ var g = gDe(it); if (g) g.classList.add('mz-sel'); });
     var n = Object.keys(conf).length, fora = D.mesas.filter(function(m){ return !noSalao(m); }).length;
     var st = document.getElementById('mzStatus');
     if (st) st.innerHTML = '<i class="fas fa-ruler-combined me-1"></i>Salão ' + metros(P().w) + ' × ' + metros(P().h) + ' · corredor mínimo ' + metros(P().corredor) +
@@ -559,92 +603,298 @@
     ligarArraste(g, m, 'mesa');
   }
 
-  // Vista: arrastar o fundo = mover; roda = zoom; dois dedos = pinça.
+  // ---------------------------------------------------------- seleção e movimento
+  // selPlanta: mesas/elementos selecionados ('m:ID' / 'e:ID' -> objeto).
+  // Shift/Ctrl+clique ou o modo "Selecionar" alternam; no modo Selecionar,
+  // arrastar no fundo desenha um retângulo. Arrastar um item selecionado
+  // move todos juntos. "Mover para…" leva a seleção até o ponto clicado.
+  var selPlanta = {}, modoSelecao = false, modoMoverPara = false;
+  var gMesa = {}, gElem = {};           // id -> <g> (fora dos objetos, que vão para o servidor)
+  var arr = null, ultimoEv = null, quadroPendente = false, inv = null;
+
+  function chaveDe(obj, tipo) { return (tipo === 'mesa' ? 'm:' : 'e:') + obj.id; }
+  function itensSel() { return Object.keys(selPlanta).map(function(k){ return { k: k, tipo: k[0] === 'm' ? 'mesa' : 'elem', obj: selPlanta[k] }; }); }
+  function gDe(it) { return it.tipo === 'mesa' ? gMesa[it.obj.id] : gElem[it.obj.id]; }
+  function aSvg(ev) { return new DOMPoint(ev.clientX, ev.clientY).matrixTransform(inv); }
+  function medirTela() { var svg = document.getElementById('mzSvg'); inv = svg.getScreenCTM().inverse(); }
+
+  function marcarSel() {
+    document.querySelectorAll('#mzSvg .mz-sel').forEach(function(g){ g.classList.remove('mz-sel'); });
+    itensSel().forEach(function(it){ var g = gDe(it); if (g) g.classList.add('mz-sel'); });
+    atualizarSelBar();
+  }
+  function limparSel() { selPlanta = {}; marcarSel(); }
+  function atualizarSelBar() {
+    var bar = document.getElementById('mzSelBar');
+    if (!bar) return;
+    var n = Object.keys(selPlanta).length;
+    var btn = document.getElementById('btnModoSel');
+    if (btn) btn.classList.toggle('on', modoSelecao);
+    if (modoMoverPara) { bar.innerHTML = '<span class="mz-sel-n"><i class="fas fa-crosshairs me-1"></i>Clique no ponto de destino na planta</span><button class="btn btn-sm btn-link" onclick="cancelarMoverPara()">Cancelar (Esc)</button>'; bar.style.display = 'flex'; return; }
+    if (!n) {
+      bar.innerHTML = modoSelecao ? '<span class="text-muted small"><i class="fas fa-circle-info me-1"></i>Toque nas mesas/elementos para selecionar, ou arraste no fundo para marcar uma área.</span>' : '';
+      bar.style.display = modoSelecao ? 'flex' : 'none'; return;
+    }
+    bar.style.display = 'flex';
+    bar.innerHTML = '<span class="mz-sel-n">' + n + ' selecionado(s)</span>' +
+      '<button class="btn-hb btn-sm" onclick="iniciarMoverPara()" title="Clique depois no ponto de destino"><i class="fas fa-up-down-left-right"></i> Mover para…</button>' +
+      (n > 1 ? '<button class="btn-hb-outline btn-sm" onclick="alinharSel(\'y\')" title="Mesma linha (mesma altura)"><i class="fas fa-grip-lines"></i> Alinhar em linha</button>' +
+               '<button class="btn-hb-outline btn-sm" onclick="alinharSel(\'x\')" title="Mesma coluna"><i class="fas fa-grip-lines-vertical"></i> Alinhar em coluna</button>' : '') +
+      (n > 2 ? '<button class="btn-hb-outline btn-sm" onclick="espacarSel(\'x\')" title="Mesma distância na horizontal"><i class="fas fa-arrows-left-right"></i> Espaçar</button>' +
+               '<button class="btn-hb-outline btn-sm" onclick="espacarSel(\'y\')" title="Mesma distância na vertical"><i class="fas fa-arrows-up-down"></i> Espaçar</button>' : '') +
+      '<button class="btn btn-sm btn-link" onclick="limparSelPlanta()">Limpar</button>' +
+      '<span class="text-muted small ms-auto d-none d-md-inline">setas do teclado: 10 cm · Shift+setas: 1 m</span>';
+  }
+  window.limparSelPlanta = limparSel;
+  window.alternarModoSel = function() { modoSelecao = !modoSelecao; if (!modoSelecao) selPlanta = {}; marcarSel(); };
+
+  // Não deixa passar da borda esquerda/de cima da planta (o servidor grava a partir de 0).
+  function limiteDesloc(itens, dx, dy) {
+    var mx = Infinity, my = Infinity;
+    itens.forEach(function(it){ var ox = it.ox !== undefined ? it.ox : it.obj.x, oy = it.oy !== undefined ? it.oy : it.obj.y; mx = Math.min(mx, ox); my = Math.min(my, oy); });
+    return { dx: Math.max(dx, -mx), dy: Math.max(dy, -my) };
+  }
+
+  // Aplica um deslocamento a vários itens, salva e redesenha uma vez.
+  function moverItens(itens, dx, dy) {
+    var lim = limiteDesloc(itens, dx, dy); dx = lim.dx; dy = lim.dy;
+    if (!itens.length || (!dx && !dy)) return;
+    var cruzou = false, temElem = false;
+    itens.forEach(function(it) {
+      var antes = it.tipo === 'mesa' && noSalao(it.obj);
+      it.obj.x = Math.round(it.obj.x + dx); it.obj.y = Math.round(it.obj.y + dy);
+      if (it.tipo === 'mesa') { if (antes !== noSalao(it.obj)) cruzou = true; pendentesPos[it.obj.id] = { id: it.obj.id, x: it.obj.x, y: it.obj.y }; }
+      else temElem = true;
+    });
+    concluirMovimento(cruzou || temElem, temElem);
+  }
+  function concluirMovimento(redesenharTudo, salvarElementos) {
+    if (Object.keys(pendentesPos).length) { clearTimeout(timerPos); timerPos = setTimeout(salvarPosicoesPendentes, 500); }
+    if (salvarElementos) salvarPlanta();
+    if (redesenharTudo) desenharPlanta(); else desenharMesas();
+    marcarSel();
+  }
+  window.alinharSel = function(eixo) {
+    var its = itensSel(); if (its.length < 2) return;
+    var media = Math.round(its.reduce(function(t, it){ return t + it.obj[eixo]; }, 0) / its.length / 10) * 10;
+    its.forEach(function(it){ var d = media - it.obj[eixo]; moverUm(it, eixo === 'x' ? d : 0, eixo === 'y' ? d : 0); });
+    concluirMovimento(true, its.some(function(it){ return it.tipo === 'elem'; }));
+  };
+  window.espacarSel = function(eixo) {
+    var its = itensSel().sort(function(a, b){ return a.obj[eixo] - b.obj[eixo]; }); if (its.length < 3) return;
+    var ini = its[0].obj[eixo], passo = (its[its.length - 1].obj[eixo] - ini) / (its.length - 1);
+    its.forEach(function(it, i){ var d = Math.round(ini + passo * i) - it.obj[eixo]; moverUm(it, eixo === 'x' ? d : 0, eixo === 'y' ? d : 0); });
+    concluirMovimento(true, its.some(function(it){ return it.tipo === 'elem'; }));
+  };
+  function moverUm(it, dx, dy) {
+    it.obj.x = Math.round(it.obj.x + dx); it.obj.y = Math.round(it.obj.y + dy);
+    if (it.tipo === 'mesa') pendentesPos[it.obj.id] = { id: it.obj.id, x: it.obj.x, y: it.obj.y };
+  }
+  window.iniciarMoverPara = function() {
+    if (!Object.keys(selPlanta).length) return;
+    modoMoverPara = true;
+    var svg = document.getElementById('mzSvg'); if (svg) svg.classList.add('mz-mira');
+    atualizarSelBar();
+  };
+  window.cancelarMoverPara = function() {
+    modoMoverPara = false;
+    var svg = document.getElementById('mzSvg'); if (svg) svg.classList.remove('mz-mira');
+    atualizarSelBar();
+  };
+  function destinoMoverPara(p) {
+    var its = itensSel();
+    var cx = its.reduce(function(t, it){ return t + it.obj.x; }, 0) / its.length, cy = its.reduce(function(t, it){ return t + it.obj.y; }, 0) / its.length;
+    cancelarMoverPara();
+    moverItens(its, Math.round((p.x - cx) / 10) * 10, Math.round((p.y - cy) / 10) * 10);
+  }
+
+  // Teclado: setas movem a seleção; Esc cancela/limpa.
+  function teclado(ev) {
+    if (!document.body.contains(wrap)) { document.removeEventListener('keydown', teclado); return; }
+    if (!D || modo !== 'planta' || !D.podeEditar) return;
+    var alvo = ev.target, tag = alvo && alvo.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.querySelector('.modal.show')) return;
+    if (ev.key === 'Escape') { if (modoMoverPara) cancelarMoverPara(); else limparSel(); return; }
+    var passo = ev.shiftKey ? 100 : 10, d = { ArrowLeft: [-passo, 0], ArrowRight: [passo, 0], ArrowUp: [0, -passo], ArrowDown: [0, passo] }[ev.key];
+    if (!d || !Object.keys(selPlanta).length) return;
+    ev.preventDefault();
+    moverItens(itensSel(), d[0], d[1]);
+  }
+  document.addEventListener('keydown', teclado);
+
+  // Vista: arrastar o fundo = mover a vista (ou marcar área no modo Selecionar);
+  // roda = zoom; dois dedos = pinça. Tudo desenhado no máximo uma vez por quadro.
   function ligarVista(svg) {
     if (svg.__ligado) return;
     svg.__ligado = true;
-    var dedos = {}, ancora = null, pinca = null;
+    var dedos = {}, ancora = null, pinca = null, marca = null, clique = null, evVista = null, quadroVista = false;
     svg.addEventListener('wheel', function(ev) {
       ev.preventDefault();
       var p = pontoSvg(ev);
       zoomPlanta(Math.exp(ev.deltaY * 0.0015), p.x, p.y);
+      if (arr) medirTela();
     }, { passive: false });
     svg.addEventListener('pointerdown', function(ev) {
       if (ev.target.closest && ev.target.closest('.mz-mesa, .mz-elem')) return;
       dedos[ev.pointerId] = { x: ev.clientX, y: ev.clientY };
       svg.setPointerCapture(ev.pointerId);
+      medirTela();
       var ids = Object.keys(dedos);
-      if (ids.length === 1) { ancora = pontoSvg(ev); pinca = null; }
-      else if (ids.length === 2) {
+      clique = { x: ev.clientX, y: ev.clientY };
+      if (ids.length === 1) {
+        pinca = null;
+        if ((modoSelecao || ev.shiftKey) && !modoMoverPara) { marca = { p0: aSvg(ev), somar: ev.shiftKey }; ancora = null; }
+        else { ancora = aSvg(ev); marca = null; }
+      } else if (ids.length === 2) {
         var a = dedos[ids[0]], b = dedos[ids[1]];
-        pinca = { dist: Math.hypot(a.x - b.x, a.y - b.y), w: view.w }; ancora = null;
+        pinca = { dist: Math.hypot(a.x - b.x, a.y - b.y), w: view.w }; ancora = null; marca = null; clique = null;
       }
     });
     svg.addEventListener('pointermove', function(ev) {
       if (!dedos[ev.pointerId]) return;
       dedos[ev.pointerId] = { x: ev.clientX, y: ev.clientY };
-      var ids = Object.keys(dedos);
-      if (pinca && ids.length === 2) {
-        var a = dedos[ids[0]], b = dedos[ids[1]], d = Math.hypot(a.x - b.x, a.y - b.y) || 1;
-        var meio = pontoSvg({ clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 });
-        zoomPlanta((pinca.w * pinca.dist / d) / view.w, meio.x, meio.y);
-      } else if (ancora) {
-        var p = pontoSvg(ev);
-        view.x += ancora.x - p.x; view.y += ancora.y - p.y; aplicarView();
-      }
+      evVista = ev;
+      if (quadroVista) return;
+      quadroVista = true;
+      requestAnimationFrame(function() {
+        quadroVista = false;
+        var e = evVista, ids = Object.keys(dedos);
+        if (pinca && ids.length === 2) {
+          var a = dedos[ids[0]], b = dedos[ids[1]], d = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+          var meio = pontoSvg({ clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 });
+          zoomPlanta((pinca.w * pinca.dist / d) / view.w, meio.x, meio.y);
+        } else if (marca) {
+          var p = aSvg(e), guias = document.getElementById('mzGuias');
+          guias.innerHTML = '';
+          el('rect', { x:Math.min(p.x, marca.p0.x), y:Math.min(p.y, marca.p0.y), width:Math.abs(p.x - marca.p0.x), height:Math.abs(p.y - marca.p0.y),
+            fill:'rgba(124,58,237,.08)', stroke:'#7C3AED', 'stroke-width':3 * cmPorPixel() / 2, 'stroke-dasharray':'10 6' }, guias);
+          marca.p1 = p;
+        } else if (ancora) {
+          var q = pontoSvg(e);
+          view.x += ancora.x - q.x; view.y += ancora.y - q.y; aplicarView();
+        }
+      });
     });
-    function fim(ev) { delete dedos[ev.pointerId]; if (Object.keys(dedos).length < 2) pinca = null; if (!Object.keys(dedos).length) ancora = null; }
+    function fim(ev) {
+      if (!dedos[ev.pointerId]) return;
+      var foiClique = clique && Math.abs(ev.clientX - clique.x) + Math.abs(ev.clientY - clique.y) < 6;
+      delete dedos[ev.pointerId];
+      if (Object.keys(dedos).length < 2) pinca = null;
+      if (Object.keys(dedos).length) return;
+      if (marca) {
+        var guias = document.getElementById('mzGuias'); if (guias) guias.innerHTML = '';
+        if (marca.p1 && !foiClique) {
+          var x0 = Math.min(marca.p0.x, marca.p1.x), x1 = Math.max(marca.p0.x, marca.p1.x), y0 = Math.min(marca.p0.y, marca.p1.y), y1 = Math.max(marca.p0.y, marca.p1.y);
+          if (!marca.somar) selPlanta = {};
+          D.mesas.forEach(function(m){ if (m.x >= x0 && m.x <= x1 && m.y >= y0 && m.y <= y1) selPlanta[chaveDe(m, 'mesa')] = m; });
+          P().elementos.forEach(function(e){ if (e.x >= x0 && e.x <= x1 && e.y >= y0 && e.y <= y1) selPlanta[chaveDe(e, 'elem')] = e; });
+          marcarSel();
+        } else if (foiClique && !marca.somar) limparSel();
+      } else if (foiClique) {
+        if (modoMoverPara) destinoMoverPara(aSvg(ev));
+        else if (Object.keys(selPlanta).length && !modoSelecao) limparSel();
+      }
+      ancora = null; marca = null; clique = null;
+    }
     svg.addEventListener('pointerup', fim);
     svg.addEventListener('pointercancel', fim);
   }
 
-  // Arrastar mesa/elemento: encaixa de 10 em 10 cm e alinha com as outras mesas (guias).
+  // Arrastar mesa/elemento (ou a seleção inteira). Encaixa de 10 em 10 cm e,
+  // com uma mesa só, alinha com as outras (guias) e mostra se o corredor está ok.
   function ligarArraste(g, obj, tipo) {
-    var off = null, ini = null, moveu = false;
+    if (tipo === 'mesa') gMesa[obj.id] = g; else gElem[obj.id] = g;
     g.addEventListener('pointerdown', function(ev) {
       if (ev.button !== undefined && ev.button !== 0) return;
       ev.stopPropagation();
-      var p = pontoSvg(ev);
-      off = { x: p.x - obj.x, y: p.y - obj.y }; ini = { x: ev.clientX, y: ev.clientY, ox: obj.x, oy: obj.y }; moveu = false;
+      medirTela();
+      if (modoMoverPara) { arr = { destino: true, ini: { x: ev.clientX, y: ev.clientY } }; return; }
+      arr = { obj: obj, tipo: tipo, k: chaveDe(obj, tipo), p0: aSvg(ev), ini: { x: ev.clientX, y: ev.clientY }, moveu: false,
+              alternar: ev.shiftKey || ev.ctrlKey || ev.metaKey || modoSelecao };
       if (D.podeEditar) g.setPointerCapture(ev.pointerId);
     });
     g.addEventListener('pointermove', function(ev) {
-      if (!off || !D.podeEditar) return;
-      if (!moveu && Math.abs(ev.clientX - ini.x) + Math.abs(ev.clientY - ini.y) < 6) return;
-      moveu = true; g.classList.add('arrastando');
-      var p = pontoSvg(ev), nx = Math.round((p.x - off.x) / 10) * 10, ny = Math.round((p.y - off.y) / 10) * 10;
-      var guias = document.getElementById('mzGuias'); guias.innerHTML = '';
-      if (tipo === 'mesa') {
-        var tol = 10 * cmPorPixel(), gx = null, gy = null;
-        D.mesas.forEach(function(o) {
-          if (o === obj) return;
-          if (gx === null && Math.abs(o.x - nx) < tol) gx = o.x;
-          if (gy === null && Math.abs(o.y - ny) < tol) gy = o.y;
-        });
-        if (gx !== null) { nx = gx; el('line', { x1:gx, y1:Math.min(ny, 0) - 200, x2:gx, y2:Math.max(ny, P().h) + 200, stroke:'#0088CC', 'stroke-width':3 * cmPorPixel() / 2, 'stroke-dasharray':'12 8' }, guias); }
-        if (gy !== null) { ny = gy; el('line', { x1:Math.min(nx, 0) - 200, y1:gy, x2:Math.max(nx, P().w) + 200, y2:gy, stroke:'#0088CC', 'stroke-width':3 * cmPorPixel() / 2, 'stroke-dasharray':'12 8' }, guias); }
-        // Mostra a área das cadeiras: verde se o corredor está ok, vermelho se não.
-        var cx = caixaMesa(obj, nx, ny), ok = true;
-        D.mesas.forEach(function(o){ if (o !== obj && noSalao(o) && folga(cx, caixaMesa(o)) < P().corredor - 1) ok = false; });
-        P().elementos.forEach(function(e){ if (folga(cx, caixaElem(e)) < 0) ok = false; });
-        var cor = ok ? '#10B981' : '#EF4444';
-        if (obj.formato === 'Redonda') el('circle', { cx:nx, cy:ny, r:cx.w / 2 + P().corredor / 2, fill:'none', stroke:cor, 'stroke-width':4 * cmPorPixel() / 2, 'stroke-dasharray':'14 10' }, guias);
-        else el('rect', { x:nx - cx.w / 2 - P().corredor / 2, y:ny - cx.h / 2 - P().corredor / 2, width:cx.w + P().corredor, height:cx.h + P().corredor, fill:'none', stroke:cor, 'stroke-width':4 * cmPorPixel() / 2, 'stroke-dasharray':'14 10' }, guias);
+      if (!arr || arr.obj !== obj || !D.podeEditar) return;
+      if (!arr.moveu) {
+        if (Math.abs(ev.clientX - arr.ini.x) + Math.abs(ev.clientY - arr.ini.y) < 6) return;
+        comecarArraste();
       }
-      obj.x = nx; obj.y = ny;
-      g.setAttribute('transform', 'translate(' + nx + ',' + ny + ')');
-      g.parentNode.appendChild(g);
+      ultimoEv = ev;
+      if (quadroPendente) return;
+      quadroPendente = true;
+      requestAnimationFrame(quadroArraste);
     });
-    function soltar() {
-      if (!off) return;
-      off = null; g.classList.remove('arrastando');
+    function soltar(ev) {
+      if (!arr) return;
+      var a = arr; arr = null;
+      if (a.destino) { destinoMoverPara(aSvg(ev)); return; }
+      if (a.obj !== obj) return;
+      if (!a.moveu) {
+        if (a.alternar && D.podeEditar) { if (selPlanta[a.k]) delete selPlanta[a.k]; else selPlanta[a.k] = obj; marcarSel(); return; }
+        if (tipo === 'mesa') cliqueMesa(obj); else if (D.podeEditar) abrirElemento(obj.id);
+        return;
+      }
+      arr = a; quadroPendente = false; quadroArraste(ev); arr = null;   // aplica a posição final
       var guias = document.getElementById('mzGuias'); if (guias) guias.innerHTML = '';
-      if (!moveu) { if (tipo === 'mesa') cliqueMesa(obj); else if (D.podeEditar) abrirElemento(obj.id); return; }
-      if (tipo === 'mesa') { agendarSalvarPosicao(obj); desenharMesas(); if (noSalao(obj) !== (ini.ox >= 0 && ini.ox <= P().w && ini.oy >= 0 && ini.oy <= P().h)) desenharPlanta(); }
-      else salvarPlanta();
+      if (a.selAuto) delete selPlanta[a.k];      // arrastar uma mesa solta não a deixa selecionada
+      var cruzou = false, temElem = false;
+      a.grupo.forEach(function(it) {
+        if (it.tipo === 'mesa') {
+          pendentesPos[it.obj.id] = { id: it.obj.id, x: it.obj.x, y: it.obj.y };
+          var antes = it.ox >= 0 && it.ox <= P().w && it.oy >= 0 && it.oy <= P().h;
+          if (antes !== noSalao(it.obj)) cruzou = true;
+        } else temElem = true;
+      });
+      concluirMovimento(cruzou || temElem, temElem);
     }
     g.addEventListener('pointerup', soltar);
-    g.addEventListener('pointercancel', function() { off = null; g.classList.remove('arrastando'); });
+    g.addEventListener('pointercancel', function() { if (arr && arr.obj === obj) { arr = null; desenharMesas(); marcarSel(); } });
+  }
+
+  function comecarArraste() {
+    arr.moveu = true;
+    if (!selPlanta[arr.k]) { if (!arr.alternar) selPlanta = {}; selPlanta[arr.k] = arr.obj; arr.selAuto = !arr.alternar; marcarSel(); }
+    arr.grupo = itensSel().map(function(it){ it.ox = it.obj.x; it.oy = it.obj.y; it.g = gDe(it); return it; });
+    arr.grupo.forEach(function(it){ if (it.g) { it.g.classList.add('arrastando'); it.g.parentNode.appendChild(it.g); } });   // à frente, uma vez só
+    arr.principal = arr.grupo.filter(function(it){ return it.k === arr.k; })[0];
+    // Vizinhas (para guias e corredor) calculadas uma vez: só as mesas fora do grupo.
+    var noGrupo = {}; arr.grupo.forEach(function(it){ noGrupo[it.k] = true; });
+    arr.outras = D.mesas.filter(function(m){ return !noGrupo['m:' + m.id]; });
+  }
+
+  function quadroArraste(evFinal) {
+    quadroPendente = false;
+    if (!arr || !arr.moveu) return;
+    var ev = evFinal && evFinal.clientX !== undefined ? evFinal : ultimoEv;
+    if (!ev) return;
+    var p = aSvg(ev), pr = arr.principal;
+    var nx = Math.round((pr.ox + p.x - arr.p0.x) / 10) * 10, ny = Math.round((pr.oy + p.y - arr.p0.y) / 10) * 10;
+    var guias = document.getElementById('mzGuias'); guias.innerHTML = '';
+    if (arr.grupo.length === 1 && arr.tipo === 'mesa') {
+      var tol = 10 * cmPorPixel(), gx = null, gy = null, esp = 3 * cmPorPixel() / 2;
+      for (var i = 0; i < arr.outras.length && (gx === null || gy === null); i++) {
+        var o = arr.outras[i];
+        if (gx === null && Math.abs(o.x - nx) < tol) gx = o.x;
+        if (gy === null && Math.abs(o.y - ny) < tol) gy = o.y;
+      }
+      if (gx !== null) { nx = gx; el('line', { x1:gx, y1:Math.min(ny, 0) - 200, x2:gx, y2:Math.max(ny, P().h) + 200, stroke:'#0088CC', 'stroke-width':esp, 'stroke-dasharray':'12 8' }, guias); }
+      if (gy !== null) { ny = gy; el('line', { x1:Math.min(nx, 0) - 200, y1:gy, x2:Math.max(nx, P().w) + 200, y2:gy, stroke:'#0088CC', 'stroke-width':esp, 'stroke-dasharray':'12 8' }, guias); }
+      var obj = arr.obj, cx = caixaMesa(obj, nx, ny), lim = cx.w + P().corredor + 400, ok = GEO.caixaDentro(FM(), cx, 0);
+      for (var j = 0; ok && j < arr.outras.length; j++) {
+        var q = arr.outras[j];
+        if (Math.abs(q.x - nx) > lim || Math.abs(q.y - ny) > lim || !noSalao(q)) continue;
+        if (folga(cx, caixaMesa(q)) < P().corredor - 1) ok = false;
+      }
+      P().elementos.forEach(function(e){ if (ok && folga(cx, caixaElem(e)) < 0) ok = false; });
+      var cor = ok ? '#10B981' : '#EF4444', meia = P().corredor / 2;
+      if (obj.formato === 'Redonda') el('circle', { cx:nx, cy:ny, r:cx.w / 2 + meia, fill:'none', stroke:cor, 'stroke-width':esp * 1.3, 'stroke-dasharray':'14 10' }, guias);
+      else el('rect', { x:nx - cx.w / 2 - meia, y:ny - cx.h / 2 - meia, width:cx.w + 2 * meia, height:cx.h + 2 * meia, fill:'none', stroke:cor, 'stroke-width':esp * 1.3, 'stroke-dasharray':'14 10' }, guias);
+    }
+    var lim = limiteDesloc(arr.grupo, nx - pr.ox, ny - pr.oy), dx = lim.dx, dy = lim.dy;
+    arr.grupo.forEach(function(it) {
+      it.obj.x = it.ox + dx; it.obj.y = it.oy + dy;
+      if (it.g) it.g.setAttribute('transform', 'translate(' + it.obj.x + ',' + it.obj.y + ')');
+    });
   }
 
   var pendentesPos = {}, timerPos = null;
@@ -662,10 +912,10 @@
       if (depois) depois();
     }).withFailureHandler(erro).apiMoverMesas(window.TOKEN, lote);
   }
-  function salvarMuitas(lista, msg) {
+  function salvarMuitas(lista, msg, depois) {
     lista.forEach(function(p){ pendentesPos[p.id] = { id: p.id, x: Math.round(p.x), y: Math.round(p.y) }; });
     clearTimeout(timerPos);
-    salvarPosicoesPendentes(function(){ if (msg) toast(msg, 'ok'); });
+    salvarPosicoesPendentes(function(){ if (msg) toast(msg, 'ok'); if (depois) depois(); });
   }
 
   var timerPlanta = null;
@@ -741,12 +991,12 @@
     return lista.map(function(m, i){ return { id: m.id, x: P().w + 150 + passo / 2 + Math.floor(i / lin) * passo, y: passo / 2 + (i % lin) * passo }; });
   }
 
-  function aplicarPosicoes(novas, msg) {
+  function aplicarPosicoes(novas, msg, depois) {
     desfazer = D.mesas.map(function(m){ return { id: m.id, x: m.x, y: m.y }; });
     var porId = {}; novas.forEach(function(p){ porId[p.id] = p; });
     D.mesas.forEach(function(m){ if (porId[m.id]) { m.x = porId[m.id].x; m.y = porId[m.id].y; } });
     render();
-    salvarMuitas(novas, msg);
+    salvarMuitas(novas, msg, depois);
   }
   window.desfazerArranjo = function() {
     if (!desfazer) return;
@@ -817,7 +1067,14 @@
     if (op.corredor !== P().corredor || op.margem !== P().margem) { P().corredor = op.corredor; P().margem = op.margem; salvarPlanta(); }
     bootstrap.Modal.getInstance(document.getElementById('modalOrganizar')).hide();
     view = null;
-    aplicarPosicoes(novas, 'Salão organizado: ' + (lista.length - resto.length) + ' mesa(s) posicionada(s)' + (resto.length ? ', ' + resto.length + ' fora do salão.' : '.'));
+    var sentarDepois = document.getElementById('orSentar').checked;
+    aplicarPosicoes(novas, 'Salão organizado: ' + (lista.length - resto.length) + ' mesa(s) posicionada(s)' + (resto.length ? ', ' + resto.length + ' fora do salão.' : '.'), sentarDepois ? function() {
+      // Com as mesas já no lugar, a distribuição usa a vizinhança real da planta.
+      google.script.run.withSuccessHandler(function(resp) {
+        if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
+        toast(resp.mensagem, 'ok'); carregar();
+      }).withFailureHandler(erro).apiDistribuirMesas(window.TOKEN, idEvento, { agrupar: 'empresa' });
+    } : null);
   };
 
   // ---------------------------------------------------------- salão e elementos
@@ -1123,8 +1380,29 @@
       bootstrap.Modal.getInstance(document.getElementById('modalDistribuir')).hide();
       toast(resp.mensagem, 'ok'); selecionados = {}; carregar();
     }).withFailureHandler(function(e){ btn.disabled = false; erro(e); }).apiDistribuirMesas(window.TOKEN, idEvento, {
-      agrupar: document.getElementById('dsAgrupar').value, somenteConfirmados: document.getElementById('dsConfirmados').checked
+      agrupar: document.getElementById('dsAgrupar').value, somenteConfirmados: document.getElementById('dsConfirmados').checked,
+      refazer: document.getElementById('dsRefazer').checked
     });
+  };
+
+  // ---------------------------------------------------------- resetar
+  window.abrirResetar = function() {
+    ['rsConvidados','rsFora','rsElementos','rsSalao','rsExcluir'].forEach(function(id){ document.getElementById(id).checked = false; });
+    new bootstrap.Modal(document.getElementById('modalResetar')).show();
+  };
+  window.confirmarResetar = function() {
+    var op = { tirarConvidados: document.getElementById('rsConvidados').checked, mesasFora: document.getElementById('rsFora').checked,
+      elementos: document.getElementById('rsElementos').checked, salao: document.getElementById('rsSalao').checked, excluirMesas: document.getElementById('rsExcluir').checked };
+    if (!Object.keys(op).some(function(k){ return op[k]; })) { toast('Marque o que deseja resetar.', 'err'); return; }
+    if (op.excluirMesas && !confirm('Excluir TODAS as ' + D.mesas.length + ' mesas deste evento? Os convidados ficam sem mesa. Não dá para desfazer.')) return;
+    var btn = document.getElementById('btnResetar'); btn.disabled = true;
+    google.script.run.withSuccessHandler(function(resp) {
+      btn.disabled = false;
+      if (!resp.ok) { toast(resp.mensagem, 'err'); return; }
+      bootstrap.Modal.getInstance(document.getElementById('modalResetar')).hide();
+      selPlanta = {}; desfazer = null; view = null;
+      toast(resp.mensagem, 'ok'); carregar();
+    }).withFailureHandler(function(e){ btn.disabled = false; erro(e); }).apiResetarMesas(window.TOKEN, idEvento, op);
   };
 
   // ---------------------------------------------------------- modal da mesa
